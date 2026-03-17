@@ -33,6 +33,7 @@ const DEFAULT_SETTINGS: BudgetSettings = {
         },
       ],
       pauseIncome: true,
+      pausePocket: false,
       pausedExpenseIds: ['default-rent'],
     },
   ],
@@ -247,14 +248,22 @@ function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
     }
   }
 
+  const pausedPocketMonths = new Set(
+    settings.goals
+      .filter((g) => g.pausePocket)
+      .flatMap((g) => getMonthsInRange(g.startDate, g.endDate)),
+  );
+
   const pocketPaydays = getPaydays(settings.firstPayday, settings.payFrequency);
   for (const payday of pocketPaydays) {
-    ev.push({
-      date: payday,
-      label: 'pocket',
-      delta: -settings.pocketPerPeriod,
-      type: 'pocket',
-    });
+    if (!pausedPocketMonths.has(payday.slice(0, 7))) {
+      ev.push({
+        date: payday,
+        label: 'pocket',
+        delta: -settings.pocketPerPeriod,
+        type: 'pocket',
+      });
+    }
   }
 
   const pausedExpensesByMonth = new Map<string, Set<string>>();
@@ -324,12 +333,14 @@ function migrateGoal(g: Record<string, unknown>): SavingsGoal {
           endDate: (g.targetDate as string) ?? '2000-01-01',
           lineItems: (g.lineItems as SavingsGoal['lineItems']) ?? [],
           pauseIncome: (g.pauseIncome as boolean) ?? false,
+          pausePocket: (g.pausePocket as boolean) ?? false,
           pausedExpenseIds: [] as string[],
         };
-  if (!('pausedExpenseIds' in base) || !base.pausedExpenseIds) {
-    return { ...base, pausedExpenseIds: [] };
-  }
-  return base;
+  return {
+    ...base,
+    pausePocket: base.pausePocket ?? false,
+    pausedExpenseIds: base.pausedExpenseIds ?? [],
+  };
 }
 
 function migrateRecurringExpenses(
@@ -443,6 +454,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
               },
             ],
             pauseIncome: true,
+            pausePocket: false,
             pausedExpenseIds: [],
           },
         ]
@@ -629,12 +641,38 @@ export function useBudget() {
       for (const e of evs.filter((x) => x.delta > 0)) running += e.delta;
       for (const e of evs.filter((x) => x.delta < 0)) running += e.delta;
 
-      const hasPayday = evs.some(
-        (e) => e.type === 'payday' || e.type === 'pocket',
+      const pocketTotal = evs
+        .filter((e) => e.type === 'pocket')
+        .reduce((s, e) => s + e.delta, 0);
+      const paydays = evs.filter((e) => e.type === 'payday');
+      const others = evs.filter(
+        (e) => e.type !== 'pocket' && e.type !== 'payday',
       );
-      const hasRecurring = evs.some((e) => e.type === 'recurring');
-      const hasGoal = evs.some((e) => e.type === 'goal');
-      const hasUser = evs.some((e) => e.type === 'user-expense');
+
+      const displayPaydays: FixedEvent[] = [];
+      if (paydays.length > 0 && pocketTotal < 0) {
+        const totalIncome = paydays.reduce((s, e) => s + e.delta, 0);
+        for (const p of paydays) {
+          const share =
+            totalIncome > 0 ? (p.delta / totalIncome) * pocketTotal : 0;
+          const net = p.delta + share;
+          displayPaydays.push({
+            ...p,
+            delta: Math.round(net),
+            label: p.label.replace(/\$\d+/, `$${Math.round(net)}`),
+          });
+        }
+      } else {
+        displayPaydays.push(...paydays);
+      }
+
+      const visible = [...displayPaydays, ...others];
+      if (visible.length === 0) continue;
+
+      const hasPayday = displayPaydays.length > 0;
+      const hasRecurring = others.some((e) => e.type === 'recurring');
+      const hasGoal = others.some((e) => e.type === 'goal');
+      const hasUser = others.some((e) => e.type === 'user-expense');
 
       let type: FixedEvent['type'] = 'payday';
       if (hasGoal && !hasPayday) type = 'goal';
@@ -654,9 +692,9 @@ export function useBudget() {
         date: fmt,
         rawDate: date,
         balance: Math.round(running),
-        label: evs.map((e) => e.label).join(' + '),
+        label: visible.map((e) => e.label).join(' + '),
         type,
-        events: evs.map((e) => ({
+        events: visible.map((e) => ({
           label: e.label,
           delta: e.delta,
           type: e.type,
