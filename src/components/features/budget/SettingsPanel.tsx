@@ -13,41 +13,41 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import type { BudgetSettings, IncomeChange } from '@/types';
-import { IncomeChangeManager } from './IncomeChangeManager';
+import type { BudgetSettings, IncomeSource } from '@/types';
+import { IncomeSourceManager } from './IncomeSourceManager';
 
 interface SettingsPanelProps {
   settings: BudgetSettings;
-  savedPerPeriod: number;
+  monthlyIncome: number;
+  monthlySavings: number;
   onUpdate: (patch: Partial<BudgetSettings>) => void;
-  onAddIncomeChange: (change: Omit<IncomeChange, 'id'>) => void;
-  onUpdateIncomeChange: (change: IncomeChange) => void;
-  onRemoveIncomeChange: (id: string) => void;
+  onAddIncomeSource: (source: Omit<IncomeSource, 'id'>) => void;
+  onUpdateIncomeSource: (source: IncomeSource) => void;
+  onRemoveIncomeSource: (id: string) => void;
 }
 
 export function SettingsPanel({
   settings,
-  savedPerPeriod,
+  monthlyIncome,
+  monthlySavings,
   onUpdate,
-  onAddIncomeChange,
-  onUpdateIncomeChange,
-  onRemoveIncomeChange,
+  onAddIncomeSource,
+  onUpdateIncomeSource,
+  onRemoveIncomeSource,
 }: SettingsPanelProps) {
   const firstPaydayDate = parseISO(settings.firstPayday);
-  const freqLabel =
-    settings.payFrequency === 'biweekly' ? 'every 2 weeks' : 'weekly';
 
   return (
     <Card className="border-border/50 bg-card/50">
       <CardHeader className="pb-2">
         <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
-          Income Settings
+          Budget Settings
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-            Pay Frequency
+            Pocket Period
           </Label>
           <div className="flex gap-1 rounded-lg bg-muted p-1">
             <button
@@ -77,29 +77,7 @@ export function SettingsPanel({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="space-y-2">
-            <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-              Income / Period
-            </Label>
-            <div className="relative">
-              <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground text-sm">
-                $
-              </span>
-              <Input
-                type="number"
-                min={0}
-                value={settings.incomePerPeriod}
-                onChange={(e) =>
-                  onUpdate({
-                    incomePerPeriod: Number(e.target.value) || 0,
-                  })
-                }
-                className="pl-7 font-mono"
-              />
-            </div>
-          </div>
-
+        <div className="grid grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label className="text-muted-foreground text-xs uppercase tracking-wider">
               Pocket / Period
@@ -146,7 +124,7 @@ export function SettingsPanel({
 
           <div className="space-y-2">
             <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-              First Payday
+              Pocket Start
             </Label>
             <Popover>
               <PopoverTrigger asChild>
@@ -181,25 +159,25 @@ export function SettingsPanel({
         </div>
 
         <p className="text-muted-foreground/70 text-xs">
-          Saving ${savedPerPeriod} {freqLabel} ($
-          {settings.incomePerPeriod} income minus ${settings.pocketPerPeriod}{' '}
-          pocket)
+          Saving ~${Math.round(monthlySavings).toLocaleString()}/mo ($
+          {Math.round(monthlyIncome).toLocaleString()} income minus $
+          {settings.pocketPerPeriod} pocket{' '}
+          {settings.payFrequency === 'biweekly' ? 'every 2 weeks' : 'weekly'})
         </p>
 
         <div className="space-y-2 border-border/50 border-t pt-4">
           <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-            Scheduled Rate Changes
+            Income Sources
           </Label>
           <p className="text-muted-foreground/60 text-xs">
-            Add upcoming raises or income changes. The projection will use the
-            new rate from the effective date onward.
+            Add your income sources. Each has its own frequency (weekly,
+            biweekly, monthly, custom) and rate changes over time.
           </p>
-          <IncomeChangeManager
-            changes={settings.incomeChanges}
-            baseIncome={settings.incomePerPeriod}
-            onAdd={onAddIncomeChange}
-            onUpdate={onUpdateIncomeChange}
-            onRemove={onRemoveIncomeChange}
+          <IncomeSourceManager
+            sources={settings.incomeSources}
+            onAdd={onAddIncomeSource}
+            onUpdate={onUpdateIncomeSource}
+            onRemove={onRemoveIncomeSource}
           />
         </div>
       </CardContent>

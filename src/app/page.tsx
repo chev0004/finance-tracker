@@ -23,7 +23,6 @@ export default function Home() {
     isLoaded,
     expenses,
     settings,
-    savedPerPeriod,
     savingsTimeline,
     pocketTimeline,
     goalStats,
@@ -41,9 +40,11 @@ export default function Home() {
     addRecurringExpense,
     updateRecurringExpense,
     removeRecurringExpense,
-    addIncomeChange,
-    updateIncomeChange,
-    removeIncomeChange,
+    monthlyIncome,
+    monthlySavings,
+    addIncomeSource,
+    updateIncomeSource,
+    removeIncomeSource,
   } = useBudget();
 
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
@@ -65,7 +66,6 @@ export default function Home() {
     );
   }
 
-  const freqLabel = settings.payFrequency === 'biweekly' ? '/2wk' : '/wk';
   const eoyVariant =
     stats.eoy < 0 ? 'danger' : stats.eoy < 500 ? 'warning' : 'success';
 
@@ -85,7 +85,8 @@ export default function Home() {
             payload={{
               settings,
               expenses,
-              savedPerPeriod,
+              monthlyIncome,
+              monthlySavings,
               savingsTimeline,
               pocketTimeline,
               goalStats,
@@ -98,8 +99,8 @@ export default function Home() {
         <div className="grid grid-cols-3 gap-3">
           <StatsCard label="Current Balance" value={settings.startingBalance} />
           <StatsCard
-            label={`Savings ${freqLabel}`}
-            value={savedPerPeriod}
+            label="Savings /mo"
+            value={Math.round(monthlySavings)}
             variant="success"
             prefix="+"
           />
@@ -112,11 +113,12 @@ export default function Home() {
 
         <SettingsPanel
           settings={settings}
-          savedPerPeriod={savedPerPeriod}
+          monthlyIncome={monthlyIncome}
+          monthlySavings={monthlySavings}
           onUpdate={updateSettings}
-          onAddIncomeChange={addIncomeChange}
-          onUpdateIncomeChange={updateIncomeChange}
-          onRemoveIncomeChange={removeIncomeChange}
+          onAddIncomeSource={addIncomeSource}
+          onUpdateIncomeSource={updateIncomeSource}
+          onRemoveIncomeSource={removeIncomeSource}
         />
 
         {/* --- Savings --- */}
@@ -133,12 +135,13 @@ export default function Home() {
             />
             <SavingsChart data={savingsTimeline} />
             <p className="text-muted-foreground/70 text-xs leading-relaxed">
-              ${savedPerPeriod} saved{' '}
+              ~${Math.round(monthlySavings).toLocaleString()} saved per month ($
+              {Math.round(monthlyIncome).toLocaleString()} income minus $
+              {settings.pocketPerPeriod} pocket{' '}
               {settings.payFrequency === 'biweekly'
-                ? 'every two weeks'
-                : 'each week'}{' '}
-              (${settings.incomePerPeriod} income minus $
-              {settings.pocketPerPeriod} pocket money).
+                ? 'every 2 weeks'
+                : 'weekly'}
+              ).
               {settings.recurringExpenses.length > 0 && (
                 <>
                   {' '}
