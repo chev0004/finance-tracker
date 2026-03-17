@@ -144,7 +144,7 @@ export function GoalForm({
   );
 
   return (
-    <Card className="border-blue-500/30 bg-blue-500/5 p-4">
+    <Card className="border-border/50 bg-card/50 p-4">
       <div className="space-y-4">
         {error && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-red-500 text-sm">
@@ -260,7 +260,7 @@ export function GoalForm({
             className={cn(
               'cursor-pointer rounded-md border px-3 py-1.5 text-xs transition-colors',
               pauseIncome
-                ? 'border-blue-500/50 bg-blue-500/10 text-blue-400'
+                ? 'border-border bg-muted text-foreground'
                 : 'border-border text-muted-foreground hover:text-foreground',
             )}
             onClick={() => setPauseIncome(!pauseIncome)}
@@ -282,7 +282,7 @@ export function GoalForm({
                   className={cn(
                     'cursor-pointer rounded-md border px-3 py-1.5 text-xs transition-colors',
                     pausedExpenseIds.has(exp.id)
-                      ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                      ? 'border-border bg-muted text-foreground'
                       : 'border-border text-muted-foreground hover:text-foreground',
                   )}
                   onClick={() => toggleExpense(exp.id)}
@@ -302,7 +302,7 @@ export function GoalForm({
         <div className="flex gap-2">
           <Button
             onClick={handleSave}
-            className="bg-blue-500 hover:bg-blue-600"
+            className="bg-foreground text-background hover:bg-foreground/90"
           >
             {goal ? 'Update Goal' : 'Add Goal'}
           </Button>

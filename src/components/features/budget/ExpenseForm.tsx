@@ -168,7 +168,7 @@ export function ExpenseForm({ onAdd }: ExpenseFormProps) {
 
         <Button
           onClick={handleSubmit}
-          className="border border-blue-500/30 bg-blue-500/10 text-blue-500 hover:border-blue-500/50 hover:bg-blue-500/20"
+          className="border border-border bg-muted text-foreground hover:bg-muted/80"
         >
           + Add Expense
         </Button>

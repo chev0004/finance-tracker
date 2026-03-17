@@ -301,7 +301,7 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
               <Button
                 size="sm"
                 onClick={handleSave}
-                className="bg-blue-500 hover:bg-blue-600"
+                className="bg-foreground text-background hover:bg-foreground/90"
               >
                 Save
               </Button>
