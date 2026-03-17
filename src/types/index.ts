@@ -31,22 +31,33 @@ export interface RecurringExpense {
   endMonth: string;
 }
 
-export interface IncomeChange {
+export type PayFrequency = 'weekly' | 'biweekly' | 'monthly' | 'custom';
+
+export interface IncomeRateChange {
   id: string;
   effectiveDate: string;
-  incomePerPeriod: number;
+  amount: number;
+}
+
+export interface IncomeSource {
+  id: string;
+  name: string;
+  amount: number;
+  payFrequency: PayFrequency;
+  firstPayday: string;
+  payInterval?: number;
+  rateChanges: IncomeRateChange[];
 }
 
 export interface BudgetSettings {
   startingBalance: number;
   startDate: string;
-  incomePerPeriod: number;
   pocketPerPeriod: number;
   payFrequency: 'weekly' | 'biweekly';
   firstPayday: string;
   goals: SavingsGoal[];
   recurringExpenses: RecurringExpense[];
-  incomeChanges: IncomeChange[];
+  incomeSources: IncomeSource[];
 }
 
 export interface FixedEvent {
@@ -55,6 +66,7 @@ export interface FixedEvent {
   delta: number;
   type:
     | 'payday'
+    | 'pocket'
     | 'recurring'
     | 'goal'
     | 'start'

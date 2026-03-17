@@ -5,7 +5,8 @@ import type {
   Expense,
   FixedEvent,
   GoalStat,
-  IncomeChange,
+  IncomeSource,
+  PayFrequency,
   PocketPoint,
   RecurringExpense,
   SavingsGoal,
@@ -15,7 +16,6 @@ import type {
 const DEFAULT_SETTINGS: BudgetSettings = {
   startingBalance: 0,
   startDate: '2000-01-01',
-  incomePerPeriod: 0,
   pocketPerPeriod: 0,
   payFrequency: 'weekly',
   firstPayday: '2000-01-01',
@@ -46,7 +46,16 @@ const DEFAULT_SETTINGS: BudgetSettings = {
       endMonth: '2000-12',
     },
   ],
-  incomeChanges: [],
+  incomeSources: [
+    {
+      id: 'default-income',
+      name: 'Income',
+      amount: 0,
+      payFrequency: 'weekly',
+      firstPayday: '2000-01-01',
+      rateChanges: [],
+    },
+  ],
 };
 
 const STORAGE_KEY = 'budget-tracker-data';
@@ -67,12 +76,51 @@ function getPaydays(
   firstPayday: string,
   frequency: 'weekly' | 'biweekly',
 ): string[] {
+  return getPaydaysForFrequency(firstPayday, frequency, undefined);
+}
+
+function advancePayday(
+  d: Date,
+  frequency: PayFrequency,
+  payInterval?: number,
+): boolean {
+  if (frequency === 'weekly') {
+    d.setDate(d.getDate() + 7);
+    return true;
+  }
+  if (frequency === 'biweekly') {
+    d.setDate(d.getDate() + 14);
+    return true;
+  }
+  if (frequency === 'monthly') {
+    const day = d.getDate();
+    d.setMonth(d.getMonth() + 1);
+    const lastDay = lastDayOf(d.getFullYear(), d.getMonth() + 1);
+    d.setDate(Math.min(day, lastDay));
+    return true;
+  }
+  if (frequency === 'custom' && payInterval && payInterval > 0) {
+    d.setDate(d.getDate() + payInterval);
+    return true;
+  }
+  return false;
+}
+
+function getPaydaysForFrequency(
+  firstPayday: string,
+  frequency: PayFrequency,
+  payInterval?: number,
+): string[] {
   const result: string[] = [];
   const d = new Date(`${firstPayday}T00:00:00`);
-  const step = frequency === 'biweekly' ? 14 : 7;
+
+  while (d.getFullYear() < 2026) {
+    if (!advancePayday(d, frequency, payInterval)) return result;
+  }
+
   while (d.getFullYear() === 2026) {
     result.push(d.toISOString().slice(0, 10));
-    d.setDate(d.getDate() + step);
+    if (!advancePayday(d, frequency, payInterval)) break;
   }
   return result;
 }
@@ -128,16 +176,47 @@ function getMonthsInRange(startDate: string, endDate: string): string[] {
   return result;
 }
 
-function getIncomeForDate(settings: BudgetSettings, date: string): number {
-  const sorted = [...settings.incomeChanges].sort((a, b) =>
+function getSourceAmountForDate(source: IncomeSource, date: string): number {
+  const sorted = [...source.rateChanges].sort((a, b) =>
     a.effectiveDate.localeCompare(b.effectiveDate),
   );
-  let income = settings.incomePerPeriod;
+  let amount = source.amount;
   for (const change of sorted) {
-    if (change.effectiveDate <= date) income = change.incomePerPeriod;
+    if (change.effectiveDate <= date) amount = change.amount;
     else break;
   }
-  return income;
+  return amount;
+}
+
+function getIncomeForDate(settings: BudgetSettings, date: string): number {
+  return settings.incomeSources.reduce(
+    (total, source) => total + getSourceAmountForDate(source, date),
+    0,
+  );
+}
+
+function periodsPerYear(freq: PayFrequency, interval?: number): number {
+  if (freq === 'weekly') return 52;
+  if (freq === 'biweekly') return 26;
+  if (freq === 'monthly') return 12;
+  if (freq === 'custom' && interval && interval > 0) return 365 / interval;
+  return 0;
+}
+
+function getMonthlyIncome(settings: BudgetSettings): number {
+  const today = new Date().toISOString().slice(0, 10);
+  return settings.incomeSources.reduce((sum, source) => {
+    const amount = getSourceAmountForDate(source, today);
+    const periods = periodsPerYear(source.payFrequency, source.payInterval);
+    return sum + (amount * periods) / 12;
+  }, 0);
+}
+
+function getMonthlySavings(settings: BudgetSettings): number {
+  const monthlyIncome = getMonthlyIncome(settings);
+  const pocketPeriods = periodsPerYear(settings.payFrequency, undefined) || 26;
+  const monthlyPocket = (settings.pocketPerPeriod * pocketPeriods) / 12;
+  return monthlyIncome - monthlyPocket;
 }
 
 function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
@@ -149,18 +228,33 @@ function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
       .flatMap((g) => getMonthsInRange(g.startDate, g.endDate)),
   );
 
-  const paydays = getPaydays(settings.firstPayday, settings.payFrequency);
-  for (const payday of paydays) {
-    if (!pausedMonths.has(payday.slice(0, 7))) {
-      const income = getIncomeForDate(settings, payday);
-      const saved = income - settings.pocketPerPeriod;
-      ev.push({
-        date: payday,
-        label: 'payday',
-        delta: saved,
-        type: 'payday',
-      });
+  for (const source of settings.incomeSources) {
+    const sourcePaydays = getPaydaysForFrequency(
+      source.firstPayday,
+      source.payFrequency,
+      source.payInterval,
+    );
+    for (const payday of sourcePaydays) {
+      if (!pausedMonths.has(payday.slice(0, 7))) {
+        const amount = getSourceAmountForDate(source, payday);
+        ev.push({
+          date: payday,
+          label: `${source.name} $${amount}`,
+          delta: amount,
+          type: 'payday',
+        });
+      }
     }
+  }
+
+  const pocketPaydays = getPaydays(settings.firstPayday, settings.payFrequency);
+  for (const payday of pocketPaydays) {
+    ev.push({
+      date: payday,
+      label: 'pocket',
+      delta: -settings.pocketPerPeriod,
+      type: 'pocket',
+    });
   }
 
   const pausedExpensesByMonth = new Map<string, Set<string>>();
@@ -246,18 +340,65 @@ function migrateRecurringExpenses(
   );
 }
 
+function migrateIncomeSources(raw: Record<string, unknown>): IncomeSource[] {
+  const globalFreq = (raw.payFrequency as 'weekly' | 'biweekly') ?? 'weekly';
+  const globalPayday = (raw.firstPayday as string) ?? '2000-01-01';
+
+  if (Array.isArray(raw.incomeSources) && raw.incomeSources.length > 0) {
+    return (raw.incomeSources as IncomeSource[]).map((s) => {
+      if ('payFrequency' in s && s.payFrequency) return s;
+      return {
+        ...s,
+        payFrequency: globalFreq,
+        firstPayday: s.firstPayday ?? globalPayday,
+        payInterval: s.payInterval,
+      };
+    });
+  }
+
+  const baseIncome = (raw.incomePerPeriod as number) ?? 0;
+  const oldChanges =
+    (raw.incomeChanges as {
+      id: string;
+      effectiveDate: string;
+      incomePerPeriod: number;
+    }[]) ?? [];
+
+  return [
+    {
+      id: crypto.randomUUID(),
+      name: 'Income',
+      amount: baseIncome,
+      payFrequency: globalFreq,
+      firstPayday: globalPayday,
+      rateChanges: oldChanges.map((c) => ({
+        id: c.id ?? crypto.randomUUID(),
+        effectiveDate: c.effectiveDate,
+        amount: c.incomePerPeriod,
+      })),
+    },
+  ];
+}
+
 function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
   if (raw.goals) {
-    const settings = raw as unknown as BudgetSettings;
+    const settings = raw as unknown as BudgetSettings & {
+      incomePerPeriod?: number;
+      incomeChanges?: unknown[];
+    };
     return {
-      ...settings,
-      incomeChanges: settings.incomeChanges ?? [],
+      startingBalance: settings.startingBalance,
+      startDate: settings.startDate,
+      pocketPerPeriod: settings.pocketPerPeriod,
+      payFrequency: settings.payFrequency,
+      firstPayday: settings.firstPayday,
       recurringExpenses: migrateRecurringExpenses(
         settings.recurringExpenses ?? [],
       ),
       goals: (settings.goals as unknown as Record<string, unknown>[]).map(
         migrateGoal,
       ),
+      incomeSources: migrateIncomeSources(raw),
     };
   }
 
@@ -274,11 +415,19 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
   return {
     startingBalance: old.startingBalance ?? 0,
     startDate: '2000-01-01',
-    incomePerPeriod: weeklySave + weeklyPocket,
     pocketPerPeriod: weeklyPocket,
     payFrequency: 'weekly',
     firstPayday: '2000-01-01',
-    incomeChanges: [],
+    incomeSources: [
+      {
+        id: crypto.randomUUID(),
+        name: 'Income',
+        amount: weeklySave + weeklyPocket,
+        payFrequency: 'weekly',
+        firstPayday: '2000-01-01',
+        rateChanges: [],
+      },
+    ],
     goals: old.tripMonth
       ? [
           {
@@ -360,6 +509,10 @@ export function useBudget() {
     const today = new Date().toISOString().slice(0, 10);
     return getIncomeForDate(settings, today);
   }, [settings]);
+
+  const monthlyIncome = useMemo(() => getMonthlyIncome(settings), [settings]);
+
+  const monthlySavings = useMemo(() => getMonthlySavings(settings), [settings]);
 
   const savedPerPeriod = currentIncome - settings.pocketPerPeriod;
 
@@ -476,7 +629,9 @@ export function useBudget() {
       for (const e of evs.filter((x) => x.delta > 0)) running += e.delta;
       for (const e of evs.filter((x) => x.delta < 0)) running += e.delta;
 
-      const hasPayday = evs.some((e) => e.type === 'payday');
+      const hasPayday = evs.some(
+        (e) => e.type === 'payday' || e.type === 'pocket',
+      );
       const hasRecurring = evs.some((e) => e.type === 'recurring');
       const hasGoal = evs.some((e) => e.type === 'goal');
       const hasUser = evs.some((e) => e.type === 'user-expense');
@@ -733,29 +888,29 @@ export function useBudget() {
     }));
   }, []);
 
-  const addIncomeChange = useCallback((change: Omit<IncomeChange, 'id'>) => {
+  const addIncomeSource = useCallback((source: Omit<IncomeSource, 'id'>) => {
     setSettings((prev) => ({
       ...prev,
-      incomeChanges: [
-        ...prev.incomeChanges,
-        { ...change, id: crypto.randomUUID() },
+      incomeSources: [
+        ...prev.incomeSources,
+        { ...source, id: crypto.randomUUID() },
       ],
     }));
   }, []);
 
-  const updateIncomeChange = useCallback((change: IncomeChange) => {
+  const updateIncomeSource = useCallback((source: IncomeSource) => {
     setSettings((prev) => ({
       ...prev,
-      incomeChanges: prev.incomeChanges.map((c) =>
-        c.id === change.id ? change : c,
+      incomeSources: prev.incomeSources.map((s) =>
+        s.id === source.id ? source : s,
       ),
     }));
   }, []);
 
-  const removeIncomeChange = useCallback((id: string) => {
+  const removeIncomeSource = useCallback((id: string) => {
     setSettings((prev) => ({
       ...prev,
-      incomeChanges: prev.incomeChanges.filter((c) => c.id !== id),
+      incomeSources: prev.incomeSources.filter((s) => s.id !== id),
     }));
   }, []);
 
@@ -763,7 +918,10 @@ export function useBudget() {
     isLoaded,
     expenses,
     settings,
+    currentIncome,
     savedPerPeriod,
+    monthlyIncome,
+    monthlySavings,
     paydays,
     savingsTimeline,
     pocketTimeline,
@@ -781,8 +939,8 @@ export function useBudget() {
     addRecurringExpense,
     updateRecurringExpense,
     removeRecurringExpense,
-    addIncomeChange,
-    updateIncomeChange,
-    removeIncomeChange,
+    addIncomeSource,
+    updateIncomeSource,
+    removeIncomeSource,
   };
 }
