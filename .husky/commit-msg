@@ -1,0 +1,14 @@
+set -e
+
+echo "Validating commit message..."
+bunx commitlint --edit "$1" || {
+  echo "❌ Commit message validation failed."
+  echo "Please follow the conventional commit format:"
+  echo "  feat: add new feature"
+  echo "  fix: resolve bug"
+  echo "  docs: update documentation"
+  echo "  etc."
+  exit 1
+}
+
+echo "✅ Commit message is valid!"

@@ -1,0 +1,27 @@
+---
+description: Component reuse and structure for React/TSX files
+globs: "**/*.tsx"
+alwaysApply: false
+---
+
+# Component Patterns
+
+## Before Creating New Components
+
+Search for existing components that could be reused or extended. Avoid duplicating similar components.
+
+## Prefer Components Over Inline JSX
+
+Anything reusable (buttons, cards, form fields, layouts) must be a proper component, not raw markup in a page.
+
+## Structure
+
+```
+src/components/
+  ui/           # Primitives: Button, Input, Card, Modal
+  features/     # Feature compositions: AuthForm, ProductCard, NavBar
+```
+
+- Shared primitives → `ui/`
+- Feature compositions → `features/`
+- Route-specific, one-off UI → colocate in the route folder (e.g. `src/app/dashboard/Chart.tsx`)

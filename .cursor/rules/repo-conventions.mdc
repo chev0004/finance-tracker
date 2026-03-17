@@ -1,0 +1,24 @@
+---
+description: Enforce repository conventions, patterns, and minimal commenting policy
+alwaysApply: true
+---
+
+# Repository Conventions
+
+## Before Making Changes
+
+1. **Read the README** (`README.md`) first. It documents project setup, scripts, Biome configuration, commit conventions, and structure.
+2. **Match existing patterns** in the codebase. Inspect similar files before adding new ones. Follow the same style, structure, and organization.
+3. **Respect Biome**: formatting and linting are configured in `biome.json`; do not override or contradict it.
+
+## No Em Dashes
+
+**Never use em dashes.** Use commas, colons, hyphens, or parentheses instead.
+
+## Comment Policy (Strict)
+
+- **Do NOT add comments** when fixing bugs or adding features. Code should be self-explanatory.
+- **Comments are allowed only for:**
+  - Separating major sections or logical component blocks (e.g. `// --- Auth ---`) when the file is long or multi-section.
+  - **Very complex, logic-heavy blocks** that the agent has explicitly deemed critical to document. Use sparingly; most logic should not need comments.
+- **Never** add explanatory comments for trivial code, obvious behavior, or "what" something does when the code already shows it.

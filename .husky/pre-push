@@ -1,0 +1,15 @@
+set -e
+
+echo "Running lint checks..."
+bun run lint || {
+  echo "❌ Lint checks failed. Please fix the errors above."
+  exit 1
+}
+
+echo "Running type checks..."
+bun run type-check || {
+  echo "❌ Type checks failed. Please fix the errors above."
+  exit 1
+}
+
+echo "✅ All pre-push checks passed!"

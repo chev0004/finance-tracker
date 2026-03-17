@@ -1,0 +1,9 @@
+set -e
+
+echo "Running lint-staged..."
+bunx lint-staged || {
+  echo "❌ Pre-commit checks failed. Please fix the errors above."
+  exit 1
+}
+
+echo "✅ Pre-commit checks passed!"
