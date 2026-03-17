@@ -50,6 +50,7 @@ export function GoalCard({
 
   const details: string[] = [dateLabel, `$${stat.totalCost.toLocaleString()}`];
   if (goal.pauseIncome) details.push('no income');
+  if (goal.pausePocket) details.push('no pocket');
   if (pausedNames.length > 0) details.push(`pauses ${pausedNames.join(', ')}`);
 
   return (
