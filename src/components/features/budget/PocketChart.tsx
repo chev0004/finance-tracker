@@ -28,18 +28,19 @@ interface PocketChartProps {
 
 const GREEN = '#10b981';
 const RED = '#ef4444';
+const ORANGE = '#f59e0b';
 const GRAY = '#6b7280';
 const BLUE = '#3b82f6';
 
 function getPocketColor(
   type: PocketPoint['type'],
   isSelected: boolean,
-  hasExpenses: boolean,
+  spent: number,
 ): string {
   if (isSelected) return BLUE;
-  if (hasExpenses) return RED;
-  if (type === 'surplus') return GREEN;
   if (type === 'over') return RED;
+  if (type === 'surplus' && spent > 0) return ORANGE;
+  if (type === 'surplus') return GREEN;
   return GRAY;
 }
 
@@ -49,6 +50,7 @@ interface ChartDataPoint {
   balance: number;
   available: number;
   spent: number;
+  overage: number;
   type: PocketPoint['type'];
   idx: number;
   expenseCount: number;
@@ -68,14 +70,11 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
       balance: point.balance,
       available: point.available,
       spent: point.spent,
+      overage: point.overage,
       type: point.type,
       idx: point.idx,
       expenseCount: point.expenseCount,
-      color: getPocketColor(
-        point.type,
-        point.idx === selectedIdx,
-        point.expenseCount > 0,
-      ),
+      color: getPocketColor(point.type, point.idx === selectedIdx, point.spent),
       isSelected: point.idx === selectedIdx,
     }));
   }, [data, selectedIdx]);
@@ -142,8 +141,13 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
           >
             ${point.balance} unspent
           </div>
+          {point.overage > 0 && (
+            <div className="mt-1 font-mono text-red-400 text-sm">
+              ${point.overage} over budget
+            </div>
+          )}
           {point.expenseCount > 0 && (
-            <div className="mt-1 text-red-400 text-xs">
+            <div className="mt-1 text-muted-foreground text-xs">
               {point.expenseCount} expense(s) logged
             </div>
           )}

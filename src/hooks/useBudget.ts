@@ -397,15 +397,51 @@ export function useBudget() {
   }, [expenses, paydays, settings.payFrequency]);
 
   const savingsTimeline = useMemo((): SavingsPoint[] => {
-    const events: FixedEvent[] = [
-      ...fixedEvents,
-      ...expenses.map((e) => ({
-        date: e.date,
-        label: e.label,
-        delta: -e.amount,
-        type: 'user-expense' as const,
-      })),
-    ];
+    const overflowEvents: FixedEvent[] = [];
+    let pocketBal = 0;
+
+    for (let i = 0; i < paydays.length; i++) {
+      pocketBal += settings.pocketPerPeriod;
+      const range = getPeriodRange(paydays[i], settings.payFrequency);
+
+      const periodExpenses = expenses
+        .filter((e) => dateInPeriod(e.date, range.start, range.end))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      if (periodExpenses.length > 0) {
+        for (const exp of periodExpenses) {
+          const covered = Math.min(exp.amount, pocketBal);
+          const overflow = exp.amount - covered;
+          pocketBal -= covered;
+          if (overflow > 0) {
+            overflowEvents.push({
+              date: exp.date,
+              label: exp.label,
+              delta: -overflow,
+              type: 'user-expense',
+            });
+          }
+        }
+      } else {
+        const manualSpent = spentPerPeriod[i] || 0;
+        pocketBal = Math.max(0, pocketBal - manualSpent);
+      }
+    }
+
+    for (const exp of expenses) {
+      if (
+        getPeriodIndexForDate(exp.date, paydays, settings.payFrequency) === null
+      ) {
+        overflowEvents.push({
+          date: exp.date,
+          label: exp.label,
+          delta: -exp.amount,
+          type: 'user-expense',
+        });
+      }
+    }
+
+    const events: FixedEvent[] = [...fixedEvents, ...overflowEvents];
     events.sort(
       (a, b) => a.date.localeCompare(b.date) || (a.delta > 0 ? -1 : 1),
     );
@@ -473,7 +509,16 @@ export function useBudget() {
       });
     }
     return points;
-  }, [fixedEvents, expenses, settings.startDate, settings.startingBalance]);
+  }, [
+    fixedEvents,
+    expenses,
+    settings.startDate,
+    settings.startingBalance,
+    settings.pocketPerPeriod,
+    settings.payFrequency,
+    paydays,
+    spentPerPeriod,
+  ]);
 
   const pocketTimeline = useMemo((): PocketPoint[] => {
     let balance = 0;
@@ -502,6 +547,7 @@ export function useBudget() {
         balance: Math.round(balance),
         available: Math.round(avail),
         spent: Math.round(finalSpent),
+        overage: Math.round(Math.max(0, spent - avail)),
         type,
         idx: i,
         expenseCount,

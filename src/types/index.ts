@@ -85,6 +85,7 @@ export interface PocketPoint {
   balance: number;
   available: number;
   spent: number;
+  overage: number;
   type: 'surplus' | 'over' | 'flat';
   idx: number;
   expenseCount: number;
