@@ -54,8 +54,9 @@ export interface BudgetSettings {
   startingBalance: number;
   startDate: string;
   pocketPerPeriod: number;
-  payFrequency: 'weekly' | 'biweekly';
-  firstPayday: string;
+  pocketFrequency: PayFrequency;
+  pocketFirstPayday: string;
+  pocketInterval?: number;
   goals: SavingsGoal[];
   recurringExpenses: RecurringExpense[];
   incomeSources: IncomeSource[];
@@ -90,6 +91,11 @@ export interface SavingsPoint {
   events: SavingsPointEvent[];
 }
 
+export interface PocketExpenseItem {
+  label: string;
+  amount: number;
+}
+
 export interface PocketPoint {
   date: string;
   rawDate: string;
@@ -102,6 +108,7 @@ export interface PocketPoint {
   type: 'surplus' | 'over' | 'flat';
   idx: number;
   expenseCount: number;
+  expenseItems: PocketExpenseItem[];
 }
 
 export interface GoalStat {
