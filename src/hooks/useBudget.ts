@@ -185,7 +185,10 @@ function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
         pausedExpensesByMonth.get(monthStr)?.has(rec.id) ?? false;
 
       if (!isPaused) {
-        const day = Math.min(rec.dayOfMonth, lastDayOf(y, m));
+        const day =
+          rec.dayOfMonth <= 0
+            ? lastDayOf(y, m)
+            : Math.min(rec.dayOfMonth, lastDayOf(y, m));
         ev.push({
           date: fmtDate(y, m, day),
           label: `${rec.label} $${rec.amount}`,
@@ -235,12 +238,23 @@ function migrateGoal(g: Record<string, unknown>): SavingsGoal {
   return base;
 }
 
+function migrateRecurringExpenses(
+  expenses: RecurringExpense[],
+): RecurringExpense[] {
+  return expenses.map((e) =>
+    e.dayOfMonth === 31 ? { ...e, dayOfMonth: 0 } : e,
+  );
+}
+
 function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
   if (raw.goals) {
     const settings = raw as unknown as BudgetSettings;
     return {
       ...settings,
       incomeChanges: settings.incomeChanges ?? [],
+      recurringExpenses: migrateRecurringExpenses(
+        settings.recurringExpenses ?? [],
+      ),
       goals: (settings.goals as unknown as Record<string, unknown>[]).map(
         migrateGoal,
       ),

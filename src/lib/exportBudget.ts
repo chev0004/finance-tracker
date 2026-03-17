@@ -56,7 +56,7 @@ export function buildExportText(payload: ExportPayload): string {
     settings.recurringExpenses.length > 0
       ? settings.recurringExpenses.map(
           (e) =>
-            `${e.label}: $${e.amount.toLocaleString()} on day ${e.dayOfMonth} (${e.startMonth} to ${e.endMonth})`,
+            `${e.label}: $${e.amount.toLocaleString()} on ${e.dayOfMonth === 0 ? 'last day' : `day ${e.dayOfMonth}`} (${e.startMonth} to ${e.endMonth})`,
         )
       : ['None'];
 

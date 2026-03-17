@@ -47,12 +47,12 @@ function ordinal(n: number): string {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-type DayPreset = '1' | '15' | '31' | 'custom';
+type DayPreset = '1' | '15' | 'end' | 'custom';
 
 function presetForDay(d: number): DayPreset {
   if (d === 1) return '1';
   if (d === 15) return '15';
-  if (d === 31) return '31';
+  if (d === 0) return 'end';
   return 'custom';
 }
 
@@ -72,11 +72,17 @@ export function RecurringExpenseManager({
   const [endMonth, setEndMonth] = useState('2026-12');
 
   const resolvedDay =
-    dayPreset === 'custom'
-      ? Number.parseInt(customDay, 10) || 1
-      : Number.parseInt(dayPreset, 10);
+    dayPreset === 'end'
+      ? 0
+      : dayPreset === 'custom'
+        ? Number.parseInt(customDay, 10) || 1
+        : Number.parseInt(dayPreset, 10);
 
-  const sorted = [...expenses].sort((a, b) => a.dayOfMonth - b.dayOfMonth);
+  const sorted = [...expenses].sort((a, b) => {
+    const aDay = a.dayOfMonth === 0 ? 32 : a.dayOfMonth;
+    const bDay = b.dayOfMonth === 0 ? 32 : b.dayOfMonth;
+    return aDay - bDay;
+  });
 
   const resetForm = () => {
     setLabel('');
@@ -109,7 +115,7 @@ export function RecurringExpenseManager({
   const handleSave = () => {
     const numAmount = Number.parseFloat(amount) || 0;
     if (!label.trim() || numAmount <= 0) return;
-    const day = Math.min(31, Math.max(1, resolvedDay));
+    const day = resolvedDay === 0 ? 0 : Math.min(31, Math.max(1, resolvedDay));
 
     if (formMode === 'edit' && editingId) {
       onUpdate({
@@ -185,7 +191,7 @@ export function RecurringExpenseManager({
           <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
             {presetBtn('1', '1st')}
             {presetBtn('15', 'Mid')}
-            {presetBtn('31', 'End')}
+            {presetBtn('end', 'End')}
             {presetBtn('custom', '#')}
           </div>
           {dayPreset === 'custom' && (
@@ -266,8 +272,9 @@ export function RecurringExpenseManager({
                     -${exp.amount}
                   </span>
                   <span className="text-muted-foreground text-xs">
-                    {ordinal(exp.dayOfMonth)} &middot;{' '}
-                    {monthLabel(exp.startMonth)}-{monthLabel(exp.endMonth)}
+                    {exp.dayOfMonth === 0 ? 'Last' : ordinal(exp.dayOfMonth)}{' '}
+                    &middot; {monthLabel(exp.startMonth)}-
+                    {monthLabel(exp.endMonth)}
                   </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">

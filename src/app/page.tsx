@@ -144,7 +144,8 @@ export default function Home() {
                   {' '}
                   {settings.recurringExpenses
                     .map(
-                      (e) => `${e.label} $${e.amount} on the ${e.dayOfMonth}th`,
+                      (e) =>
+                        `${e.label} $${e.amount} on the ${e.dayOfMonth === 0 ? 'last day' : `${e.dayOfMonth}th`}`,
                     )
                     .join(', ')}
                   .
