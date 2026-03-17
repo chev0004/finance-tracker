@@ -283,7 +283,7 @@ function SourceItem({
             <Input
               type="number"
               min={0}
-              value={source.amount}
+              value={source.amount || ''}
               onChange={(e) =>
                 onUpdate({
                   ...source,

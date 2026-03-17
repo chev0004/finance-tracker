@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { PocketPoint } from '@/types';
+import type { PocketExpenseItem, PocketPoint } from '@/types';
 
 interface PocketChartProps {
   data: PocketPoint[];
@@ -36,10 +36,12 @@ function getPocketColor(
   type: PocketPoint['type'],
   isSelected: boolean,
   spent: number,
+  balance: number,
 ): string {
   if (isSelected) return BLUE;
   if (type === 'over') return RED;
-  if (type === 'surplus' && spent > 0) return ORANGE;
+  if (type === 'surplus' && spent > 0 && balance > 0) return ORANGE;
+  if (type === 'surplus' && spent > 0) return RED;
   if (type === 'surplus') return GREEN;
   return GRAY;
 }
@@ -54,6 +56,7 @@ interface ChartDataPoint {
   type: PocketPoint['type'];
   idx: number;
   expenseCount: number;
+  expenseItems: PocketExpenseItem[];
   color: string;
   isSelected: boolean;
 }
@@ -74,7 +77,13 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
       type: point.type,
       idx: point.idx,
       expenseCount: point.expenseCount,
-      color: getPocketColor(point.type, point.idx === selectedIdx, point.spent),
+      expenseItems: point.expenseItems,
+      color: getPocketColor(
+        point.type,
+        point.idx === selectedIdx,
+        point.spent,
+        point.balance,
+      ),
       isSelected: point.idx === selectedIdx,
     }));
   }, [data, selectedIdx]);
@@ -133,22 +142,34 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
       const point = payload[0].payload;
       return (
         <div className="rounded-lg border border-border bg-popover p-3 shadow-lg">
-          <div className="mb-1 text-muted-foreground text-xs">{point.date}</div>
-          <div className="text-sm">Spent: ${point.spent}</div>
-          <div
-            className="mt-1 font-mono text-sm"
-            style={{ color: point.color }}
-          >
-            ${point.balance} unspent
-          </div>
+          <div className="mb-2 text-muted-foreground text-xs">{point.date}</div>
+          {point.expenseItems.length > 0 ? (
+            <div className="mb-1 space-y-0.5">
+              {point.expenseItems.map((item, i) => (
+                <div key={i} className="flex justify-between gap-4 text-sm">
+                  <span className="text-muted-foreground">{item.label}</span>
+                  <span className="font-mono text-red-400">
+                    -${item.amount}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            point.spent > 0 && (
+              <div className="mb-1 flex justify-between gap-4 text-sm">
+                <span className="text-muted-foreground">Spent</span>
+                <span className="font-mono text-red-400">-${point.spent}</span>
+              </div>
+            )
+          )}
+          {point.balance > 0 && (
+            <div className="mt-1 font-mono text-green-400 text-sm">
+              ${point.balance} unspent
+            </div>
+          )}
           {point.overage > 0 && (
             <div className="mt-1 font-mono text-red-400 text-sm">
               ${point.overage} over budget
-            </div>
-          )}
-          {point.expenseCount > 0 && (
-            <div className="mt-1 text-muted-foreground text-xs">
-              {point.expenseCount} expense(s) logged
             </div>
           )}
         </div>
