@@ -10,7 +10,8 @@ import type {
 export interface ExportPayload {
   settings: BudgetSettings;
   expenses: Expense[];
-  savedPerPeriod: number;
+  monthlyIncome: number;
+  monthlySavings: number;
   savingsTimeline: SavingsPoint[];
   pocketTimeline: PocketPoint[];
   goalStats: GoalStat[];
@@ -26,27 +27,27 @@ export function buildExportText(payload: ExportPayload): string {
   const {
     settings,
     expenses,
-    savedPerPeriod,
+    monthlyIncome,
+    monthlySavings,
     savingsTimeline,
     pocketTimeline,
     goalStats,
     eoyBalance,
     validationErrors,
   } = payload;
-  const freq = settings.payFrequency === 'biweekly' ? 'biweekly' : 'weekly';
-  const freqLabel =
-    settings.payFrequency === 'biweekly' ? 'every 2 weeks' : 'weekly';
+  const pocketFreq =
+    settings.payFrequency === 'biweekly' ? 'biweekly' : 'weekly';
 
   const summary = [
     `Current balance: $${settings.startingBalance.toLocaleString()}`,
-    `Savings ${freqLabel}: $${savedPerPeriod.toLocaleString()}`,
+    `Savings per month: $${Math.round(monthlySavings).toLocaleString()}`,
     `Projected end of year: $${eoyBalance.toLocaleString()}`,
   ];
 
   const settingsLines = [
-    `Pay frequency: ${freq}`,
-    `First payday: ${settings.firstPayday}`,
-    `Income per period: $${settings.incomePerPeriod.toLocaleString()}`,
+    `Pocket period: ${pocketFreq}`,
+    `Pocket start: ${settings.firstPayday}`,
+    `Monthly income: $${Math.round(monthlyIncome).toLocaleString()}`,
     `Pocket per period: $${settings.pocketPerPeriod.toLocaleString()}`,
     `Starting balance: $${settings.startingBalance.toLocaleString()}`,
     `Start date: ${settings.startDate}`,
@@ -60,15 +61,24 @@ export function buildExportText(payload: ExportPayload): string {
         )
       : ['None'];
 
-  const incomeChangeLines =
-    settings.incomeChanges.length > 0
-      ? settings.incomeChanges
-          .slice()
-          .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
-          .map(
-            (c) =>
-              `From ${c.effectiveDate}: $${c.incomePerPeriod.toLocaleString()} per period`,
-          )
+  const incomeSourceLines =
+    settings.incomeSources.length > 0
+      ? settings.incomeSources.flatMap((source) => {
+          const freq =
+            source.payFrequency === 'custom' && source.payInterval
+              ? `every ${source.payInterval} days`
+              : source.payFrequency;
+          const header = `${source.name}: $${source.amount.toLocaleString()} ${freq} (first: ${source.firstPayday})`;
+          if (source.rateChanges.length === 0) return [header];
+          const changes = source.rateChanges
+            .slice()
+            .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+            .map(
+              (c) =>
+                `  From ${c.effectiveDate}: $${c.amount.toLocaleString()} per period`,
+            );
+          return [header, ...changes];
+        })
       : ['None'];
 
   const goalLines = settings.goals.map((goal) => {
@@ -117,7 +127,7 @@ export function buildExportText(payload: ExportPayload): string {
     section('Summary', summary),
     section('Settings', settingsLines),
     section('Recurring expenses', recurringLines),
-    section('Income changes', incomeChangeLines),
+    section('Income sources', incomeSourceLines),
     section('Savings goals', goalLines.length ? goalLines : ['None']),
     section('Goal feasibility', goalStatLines),
     section('Logged expenses', expenseLines),
