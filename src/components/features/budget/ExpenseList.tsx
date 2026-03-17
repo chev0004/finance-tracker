@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { normalizeNumInputBlur, normalizeNumInputLeading } from '@/lib/utils';
 import type { Expense, PayFrequency } from '@/types';
 
 interface ExpenseListProps {
@@ -94,7 +95,8 @@ export function ExpenseList({
 
   const commitEdit = () => {
     if (editingId) {
-      const num = Number.parseFloat(editValue);
+      const normalized = normalizeNumInputBlur(editValue);
+      const num = Number.parseFloat(normalized);
       if (!Number.isNaN(num) && num > 0) {
         onUpdateAmount(editingId, num);
       }
@@ -177,8 +179,10 @@ export function ExpenseList({
                         type="number"
                         min={0}
                         step={0.01}
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
+                        value={editValue === '' ? '0' : editValue}
+                        onChange={(e) =>
+                          setEditValue(normalizeNumInputLeading(e.target.value))
+                        }
                         onBlur={commitEdit}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') commitEdit();

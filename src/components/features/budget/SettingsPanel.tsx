@@ -2,6 +2,7 @@
 
 import { format, isValid, parseISO } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +20,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import {
+  cn,
+  normalizeNumInputBlur,
+  normalizeNumInputLeading,
+} from '@/lib/utils';
 import type { BudgetSettings, IncomeSource, PayFrequency } from '@/types';
 import { IncomeSourceManager } from './IncomeSourceManager';
 
@@ -51,6 +56,34 @@ export function SettingsPanel({
 }: SettingsPanelProps) {
   const pocketStartDate = parseISO(settings.pocketFirstPayday);
 
+  const [pocketStr, setPocketStr] = useState(String(settings.pocketPerPeriod));
+  const [pocketFocused, setPocketFocused] = useState(false);
+  const [balanceStr, setBalanceStr] = useState(
+    String(settings.startingBalance),
+  );
+  const [balanceFocused, setBalanceFocused] = useState(false);
+  const [intervalStr, setIntervalStr] = useState(
+    settings.pocketInterval === undefined
+      ? ''
+      : String(settings.pocketInterval),
+  );
+  const [intervalFocused, setIntervalFocused] = useState(false);
+
+  useEffect(() => {
+    if (!pocketFocused) setPocketStr(String(settings.pocketPerPeriod));
+  }, [settings.pocketPerPeriod, pocketFocused]);
+  useEffect(() => {
+    if (!balanceFocused) setBalanceStr(String(settings.startingBalance));
+  }, [settings.startingBalance, balanceFocused]);
+  useEffect(() => {
+    if (!intervalFocused)
+      setIntervalStr(
+        settings.pocketInterval === undefined
+          ? ''
+          : String(settings.pocketInterval),
+      );
+  }, [settings.pocketInterval, intervalFocused]);
+
   const pocketFreqLabel =
     settings.pocketFrequency === 'custom' && settings.pocketInterval
       ? `every ${settings.pocketInterval} days`
@@ -80,12 +113,16 @@ export function SettingsPanel({
               <Input
                 type="number"
                 min={0}
-                value={settings.pocketPerPeriod}
-                onFocus={(e) => e.target.select()}
+                value={pocketStr === '' ? '0' : pocketStr}
+                onFocus={() => setPocketFocused(true)}
+                onBlur={() => {
+                  setPocketFocused(false);
+                  const n = normalizeNumInputBlur(pocketStr);
+                  setPocketStr(n);
+                  onUpdate({ pocketPerPeriod: Number(n) || 0 });
+                }}
                 onChange={(e) =>
-                  onUpdate({
-                    pocketPerPeriod: Number(e.target.value) || 0,
-                  })
+                  setPocketStr(normalizeNumInputLeading(e.target.value))
                 }
                 className="pl-7 font-mono"
               />
@@ -124,11 +161,19 @@ export function SettingsPanel({
                 type="number"
                 min={1}
                 placeholder="e.g. 14"
-                value={settings.pocketInterval ?? ''}
-                onChange={(e) =>
+                value={intervalStr}
+                onFocus={() => setIntervalFocused(true)}
+                onBlur={() => {
+                  setIntervalFocused(false);
+                  const n = normalizeNumInputBlur(intervalStr);
+                  setIntervalStr(n);
                   onUpdate({
-                    pocketInterval: Number(e.target.value) || undefined,
-                  })
+                    pocketInterval:
+                      n === '' ? undefined : Number(n) || undefined,
+                  });
+                }}
+                onChange={(e) =>
+                  setIntervalStr(normalizeNumInputLeading(e.target.value))
                 }
                 className="font-mono"
               />
@@ -146,12 +191,16 @@ export function SettingsPanel({
               <Input
                 type="number"
                 min={0}
-                value={settings.startingBalance}
-                onFocus={(e) => e.target.select()}
+                value={balanceStr === '' ? '0' : balanceStr}
+                onFocus={() => setBalanceFocused(true)}
+                onBlur={() => {
+                  setBalanceFocused(false);
+                  const n = normalizeNumInputBlur(balanceStr);
+                  setBalanceStr(n);
+                  onUpdate({ startingBalance: Number(n) || 0 });
+                }}
                 onChange={(e) =>
-                  onUpdate({
-                    startingBalance: Number(e.target.value) || 0,
-                  })
+                  setBalanceStr(normalizeNumInputLeading(e.target.value))
                 }
                 className="pl-7 font-mono"
               />

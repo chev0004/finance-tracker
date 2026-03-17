@@ -2,7 +2,7 @@
 
 import { format, isValid, parseISO } from 'date-fns';
 import { CalendarIcon, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import {
+  cn,
+  normalizeNumInputBlur,
+  normalizeNumInputLeading,
+} from '@/lib/utils';
 import type { IncomeRateChange, IncomeSource, PayFrequency } from '@/types';
 
 const PAY_FREQUENCY_OPTIONS: { value: PayFrequency; label: string }[] = [
@@ -72,7 +76,7 @@ function RateChangeList({
   };
 
   const handleSave = () => {
-    const numAmount = Number.parseFloat(amount) || 0;
+    const numAmount = Number.parseFloat(normalizeNumInputBlur(amount)) || 0;
     if (!effectiveDate || numAmount <= 0) return;
 
     if (formMode === 'edit' && editingId) {
@@ -169,8 +173,10 @@ function RateChangeList({
               type="number"
               min={0}
               placeholder="0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              value={amount === '' ? '0' : amount}
+              onChange={(e) =>
+                setAmount(normalizeNumInputLeading(e.target.value))
+              }
               className="pl-7 font-mono"
             />
           </div>
@@ -259,6 +265,23 @@ function SourceItem({
 }) {
   const firstPaydayDate = parseISO(source.firstPayday);
 
+  const [amountStr, setAmountStr] = useState(String(source.amount));
+  const [amountFocused, setAmountFocused] = useState(false);
+  const [intervalStr, setIntervalStr] = useState(
+    source.payInterval === undefined ? '' : String(source.payInterval),
+  );
+  const [intervalFocused, setIntervalFocused] = useState(false);
+
+  useEffect(() => {
+    if (!amountFocused) setAmountStr(String(source.amount));
+  }, [source.amount, amountFocused]);
+  useEffect(() => {
+    if (!intervalFocused)
+      setIntervalStr(
+        source.payInterval === undefined ? '' : String(source.payInterval),
+      );
+  }, [source.payInterval, intervalFocused]);
+
   return (
     <div className="space-y-3 rounded-lg border border-border/50 bg-muted/20 p-3">
       <div className="flex flex-wrap items-end gap-3">
@@ -283,13 +306,16 @@ function SourceItem({
             <Input
               type="number"
               min={0}
-              value={source.amount}
-              onFocus={(e) => e.target.select()}
+              value={amountStr === '' ? '0' : amountStr}
+              onFocus={() => setAmountFocused(true)}
+              onBlur={() => {
+                setAmountFocused(false);
+                const n = normalizeNumInputBlur(amountStr);
+                setAmountStr(n);
+                onUpdate({ ...source, amount: Number(n) || 0 });
+              }}
               onChange={(e) =>
-                onUpdate({
-                  ...source,
-                  amount: Number(e.target.value) || 0,
-                })
+                setAmountStr(normalizeNumInputLeading(e.target.value))
               }
               className="pl-7 font-mono"
             />
@@ -361,12 +387,19 @@ function SourceItem({
               type="number"
               min={1}
               placeholder="e.g. 14"
-              value={source.payInterval ?? ''}
-              onChange={(e) =>
+              value={intervalStr}
+              onFocus={() => setIntervalFocused(true)}
+              onBlur={() => {
+                setIntervalFocused(false);
+                const n = normalizeNumInputBlur(intervalStr);
+                setIntervalStr(n);
                 onUpdate({
                   ...source,
-                  payInterval: Number(e.target.value) || undefined,
-                })
+                  payInterval: n === '' ? undefined : Number(n) || undefined,
+                });
+              }}
+              onChange={(e) =>
+                setIntervalStr(normalizeNumInputLeading(e.target.value))
               }
               className="font-mono"
             />
@@ -485,8 +518,11 @@ export function IncomeSourceManager({
                   type="number"
                   min={0}
                   placeholder="0"
-                  value={newAmount}
-                  onChange={(e) => setNewAmount(e.target.value)}
+                  value={newAmount === '' ? '0' : newAmount}
+                  onChange={(e) =>
+                    setNewAmount(normalizeNumInputLeading(e.target.value))
+                  }
+                  onBlur={() => setNewAmount(normalizeNumInputBlur(newAmount))}
                   className="pl-7 font-mono"
                 />
               </div>
@@ -553,12 +589,17 @@ export function IncomeSourceManager({
                   type="number"
                   min={1}
                   placeholder="e.g. 14"
-                  value={newPayInterval}
-                  onChange={(e) =>
-                    setNewPayInterval(
-                      e.target.value ? Number(e.target.value) : '',
-                    )
-                  }
+                  value={newPayInterval === '' ? '' : String(newPayInterval)}
+                  onChange={(e) => {
+                    const v = normalizeNumInputLeading(e.target.value);
+                    setNewPayInterval(v === '' ? '' : Number(v));
+                  }}
+                  onBlur={() => {
+                    const v = normalizeNumInputBlur(
+                      newPayInterval === '' ? '' : String(newPayInterval),
+                    );
+                    setNewPayInterval(v === '' ? '' : Number(v));
+                  }}
                   className="font-mono"
                 />
               </div>

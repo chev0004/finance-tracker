@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { normalizeNumInputBlur, normalizeNumInputLeading } from '@/lib/utils';
 import type { PocketExpenseItem, PocketPoint } from '@/types';
 
 interface PocketChartProps {
@@ -147,8 +148,8 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
             <div className="mb-1 space-y-0.5">
               {point.expenseItems.map((item, i) => (
                 <div key={i} className="flex justify-between gap-4 text-sm">
-                  <span>{item.label}</span>
-                  <span className="font-mono text-red-400">
+                  <span className="text-muted-foreground">{item.label}</span>
+                  <span className="font-mono text-foreground text-sm">
                     -${item.amount}
                   </span>
                 </div>
@@ -157,8 +158,10 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
           ) : (
             point.spent > 0 && (
               <div className="mb-1 flex justify-between gap-4 text-sm">
-                <span>Spent</span>
-                <span className="font-mono text-red-400">-${point.spent}</span>
+                <span className="text-muted-foreground">Spent</span>
+                <span className="font-mono text-foreground">
+                  -${point.spent}
+                </span>
               </div>
             )
           )}
@@ -280,8 +283,13 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
                   type="number"
                   min={0}
                   max={selectedPoint.available}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
+                  value={inputValue === '' ? '0' : inputValue}
+                  onChange={(e) =>
+                    setInputValue(normalizeNumInputLeading(e.target.value))
+                  }
+                  onBlur={() =>
+                    setInputValue(normalizeNumInputBlur(inputValue))
+                  }
                   className="w-24 pr-7 text-center font-mono"
                 />
                 <div className="absolute inset-y-0 right-0 flex w-7 flex-col border-input border-l">
