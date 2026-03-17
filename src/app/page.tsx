@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
 import { ExpenseList } from '@/components/features/budget/ExpenseList';
+import { ExportMenu } from '@/components/features/budget/ExportMenu';
 import { GoalCard } from '@/components/features/budget/GoalCard';
 import { GoalForm } from '@/components/features/budget/GoalForm';
 import { PocketChart } from '@/components/features/budget/PocketChart';
@@ -71,13 +72,27 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
-        <header className="mb-6">
-          <h1 className="font-mono text-muted-foreground text-sm uppercase tracking-wider">
-            chev.dev / budget tracker
-          </h1>
-          <p className="mt-1 text-muted-foreground/60 text-xs">
-            2026 full-year projection
-          </p>
+        <header className="mb-6 flex flex-row items-start justify-between gap-4">
+          <div>
+            <h1 className="font-mono text-muted-foreground text-sm uppercase tracking-wider">
+              chev.dev / budget tracker
+            </h1>
+            <p className="mt-1 text-muted-foreground/60 text-xs">
+              2026 full-year projection
+            </p>
+          </div>
+          <ExportMenu
+            payload={{
+              settings,
+              expenses,
+              savedPerPeriod,
+              savingsTimeline,
+              pocketTimeline,
+              goalStats,
+              eoyBalance: stats.eoy,
+              validationErrors: validation.errors,
+            }}
+          />
         </header>
 
         <div className="grid grid-cols-3 gap-3">
