@@ -6,18 +6,53 @@ export interface Expense {
   weekIdx?: number;
 }
 
+export interface GoalLineItem {
+  id: string;
+  label: string;
+  amount: number;
+}
+
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  lineItems: GoalLineItem[];
+  pauseIncome: boolean;
+  pausedExpenseIds: string[];
+}
+
+export interface RecurringExpense {
+  id: string;
+  label: string;
+  amount: number;
+  dayOfMonth: number;
+  startMonth: string;
+  endMonth: string;
+}
+
+export interface BudgetSettings {
+  startingBalance: number;
+  startDate: string;
+  incomePerPeriod: number;
+  pocketPerPeriod: number;
+  payFrequency: 'weekly' | 'biweekly';
+  firstPayday: string;
+  goals: SavingsGoal[];
+  recurringExpenses: RecurringExpense[];
+}
+
 export interface FixedEvent {
   date: string;
   label: string;
   delta: number;
   type:
     | 'payday'
-    | 'rent'
-    | 'fixed-expense'
-    | 'trip'
+    | 'recurring'
+    | 'goal'
     | 'start'
     | 'user-expense'
-    | 'payday-rent';
+    | 'payday-recurring';
 }
 
 export interface SavingsPoint {
@@ -41,12 +76,13 @@ export interface PocketPoint {
   expenseCount: number;
 }
 
-export interface BudgetSettings {
-  startingBalance: number;
-  tripCost: number;
-  weeklySave: number;
-  weeklyPocket: number;
-  tripMonth: string;
+export interface GoalStat {
+  goalId: string;
+  totalCost: number;
+  preBalance: number;
+  postBalance: number;
+  isFeasible: boolean;
+  isWarning: boolean;
 }
 
 export interface ValidationError {
@@ -56,6 +92,6 @@ export interface ValidationError {
 
 export interface BudgetState {
   expenses: Expense[];
-  spentPerWeek: number[];
+  spentPerPeriod: number[];
   settings: BudgetSettings;
 }

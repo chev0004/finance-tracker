@@ -4,16 +4,47 @@ import type {
   BudgetState,
   Expense,
   FixedEvent,
+  GoalStat,
   PocketPoint,
+  RecurringExpense,
+  SavingsGoal,
   SavingsPoint,
 } from '@/types';
 
 const DEFAULT_SETTINGS: BudgetSettings = {
   startingBalance: 0,
-  tripCost: 0,
-  weeklySave: 0,
-  weeklyPocket: 0,
-  tripMonth: '2000-01',
+  startDate: '2000-01-01',
+  incomePerPeriod: 0,
+  pocketPerPeriod: 0,
+  payFrequency: 'weekly',
+  firstPayday: '2000-01-01',
+  goals: [
+    {
+      id: 'default-goal',
+      name: 'Goal',
+      startDate: '2000-01-01',
+      endDate: '2026-07-31',
+      lineItems: [
+        {
+          id: 'default-goal-cost',
+          label: 'Trip Cost',
+          amount: 0,
+        },
+      ],
+      pauseIncome: true,
+      pausedExpenseIds: ['default-rent'],
+    },
+  ],
+  recurringExpenses: [
+    {
+      id: 'default-rent',
+      label: 'Rent',
+      amount: 0,
+      dayOfMonth: 15,
+      startMonth: '2000-01',
+      endMonth: '2000-12',
+    },
+  ],
 };
 
 const STORAGE_KEY = 'budget-tracker-data';
@@ -22,107 +53,260 @@ function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-function dateStr(y: number, m: number, d: number): string {
+function fmtDate(y: number, m: number, d: number): string {
   return `${y}-${pad(m)}-${pad(d)}`;
 }
 
-function getFridays(): string[] {
-  const f: string[] = [];
-  const d = new Date('2000-01-01T00:00:00');
-  while (d.getFullYear() === 2026) {
-    f.push(d.toISOString().slice(0, 10));
-    d.setDate(d.getDate() + 7);
-  }
-  return f;
+function lastDayOf(y: number, m: number): number {
+  return new Date(y, m, 0).getDate();
 }
 
-function getWeekRange(fridayDate: string): {
-  start: string;
-  end: string;
-  label: string;
-} {
-  const friday = new Date(`${fridayDate}T00:00:00`);
-  const saturday = new Date(friday);
-  saturday.setDate(friday.getDate() - 6);
+function getPaydays(
+  firstPayday: string,
+  frequency: 'weekly' | 'biweekly',
+): string[] {
+  const result: string[] = [];
+  const d = new Date(`${firstPayday}T00:00:00`);
+  const step = frequency === 'biweekly' ? 14 : 7;
+  while (d.getFullYear() === 2026) {
+    result.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + step);
+  }
+  return result;
+}
 
-  const formatDate = (d: Date) =>
+function getPeriodRange(
+  payday: string,
+  frequency: 'weekly' | 'biweekly',
+): { start: string; end: string; label: string } {
+  const end = new Date(`${payday}T00:00:00`);
+  const start = new Date(end);
+  start.setDate(end.getDate() - (frequency === 'biweekly' ? 13 : 6));
+
+  const fmt = (d: Date) =>
     d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   return {
-    start: saturday.toISOString().slice(0, 10),
-    end: fridayDate,
-    label: `${formatDate(saturday)}-${formatDate(friday)}`,
+    start: start.toISOString().slice(0, 10),
+    end: payday,
+    label: `${fmt(start)}-${fmt(end)}`,
   };
 }
 
-function dateInWeek(date: string, weekStart: string, weekEnd: string): boolean {
-  return date >= weekStart && date <= weekEnd;
+function dateInPeriod(date: string, start: string, end: string): boolean {
+  return date >= start && date <= end;
 }
 
-function getWeekIndexForDate(date: string, fridays: string[]): number | null {
-  for (let i = 0; i < fridays.length; i++) {
-    const weekRange = getWeekRange(fridays[i]);
-    if (dateInWeek(date, weekRange.start, weekRange.end)) {
-      return i;
-    }
+function getPeriodIndexForDate(
+  date: string,
+  paydays: string[],
+  frequency: 'weekly' | 'biweekly',
+): number | null {
+  for (let i = 0; i < paydays.length; i++) {
+    const range = getPeriodRange(paydays[i], frequency);
+    if (dateInPeriod(date, range.start, range.end)) return i;
   }
   return null;
 }
 
-function genFixedEvents(weeklySave: number, tripMonth: string): FixedEvent[] {
+function getMonthsInRange(startDate: string, endDate: string): string[] {
+  const result: string[] = [];
+  const [sy, sm] = startDate.slice(0, 7).split('-').map(Number);
+  const [ey, em] = endDate.slice(0, 7).split('-').map(Number);
+  let y = sy;
+  let m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    result.push(`${y}-${pad(m)}`);
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+  return result;
+}
+
+function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
   const ev: FixedEvent[] = [];
-  const d = new Date('2000-01-01T00:00:00');
-  while (d.getFullYear() === 2026) {
-    const dateStr = d.toISOString().slice(0, 10);
-    const inTripMonth = dateStr.startsWith(`${tripMonth}-`);
-    if (!inTripMonth) {
+  const saved = settings.incomePerPeriod - settings.pocketPerPeriod;
+
+  const pausedMonths = new Set(
+    settings.goals
+      .filter((g) => g.pauseIncome)
+      .flatMap((g) => getMonthsInRange(g.startDate, g.endDate)),
+  );
+
+  const paydays = getPaydays(settings.firstPayday, settings.payFrequency);
+  for (const payday of paydays) {
+    if (!pausedMonths.has(payday.slice(0, 7))) {
       ev.push({
-        date: dateStr,
+        date: payday,
         label: 'payday',
-        delta: weeklySave,
+        delta: saved,
         type: 'payday',
       });
     }
-    d.setDate(d.getDate() + 7);
   }
-  for (let m = 4; m <= 12; m++) {
-    ev.push({
-      date: dateStr(2026, m, 15),
-      label: 'rent',
-      delta: 0,
-      type: 'rent',
-    });
+
+  const pausedExpensesByMonth = new Map<string, Set<string>>();
+  for (const goal of settings.goals) {
+    if (goal.pausedExpenseIds.length === 0) continue;
+    for (const month of getMonthsInRange(goal.startDate, goal.endDate)) {
+      const existing = pausedExpensesByMonth.get(month) ?? new Set<string>();
+      for (const id of goal.pausedExpenseIds) {
+        existing.add(id);
+      }
+      pausedExpensesByMonth.set(month, existing);
+    }
   }
-  ev.push({
-    date: '2000-01-01',
-    label: 'adjustment',
-    delta: 0,
-    type: 'fixed-expense',
-  });
+
+  for (const rec of settings.recurringExpenses) {
+    const [endY, endM] = rec.endMonth.split('-').map(Number);
+    let [y, m] = rec.startMonth.split('-').map(Number);
+
+    while (y < endY || (y === endY && m <= endM)) {
+      const monthStr = `${y}-${pad(m)}`;
+      const isPaused =
+        pausedExpensesByMonth.get(monthStr)?.has(rec.id) ?? false;
+
+      if (!isPaused) {
+        const day = Math.min(rec.dayOfMonth, lastDayOf(y, m));
+        ev.push({
+          date: fmtDate(y, m, day),
+          label: `${rec.label} $${rec.amount}`,
+          delta: -rec.amount,
+          type: 'recurring',
+        });
+      }
+      m++;
+      if (m > 12) {
+        m = 1;
+        y++;
+      }
+    }
+  }
+
+  for (const goal of settings.goals) {
+    const total = goal.lineItems.reduce((s, i) => s + i.amount, 0);
+    if (total > 0) {
+      ev.push({
+        date: goal.startDate,
+        label: `${goal.name} $${total.toLocaleString()}`,
+        delta: -total,
+        type: 'goal',
+      });
+    }
+  }
+
   return ev;
+}
+
+function migrateGoal(g: Record<string, unknown>): SavingsGoal {
+  const base =
+    'startDate' in g
+      ? (g as unknown as SavingsGoal)
+      : {
+          id: (g.id as string) ?? crypto.randomUUID(),
+          name: (g.name as string) ?? '',
+          startDate: (g.targetDate as string) ?? '2000-01-01',
+          endDate: (g.targetDate as string) ?? '2000-01-01',
+          lineItems: (g.lineItems as SavingsGoal['lineItems']) ?? [],
+          pauseIncome: (g.pauseIncome as boolean) ?? false,
+          pausedExpenseIds: [] as string[],
+        };
+  if (!('pausedExpenseIds' in base) || !base.pausedExpenseIds) {
+    return { ...base, pausedExpenseIds: [] };
+  }
+  return base;
+}
+
+function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
+  if (raw.goals) {
+    const settings = raw as unknown as BudgetSettings;
+    return {
+      ...settings,
+      goals: (settings.goals as unknown as Record<string, unknown>[]).map(
+        migrateGoal,
+      ),
+    };
+  }
+
+  const old = raw as {
+    startingBalance?: number;
+    tripCost?: number;
+    weeklySave?: number;
+    weeklyPocket?: number;
+    tripMonth?: string;
+  };
+  const weeklySave = old.weeklySave ?? 0;
+  const weeklyPocket = old.weeklyPocket ?? 0;
+
+  return {
+    startingBalance: old.startingBalance ?? 0,
+    startDate: '2000-01-01',
+    incomePerPeriod: weeklySave + weeklyPocket,
+    pocketPerPeriod: weeklyPocket,
+    payFrequency: 'weekly',
+    firstPayday: '2000-01-01',
+    goals: old.tripMonth
+      ? [
+          {
+            id: crypto.randomUUID(),
+            name: 'Goal',
+            startDate: `${old.tripMonth}-01`,
+            endDate: `${old.tripMonth}-01`,
+            lineItems: [
+              {
+                id: crypto.randomUUID(),
+                label: 'Trip Cost',
+                amount: old.tripCost ?? 0,
+              },
+            ],
+            pauseIncome: true,
+            pausedExpenseIds: [],
+          },
+        ]
+      : [],
+    recurringExpenses: [
+      {
+        id: crypto.randomUUID(),
+        label: 'Rent',
+        amount: 0,
+        dayOfMonth: 15,
+        startMonth: '2000-01',
+        endMonth: '2000-12',
+      },
+    ],
+  };
 }
 
 export function useBudget() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [spentPerWeek, setSpentPerWeek] = useState<number[]>([]);
+  const [spentPerPeriod, setSpentPerPeriod] = useState<number[]>([]);
   const [settings, setSettings] = useState<BudgetSettings>(DEFAULT_SETTINGS);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const data: BudgetState = JSON.parse(stored);
+        const data = JSON.parse(stored);
         setExpenses(data.expenses || []);
-        setSpentPerWeek(data.spentPerWeek || []);
-        setSettings({ ...DEFAULT_SETTINGS, ...data.settings });
+        setSpentPerPeriod(data.spentPerPeriod || data.spentPerWeek || []);
+        setSettings(migrateSettings(data.settings || {}));
       } else {
-        const fridays = getFridays();
-        setSpentPerWeek(fridays.map(() => 0));
+        const pd = getPaydays(
+          DEFAULT_SETTINGS.firstPayday,
+          DEFAULT_SETTINGS.payFrequency,
+        );
+        setSpentPerPeriod(pd.map(() => 0));
       }
     } catch {
-      const fridays = getFridays();
-      setSpentPerWeek(fridays.map(() => 0));
+      const pd = getPaydays(
+        DEFAULT_SETTINGS.firstPayday,
+        DEFAULT_SETTINGS.payFrequency,
+      );
+      setSpentPerPeriod(pd.map(() => 0));
     }
     setIsLoaded(true);
   }, []);
@@ -130,36 +314,53 @@ export function useBudget() {
   useEffect(() => {
     if (!isLoaded) return;
     try {
-      const data: BudgetState = { expenses, spentPerWeek, settings };
+      const data: BudgetState = {
+        expenses,
+        spentPerPeriod,
+        settings,
+      };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
       // localStorage unavailable
     }
-  }, [expenses, spentPerWeek, settings, isLoaded]);
+  }, [expenses, spentPerPeriod, settings, isLoaded]);
 
-  const fridays = useMemo(() => getFridays(), []);
-  const fixedEvents = useMemo(
-    () => genFixedEvents(settings.weeklySave, settings.tripMonth),
-    [settings.weeklySave, settings.tripMonth],
+  const savedPerPeriod = settings.incomePerPeriod - settings.pocketPerPeriod;
+
+  const paydays = useMemo(
+    () => getPaydays(settings.firstPayday, settings.payFrequency),
+    [settings.firstPayday, settings.payFrequency],
   );
 
-  const expensesPerWeek = useMemo(() => {
-    const weekTotals: number[] = fridays.map(() => 0);
-    const weekExpenseCounts: number[] = fridays.map(() => 0);
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (spentPerPeriod.length !== paydays.length) {
+      setSpentPerPeriod(paydays.map(() => 0));
+    }
+  }, [paydays.length, isLoaded, spentPerPeriod.length, paydays]);
+
+  const fixedEvents = useMemo(() => genFixedEvents(settings), [settings]);
+
+  const expensesPerPeriod = useMemo(() => {
+    const totals: number[] = paydays.map(() => 0);
+    const counts: number[] = paydays.map(() => 0);
 
     for (const expense of expenses) {
-      const weekIdx = getWeekIndexForDate(expense.date, fridays);
-      if (weekIdx !== null) {
-        weekTotals[weekIdx] += expense.amount;
-        weekExpenseCounts[weekIdx]++;
+      const idx = getPeriodIndexForDate(
+        expense.date,
+        paydays,
+        settings.payFrequency,
+      );
+      if (idx !== null) {
+        totals[idx] += expense.amount;
+        counts[idx]++;
       }
     }
 
-    return { weekTotals, weekExpenseCounts };
-  }, [expenses, fridays]);
+    return { totals, counts };
+  }, [expenses, paydays, settings.payFrequency]);
 
   const savingsTimeline = useMemo((): SavingsPoint[] => {
-    const tripDate = `${settings.tripMonth}-01`;
     const events: FixedEvent[] = [
       ...fixedEvents,
       ...expenses.map((e) => ({
@@ -168,21 +369,21 @@ export function useBudget() {
         delta: -e.amount,
         type: 'user-expense' as const,
       })),
-      {
-        date: tripDate,
-        label: 'trip cost',
-        delta: -settings.tripCost,
-        type: 'trip' as const,
-      },
     ];
     events.sort(
       (a, b) => a.date.localeCompare(b.date) || (a.delta > 0 ? -1 : 1),
     );
 
+    const startD = new Date(`${settings.startDate}T00:00:00`);
+    const startLabel = startD.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+
     const points: SavingsPoint[] = [
       {
-        date: 'Mar 16',
-        rawDate: '2026-03-16',
+        date: startLabel,
+        rawDate: settings.startDate,
         balance: settings.startingBalance,
         label: 'start',
         type: 'start',
@@ -192,7 +393,7 @@ export function useBudget() {
     const grouped: Record<string, FixedEvent[]> = {};
 
     for (const e of events) {
-      if (e.date < '2000-01-01') continue;
+      if (e.date <= settings.startDate) continue;
       if (!grouped[e.date]) grouped[e.date] = [];
       grouped[e.date].push(e);
     }
@@ -203,19 +404,18 @@ export function useBudget() {
       for (const e of evs.filter((x) => x.delta < 0)) running += e.delta;
 
       const hasPayday = evs.some((e) => e.type === 'payday');
-      const hasRent = evs.some((e) => e.type === 'rent');
-      const hasTrip = evs.some((e) => e.type === 'trip');
-      const hasFixed = evs.some((e) => e.type === 'fixed-expense');
+      const hasRecurring = evs.some((e) => e.type === 'recurring');
+      const hasGoal = evs.some((e) => e.type === 'goal');
       const hasUser = evs.some((e) => e.type === 'user-expense');
 
       let type: FixedEvent['type'] = 'payday';
-      if (hasTrip && hasPayday) type = 'payday-rent';
-      else if (hasTrip) type = 'trip';
-      else if ((hasFixed || hasUser) && !hasPayday && !hasRent)
-        type = 'user-expense';
-      else if (hasPayday && (hasRent || hasFixed || hasUser))
-        type = 'payday-rent';
-      else if (hasRent) type = 'rent';
+      if (hasGoal && !hasPayday) type = 'goal';
+      else if (hasGoal && hasPayday) type = 'payday-recurring';
+      else if ((hasRecurring || hasUser) && !hasPayday)
+        type = hasRecurring ? 'recurring' : 'user-expense';
+      else if (hasPayday && (hasRecurring || hasUser))
+        type = 'payday-recurring';
+      else if (hasRecurring) type = 'recurring';
 
       const d = new Date(`${date}T00:00:00`);
       const fmt = d.toLocaleDateString('en-US', {
@@ -231,41 +431,32 @@ export function useBudget() {
       });
     }
     return points;
-  }, [
-    fixedEvents,
-    expenses,
-    settings.tripMonth,
-    settings.tripCost,
-    settings.startingBalance,
-  ]);
+  }, [fixedEvents, expenses, settings.startDate, settings.startingBalance]);
 
   const pocketTimeline = useMemo((): PocketPoint[] => {
     let balance = 0;
-    return fridays.map((fridayDate, i) => {
-      const weekRange = getWeekRange(fridayDate);
-      const expenseTotal = expensesPerWeek.weekTotals[i] || 0;
-      const expenseCount = expensesPerWeek.weekExpenseCounts[i] || 0;
+    return paydays.map((payday, i) => {
+      const range = getPeriodRange(payday, settings.payFrequency);
+      const expenseTotal = expensesPerPeriod.totals[i] || 0;
+      const expenseCount = expensesPerPeriod.counts[i] || 0;
 
-      const spentFromExpenses = expenseCount > 0 ? expenseTotal : 0;
-      const manualSpent = spentPerWeek[i] || 0;
-      const spent = expenseCount > 0 ? spentFromExpenses : manualSpent;
-
-      const avail = balance + settings.weeklyPocket;
+      const spent = expenseCount > 0 ? expenseTotal : spentPerPeriod[i] || 0;
+      const avail = balance + settings.pocketPerPeriod;
       const finalSpent = Math.min(spent, avail);
       balance = avail - finalSpent;
 
       const type =
-        finalSpent < settings.weeklyPocket
+        finalSpent < settings.pocketPerPeriod
           ? 'surplus'
-          : finalSpent > settings.weeklyPocket
+          : finalSpent > settings.pocketPerPeriod
             ? 'over'
             : 'flat';
 
       return {
-        date: weekRange.label,
-        rawDate: fridayDate,
-        weekStart: weekRange.start,
-        weekEnd: weekRange.end,
+        date: range.label,
+        rawDate: payday,
+        weekStart: range.start,
+        weekEnd: range.end,
         balance: Math.round(balance),
         available: Math.round(avail),
         spent: Math.round(finalSpent),
@@ -274,107 +465,125 @@ export function useBudget() {
         expenseCount,
       };
     });
-  }, [fridays, spentPerWeek, settings.weeklyPocket, expensesPerWeek]);
+  }, [
+    paydays,
+    spentPerPeriod,
+    settings.pocketPerPeriod,
+    settings.payFrequency,
+    expensesPerPeriod,
+  ]);
+
+  const goalStats = useMemo((): GoalStat[] => {
+    return settings.goals.map((goal) => {
+      const total = goal.lineItems.reduce((s, item) => s + item.amount, 0);
+      const prePt = [...savingsTimeline]
+        .filter((p) => p.rawDate < goal.startDate)
+        .pop();
+      const goalPt = savingsTimeline.find((p) => p.rawDate === goal.startDate);
+      const preBalance = prePt ? prePt.balance : settings.startingBalance;
+      const postBalance = goalPt ? goalPt.balance : preBalance - total;
+
+      return {
+        goalId: goal.id,
+        totalCost: total,
+        preBalance,
+        postBalance,
+        isFeasible: postBalance >= 0,
+        isWarning: postBalance >= 0 && postBalance < 500,
+      };
+    });
+  }, [settings.goals, savingsTimeline, settings.startingBalance]);
 
   const stats = useMemo(() => {
-    const tripDate = `${settings.tripMonth}-01`;
-    const pts = savingsTimeline;
-    const prePt = [...pts].filter((p) => p.rawDate < tripDate).pop();
-    const tripPt = pts.find((p) => p.rawDate === tripDate);
-    const pre = prePt ? prePt.balance : settings.startingBalance;
-    const post = tripPt ? tripPt.balance : pre - settings.tripCost;
-
-    let running = settings.startingBalance;
-    const grouped: Record<string, FixedEvent[]> = {};
-    for (const e of fixedEvents) {
-      if (e.date < '2000-01-01') continue;
-      if (!grouped[e.date]) grouped[e.date] = [];
-      grouped[e.date].push(e);
-    }
-    for (const date of Object.keys(grouped).sort()) {
-      const evs = grouped[date];
-      for (const e of evs.filter((x) => x.delta > 0)) running += e.delta;
-      for (const e of evs.filter((x) => x.delta < 0)) running += e.delta;
-    }
-    const eoy = Math.round(running);
-
-    return { pre, post, eoy };
-  }, [
-    savingsTimeline,
-    settings.tripMonth,
-    settings.startingBalance,
-    settings.tripCost,
-    fixedEvents,
-  ]);
+    const last = savingsTimeline[savingsTimeline.length - 1];
+    return {
+      eoy: last ? last.balance : settings.startingBalance,
+    };
+  }, [savingsTimeline, settings.startingBalance]);
 
   const validation = useMemo(() => {
     const errors: { field: string; message: string }[] = [];
-    const tripDate = `${settings.tripMonth}-01`;
-    const post = stats.post;
 
-    if (post < 0) {
-      const mn = new Date(`${tripDate}T00:00:00`).toLocaleDateString('en-US', {
-        month: 'long',
-      });
+    const negPt = savingsTimeline.find((p) => p.balance < 0);
+    if (negPt) {
       errors.push({
-        field: 'tripMonth',
-        message: `You would be $${Math.abs(post).toLocaleString()} short in ${mn}. Pick a later month.`,
-      });
-    } else if (post < 500) {
-      const mn = new Date(`${tripDate}T00:00:00`).toLocaleDateString('en-US', {
-        month: 'long',
-      });
-      errors.push({
-        field: 'tripMonth',
-        message: `Cutting it close. Only $${post.toLocaleString()} left after main expense in ${mn}.`,
+        field: 'balance',
+        message: `Balance goes negative ($${negPt.balance.toLocaleString()}) on ${negPt.date}. You're spending more than you've saved.`,
       });
     }
 
-    return { errors, hasError: errors.length > 0, isCritical: post < 0 };
-  }, [stats.post, settings.tripMonth]);
+    for (const goal of settings.goals) {
+      const stat = goalStats.find((s) => s.goalId === goal.id);
+      if (stat && !stat.isFeasible) {
+        errors.push({
+          field: 'goal',
+          message: `You'd be $${Math.abs(stat.postBalance).toLocaleString()} short for ${goal.name}.`,
+        });
+      } else if (stat?.isWarning) {
+        errors.push({
+          field: 'goal',
+          message: `Cutting it close for ${goal.name}. Only $${stat.postBalance.toLocaleString()} left after.`,
+        });
+      }
+    }
+    return {
+      errors,
+      hasError: errors.length > 0,
+      isCritical: !!negPt || goalStats.some((s) => !s.isFeasible),
+    };
+  }, [settings.goals, goalStats, savingsTimeline]);
+
+  // --- Actions ---
 
   const addExpense = useCallback(
     (date: string, label: string, amount: number) => {
       if (!date || !label || Number.isNaN(amount) || amount <= 0) return false;
-
-      const weekIdx = getWeekIndexForDate(date, fridays);
-
-      const newExpense: Expense = {
-        id: crypto.randomUUID(),
+      const periodIdx = getPeriodIndexForDate(
         date,
-        label,
-        amount,
-        weekIdx: weekIdx ?? undefined,
-      };
-
-      setExpenses((prev) => [...prev, newExpense]);
+        paydays,
+        settings.payFrequency,
+      );
+      setExpenses((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          date,
+          label,
+          amount,
+          weekIdx: periodIdx ?? undefined,
+        },
+      ]);
       return true;
     },
-    [fridays],
+    [paydays, settings.payFrequency],
   );
 
   const removeExpense = useCallback((id: string) => {
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   }, []);
 
-  const updateSpentForWeek = useCallback(
-    (weekIdx: number, amount: number): { success: boolean; error?: string } => {
-      const pt = pocketTimeline[weekIdx];
-      if (!pt) return { success: false, error: 'Invalid week' };
+  const updateExpenseAmount = useCallback((id: string, amount: number) => {
+    if (Number.isNaN(amount) || amount <= 0) return;
+    setExpenses((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, amount } : e)),
+    );
+  }, []);
 
+  const updateSpentForPeriod = useCallback(
+    (idx: number, amount: number): { success: boolean; error?: string } => {
+      const pt = pocketTimeline[idx];
+      if (!pt) return { success: false, error: 'Invalid period' };
       if (pt.expenseCount > 0) {
         return {
           success: false,
           error:
-            'Expenses are logged for this week. Edit through the expense log.',
+            'Expenses are logged for this period. Edit through the expense log.',
         };
       }
-
-      const validAmount = Math.max(0, Math.min(amount, pt.available));
-
-      setSpentPerWeek((prev) => {
+      const valid = Math.max(0, Math.min(amount, pt.available));
+      setSpentPerPeriod((prev) => {
         const next = [...prev];
-        next[weekIdx] = validAmount;
+        next[idx] = valid;
         return next;
       });
       return { success: true };
@@ -382,28 +591,81 @@ export function useBudget() {
     [pocketTimeline],
   );
 
-  const updateTripMonth = useCallback((month: string) => {
-    setSettings((prev) => ({ ...prev, tripMonth: month }));
+  const updateSettings = useCallback((patch: Partial<BudgetSettings>) => {
+    setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  const updateSettings = useCallback((newSettings: Partial<BudgetSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
+  const addGoal = useCallback((goal: SavingsGoal) => {
+    setSettings((prev) => ({
+      ...prev,
+      goals: [...prev.goals, goal],
+    }));
+  }, []);
+
+  const updateGoal = useCallback((goal: SavingsGoal) => {
+    setSettings((prev) => ({
+      ...prev,
+      goals: prev.goals.map((g) => (g.id === goal.id ? goal : g)),
+    }));
+  }, []);
+
+  const removeGoal = useCallback((id: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      goals: prev.goals.filter((g) => g.id !== id),
+    }));
+  }, []);
+
+  const addRecurringExpense = useCallback(
+    (expense: Omit<RecurringExpense, 'id'>) => {
+      setSettings((prev) => ({
+        ...prev,
+        recurringExpenses: [
+          ...prev.recurringExpenses,
+          { ...expense, id: crypto.randomUUID() },
+        ],
+      }));
+    },
+    [],
+  );
+
+  const updateRecurringExpense = useCallback((expense: RecurringExpense) => {
+    setSettings((prev) => ({
+      ...prev,
+      recurringExpenses: prev.recurringExpenses.map((e) =>
+        e.id === expense.id ? expense : e,
+      ),
+    }));
+  }, []);
+
+  const removeRecurringExpense = useCallback((id: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      recurringExpenses: prev.recurringExpenses.filter((e) => e.id !== id),
+    }));
   }, []);
 
   return {
     isLoaded,
     expenses,
-    spentPerWeek,
     settings,
-    fridays,
+    savedPerPeriod,
+    paydays,
     savingsTimeline,
     pocketTimeline,
+    goalStats,
     stats,
     validation,
     addExpense,
     removeExpense,
-    updateSpentForWeek,
-    updateTripMonth,
+    updateExpenseAmount,
+    updateSpentForPeriod,
     updateSettings,
+    addGoal,
+    updateGoal,
+    removeGoal,
+    addRecurringExpense,
+    updateRecurringExpense,
+    removeRecurringExpense,
   };
 }

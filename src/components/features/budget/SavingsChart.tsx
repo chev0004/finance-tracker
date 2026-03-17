@@ -25,15 +25,15 @@ const BLUE = '#3b82f6';
 
 function getSavingsColor(type: SavingsPoint['type']): string {
   if (type === 'payday') return GREEN;
-  if (type === 'payday-rent') return ORANGE;
+  if (type === 'payday-recurring') return ORANGE;
   if (type === 'start') return GRAY;
   return RED;
 }
 
 function getSavingsRadius(type: SavingsPoint['type']): number {
-  if (type === 'trip') return 8;
-  if (type === 'payday-rent' || type === 'fixed-expense') return 6;
-  if (type === 'rent') return 5;
+  if (type === 'goal') return 8;
+  if (type === 'payday-recurring') return 6;
+  if (type === 'recurring') return 5;
   return 4;
 }
 
