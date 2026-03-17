@@ -42,45 +42,24 @@ export function GoalCard({
     .map((id) => recurringExpenses.find((e) => e.id === id)?.label)
     .filter(Boolean);
 
-  const statusColor = !stat.isFeasible
-    ? 'text-red-500'
-    : stat.isWarning
-      ? 'text-amber-500'
-      : 'text-emerald-500';
-
   const statusBorder = !stat.isFeasible
     ? 'border-red-500/20'
     : stat.isWarning
       ? 'border-amber-500/20'
       : 'border-border/50';
 
+  const details: string[] = [dateLabel, `$${stat.totalCost.toLocaleString()}`];
+  if (goal.pauseIncome) details.push('no income');
+  if (pausedNames.length > 0) details.push(`pauses ${pausedNames.join(', ')}`);
+
   return (
     <Card className={cn('bg-card/50 p-4 transition-colors', statusBorder)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate font-medium text-sm">{goal.name}</h3>
-            {goal.pauseIncome && (
-              <span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-400">
-                no income
-              </span>
-            )}
-            {pausedNames.length > 0 && (
-              <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-400">
-                pauses {pausedNames.join(', ')}
-              </span>
-            )}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-            <span className="text-muted-foreground">{dateLabel}</span>
-            <span className="font-medium font-mono">
-              ${stat.totalCost.toLocaleString()}
-            </span>
-            <span className={cn('font-mono', statusColor)}>
-              ${stat.preBalance.toLocaleString()} &rarr; $
-              {stat.postBalance.toLocaleString()}
-            </span>
-          </div>
+          <h3 className="truncate font-medium text-sm">{goal.name}</h3>
+          <p className="mt-1 text-muted-foreground text-xs">
+            {details.join(' · ')}
+          </p>
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
