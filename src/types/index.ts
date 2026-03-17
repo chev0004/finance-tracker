@@ -62,12 +62,19 @@ export interface FixedEvent {
     | 'payday-recurring';
 }
 
+export interface SavingsPointEvent {
+  label: string;
+  delta: number;
+  type: FixedEvent['type'];
+}
+
 export interface SavingsPoint {
   date: string;
   rawDate: string;
   balance: number;
   label: string;
   type: FixedEvent['type'];
+  events: SavingsPointEvent[];
 }
 
 export interface PocketPoint {

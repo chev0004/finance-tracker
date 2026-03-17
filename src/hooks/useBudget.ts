@@ -423,6 +423,7 @@ export function useBudget() {
         balance: settings.startingBalance,
         label: 'start',
         type: 'start',
+        events: [],
       },
     ];
     let running = settings.startingBalance;
@@ -464,6 +465,11 @@ export function useBudget() {
         balance: Math.round(running),
         label: evs.map((e) => e.label).join(' + '),
         type,
+        events: evs.map((e) => ({
+          label: e.label,
+          delta: e.delta,
+          type: e.type,
+        })),
       });
     }
     return points;

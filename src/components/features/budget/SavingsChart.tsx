@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { SavingsPoint } from '@/types';
+import type { SavingsPoint, SavingsPointEvent } from '@/types';
 
 interface SavingsChartProps {
   data: SavingsPoint[];
@@ -45,6 +45,20 @@ interface ChartDataPoint {
   type: SavingsPoint['type'];
   color: string;
   radius: number;
+  events: SavingsPointEvent[];
+}
+
+function eventName(label: string): string {
+  return label.replace(/\s*\$[\d,.]+$/, '');
+}
+
+function formatDelta(delta: number): string {
+  const abs = Math.abs(delta).toLocaleString();
+  return delta >= 0 ? `+$${abs}` : `-$${abs}`;
+}
+
+function deltaColor(delta: number): string {
+  return delta >= 0 ? GREEN : RED;
 }
 
 export function SavingsChart({ data }: SavingsChartProps) {
@@ -57,6 +71,7 @@ export function SavingsChart({ data }: SavingsChartProps) {
       type: point.type,
       color: getSavingsColor(point.type),
       radius: getSavingsRadius(point.type),
+      events: point.events,
     }));
   }, [data]);
 
@@ -69,15 +84,48 @@ export function SavingsChart({ data }: SavingsChartProps) {
   }) => {
     if (active && payload && payload.length) {
       const point = payload[0].payload;
+      const evs = point.events;
+      const net = evs.reduce((s, e) => s + e.delta, 0);
+
       return (
         <div className="rounded-lg border border-border bg-popover p-3 shadow-lg">
-          <div className="mb-1 text-muted-foreground text-xs">{point.date}</div>
-          <div className="font-medium text-sm">{point.label}</div>
-          <div
-            className="mt-1 font-mono text-sm"
-            style={{ color: point.color }}
-          >
-            ${point.balance.toLocaleString()}
+          <div className="mb-2 text-muted-foreground text-xs">{point.date}</div>
+          {evs.length > 0 ? (
+            <div className="space-y-1">
+              {evs.map((ev, i) => (
+                <div
+                  key={i}
+                  className="flex items-baseline justify-between gap-4"
+                >
+                  <span className="text-sm">{eventName(ev.label)}</span>
+                  <span
+                    className="font-mono text-sm"
+                    style={{ color: deltaColor(ev.delta) }}
+                  >
+                    {formatDelta(ev.delta)}
+                  </span>
+                </div>
+              ))}
+              {evs.length > 1 && (
+                <div className="flex items-baseline justify-between gap-4 border-border/50 border-t pt-1">
+                  <span className="text-muted-foreground text-xs">Net</span>
+                  <span
+                    className="font-mono text-xs"
+                    style={{ color: deltaColor(net) }}
+                  >
+                    {formatDelta(net)}
+                  </span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="font-medium text-sm">{point.label}</div>
+          )}
+          <div className="mt-2 flex items-baseline justify-between gap-4 border-border/50 border-t pt-1">
+            <span className="text-muted-foreground text-xs">Balance</span>
+            <span className="font-mono text-sm">
+              ${point.balance.toLocaleString()}
+            </span>
           </div>
         </div>
       );
