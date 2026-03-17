@@ -36,7 +36,9 @@ export function buildExportText(payload: ExportPayload): string {
     validationErrors,
   } = payload;
   const pocketFreq =
-    settings.payFrequency === 'biweekly' ? 'biweekly' : 'weekly';
+    settings.pocketFrequency === 'custom' && settings.pocketInterval
+      ? `every ${settings.pocketInterval} days`
+      : settings.pocketFrequency;
 
   const summary = [
     `Current balance: $${settings.startingBalance.toLocaleString()}`,
@@ -46,7 +48,7 @@ export function buildExportText(payload: ExportPayload): string {
 
   const settingsLines = [
     `Pocket period: ${pocketFreq}`,
-    `Pocket start: ${settings.firstPayday}`,
+    `Pocket start: ${settings.pocketFirstPayday}`,
     `Monthly income: $${Math.round(monthlyIncome).toLocaleString()}`,
     `Pocket per period: $${settings.pocketPerPeriod.toLocaleString()}`,
     `Starting balance: $${settings.startingBalance.toLocaleString()}`,

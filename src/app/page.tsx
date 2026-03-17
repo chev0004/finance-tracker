@@ -50,6 +50,15 @@ export default function Home() {
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [showAddGoal, setShowAddGoal] = useState(false);
 
+  const pocketFreqLabel =
+    settings.pocketFrequency === 'custom' && settings.pocketInterval
+      ? `every ${settings.pocketInterval} days`
+      : settings.pocketFrequency === 'monthly'
+        ? 'monthly'
+        : settings.pocketFrequency === 'biweekly'
+          ? 'every 2 weeks'
+          : 'weekly';
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
@@ -137,11 +146,7 @@ export default function Home() {
             <p className="text-muted-foreground/70 text-xs leading-relaxed">
               ~${Math.round(monthlySavings).toLocaleString()} saved per month ($
               {Math.round(monthlyIncome).toLocaleString()} income minus $
-              {settings.pocketPerPeriod} pocket{' '}
-              {settings.payFrequency === 'biweekly'
-                ? 'every 2 weeks'
-                : 'weekly'}
-              ).
+              {settings.pocketPerPeriod} pocket {pocketFreqLabel}).
               {settings.recurringExpenses.length > 0 && (
                 <>
                   {' '}
@@ -247,16 +252,13 @@ export default function Home() {
         <Card className="border-border/50 bg-card/50 hover:border-border/80">
           <CardHeader className="pb-2">
             <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
-              {settings.payFrequency === 'biweekly' ? 'Biweekly' : 'Weekly'}{' '}
               Pocket Money
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground/70 text-xs leading-relaxed">
-              ${settings.pocketPerPeriod} allocated every{' '}
-              {settings.payFrequency === 'biweekly' ? 'two weeks' : 'week'}.
-              Click any dot to edit what you actually spent. Unspent balance
-              carries over.
+              ${settings.pocketPerPeriod} allocated {pocketFreqLabel}. Click any
+              dot to edit what you actually spent. Unspent balance carries over.
             </p>
             <PocketChart
               data={pocketTimeline}
@@ -278,7 +280,8 @@ export default function Home() {
               <ExpenseList
                 expenses={expenses}
                 paydays={paydays}
-                payFrequency={settings.payFrequency}
+                payFrequency={settings.pocketFrequency}
+                payInterval={settings.pocketInterval}
                 onRemove={removeExpense}
                 onUpdateAmount={updateExpenseAmount}
               />

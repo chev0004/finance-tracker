@@ -12,9 +12,23 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import type { BudgetSettings, IncomeSource } from '@/types';
+import type { BudgetSettings, IncomeSource, PayFrequency } from '@/types';
 import { IncomeSourceManager } from './IncomeSourceManager';
+
+const POCKET_FREQ_OPTIONS: { value: PayFrequency; label: string }[] = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'biweekly', label: 'Biweekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'custom', label: 'Custom' },
+];
 
 interface SettingsPanelProps {
   settings: BudgetSettings;
@@ -35,7 +49,16 @@ export function SettingsPanel({
   onUpdateIncomeSource,
   onRemoveIncomeSource,
 }: SettingsPanelProps) {
-  const firstPaydayDate = parseISO(settings.firstPayday);
+  const pocketStartDate = parseISO(settings.pocketFirstPayday);
+
+  const pocketFreqLabel =
+    settings.pocketFrequency === 'custom' && settings.pocketInterval
+      ? `every ${settings.pocketInterval} days`
+      : settings.pocketFrequency === 'monthly'
+        ? 'monthly'
+        : settings.pocketFrequency === 'biweekly'
+          ? 'every 2 weeks'
+          : 'weekly';
 
   return (
     <Card className="border-border/50 bg-card/50">
@@ -45,39 +68,7 @@ export function SettingsPanel({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-            Pocket Period
-          </Label>
-          <div className="flex gap-1 rounded-lg bg-muted p-1">
-            <button
-              type="button"
-              className={cn(
-                'flex-1 rounded-md px-3 py-1.5 text-sm transition-all',
-                settings.payFrequency === 'weekly'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'cursor-pointer text-muted-foreground hover:text-foreground',
-              )}
-              onClick={() => onUpdate({ payFrequency: 'weekly' })}
-            >
-              Weekly
-            </button>
-            <button
-              type="button"
-              className={cn(
-                'flex-1 rounded-md px-3 py-1.5 text-sm transition-all',
-                settings.payFrequency === 'biweekly'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'cursor-pointer text-muted-foreground hover:text-foreground',
-              )}
-              onClick={() => onUpdate({ payFrequency: 'biweekly' })}
-            >
-              Biweekly
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div className="space-y-2">
             <Label className="text-muted-foreground text-xs uppercase tracking-wider">
               Pocket / Period
@@ -89,7 +80,7 @@ export function SettingsPanel({
               <Input
                 type="number"
                 min={0}
-                value={settings.pocketPerPeriod}
+                value={settings.pocketPerPeriod || ''}
                 onChange={(e) =>
                   onUpdate({
                     pocketPerPeriod: Number(e.target.value) || 0,
@@ -102,6 +93,49 @@ export function SettingsPanel({
 
           <div className="space-y-2">
             <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+              Pocket Frequency
+            </Label>
+            <Select
+              value={settings.pocketFrequency}
+              onValueChange={(v: PayFrequency) =>
+                onUpdate({ pocketFrequency: v })
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {POCKET_FREQ_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {settings.pocketFrequency === 'custom' && (
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+                Days Between
+              </Label>
+              <Input
+                type="number"
+                min={1}
+                placeholder="e.g. 14"
+                value={settings.pocketInterval ?? ''}
+                onChange={(e) =>
+                  onUpdate({
+                    pocketInterval: Number(e.target.value) || undefined,
+                  })
+                }
+                className="font-mono"
+              />
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label className="text-muted-foreground text-xs uppercase tracking-wider">
               Starting Balance
             </Label>
             <div className="relative">
@@ -111,7 +145,7 @@ export function SettingsPanel({
               <Input
                 type="number"
                 min={0}
-                value={settings.startingBalance}
+                value={settings.startingBalance || ''}
                 onChange={(e) =>
                   onUpdate({
                     startingBalance: Number(e.target.value) || 0,
@@ -132,26 +166,26 @@ export function SettingsPanel({
                   variant="outline"
                   className={cn(
                     'w-full justify-start text-left font-normal',
-                    !settings.firstPayday && 'text-muted-foreground',
+                    !settings.pocketFirstPayday && 'text-muted-foreground',
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {isValid(firstPaydayDate)
-                    ? format(firstPaydayDate, 'MMM d, yyyy')
+                  {isValid(pocketStartDate)
+                    ? format(pocketStartDate, 'MMM d, yyyy')
                     : 'Select date'}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
-                  selected={firstPaydayDate}
+                  selected={pocketStartDate}
                   onSelect={(d) => {
                     if (d && isValid(d))
                       onUpdate({
-                        firstPayday: format(d, 'yyyy-MM-dd'),
+                        pocketFirstPayday: format(d, 'yyyy-MM-dd'),
                       });
                   }}
-                  defaultMonth={firstPaydayDate}
+                  defaultMonth={pocketStartDate}
                 />
               </PopoverContent>
             </Popover>
@@ -161,8 +195,7 @@ export function SettingsPanel({
         <p className="text-muted-foreground/70 text-xs">
           Saving ~${Math.round(monthlySavings).toLocaleString()}/mo ($
           {Math.round(monthlyIncome).toLocaleString()} income minus $
-          {settings.pocketPerPeriod} pocket{' '}
-          {settings.payFrequency === 'biweekly' ? 'every 2 weeks' : 'weekly'})
+          {settings.pocketPerPeriod} pocket {pocketFreqLabel})
         </p>
 
         <div className="space-y-2 border-border/50 border-t pt-4">

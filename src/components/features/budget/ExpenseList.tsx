@@ -6,12 +6,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { Expense } from '@/types';
+import type { Expense, PayFrequency } from '@/types';
 
 interface ExpenseListProps {
   expenses: Expense[];
   paydays: string[];
-  payFrequency: 'weekly' | 'biweekly';
+  payFrequency: PayFrequency;
+  payInterval?: number;
   onRemove: (id: string) => void;
   onUpdateAmount: (id: string, amount: number) => void;
 }
@@ -23,17 +24,25 @@ interface PeriodGroup {
   expenses: Expense[];
 }
 
+function periodDaysBack(frequency: PayFrequency, interval?: number): number {
+  if (frequency === 'biweekly') return 13;
+  if (frequency === 'monthly') return 29;
+  if (frequency === 'custom' && interval && interval > 0) return interval - 1;
+  return 6;
+}
+
 export function ExpenseList({
   expenses,
   paydays,
   payFrequency,
+  payInterval,
   onRemove,
   onUpdateAmount,
 }: ExpenseListProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
-  const daysBack = payFrequency === 'biweekly' ? 13 : 6;
+  const daysBack = periodDaysBack(payFrequency, payInterval);
 
   const periods = useMemo<PeriodGroup[]>(() => {
     const sorted = [...expenses].sort((a, b) => a.date.localeCompare(b.date));
@@ -107,7 +116,12 @@ export function ExpenseList({
     );
   }
 
-  const periodLabel = payFrequency === 'biweekly' ? 'Period' : 'Week';
+  const periodLabel =
+    payFrequency === 'weekly'
+      ? 'Week'
+      : payFrequency === 'biweekly'
+        ? 'Biweek'
+        : 'Period';
 
   return (
     <div className="space-y-3">
