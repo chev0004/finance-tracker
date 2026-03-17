@@ -147,7 +147,7 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
             <div className="mb-1 space-y-0.5">
               {point.expenseItems.map((item, i) => (
                 <div key={i} className="flex justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">{item.label}</span>
+                  <span>{item.label}</span>
                   <span className="font-mono text-red-400">
                     -${item.amount}
                   </span>
@@ -157,7 +157,7 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
           ) : (
             point.spent > 0 && (
               <div className="mb-1 flex justify-between gap-4 text-sm">
-                <span className="text-muted-foreground">Spent</span>
+                <span>Spent</span>
                 <span className="font-mono text-red-400">-${point.spent}</span>
               </div>
             )

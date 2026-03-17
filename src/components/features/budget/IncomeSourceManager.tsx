@@ -283,7 +283,8 @@ function SourceItem({
             <Input
               type="number"
               min={0}
-              value={source.amount || ''}
+              value={source.amount}
+              onFocus={(e) => e.target.select()}
               onChange={(e) =>
                 onUpdate({
                   ...source,

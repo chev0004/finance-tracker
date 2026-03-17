@@ -80,7 +80,8 @@ export function SettingsPanel({
               <Input
                 type="number"
                 min={0}
-                value={settings.pocketPerPeriod || ''}
+                value={settings.pocketPerPeriod}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) =>
                   onUpdate({
                     pocketPerPeriod: Number(e.target.value) || 0,
@@ -145,7 +146,8 @@ export function SettingsPanel({
               <Input
                 type="number"
                 min={0}
-                value={settings.startingBalance || ''}
+                value={settings.startingBalance}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) =>
                   onUpdate({
                     startingBalance: Number(e.target.value) || 0,
