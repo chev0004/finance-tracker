@@ -31,6 +31,12 @@ export interface RecurringExpense {
   endMonth: string;
 }
 
+export interface IncomeChange {
+  id: string;
+  effectiveDate: string;
+  incomePerPeriod: number;
+}
+
 export interface BudgetSettings {
   startingBalance: number;
   startDate: string;
@@ -40,6 +46,7 @@ export interface BudgetSettings {
   firstPayday: string;
   goals: SavingsGoal[];
   recurringExpenses: RecurringExpense[];
+  incomeChanges: IncomeChange[];
 }
 
 export interface FixedEvent {

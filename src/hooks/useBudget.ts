@@ -5,6 +5,7 @@ import type {
   Expense,
   FixedEvent,
   GoalStat,
+  IncomeChange,
   PocketPoint,
   RecurringExpense,
   SavingsGoal,
@@ -45,6 +46,7 @@ const DEFAULT_SETTINGS: BudgetSettings = {
       endMonth: '2000-12',
     },
   ],
+  incomeChanges: [],
 };
 
 const STORAGE_KEY = 'budget-tracker-data';
@@ -126,9 +128,20 @@ function getMonthsInRange(startDate: string, endDate: string): string[] {
   return result;
 }
 
+function getIncomeForDate(settings: BudgetSettings, date: string): number {
+  const sorted = [...settings.incomeChanges].sort((a, b) =>
+    a.effectiveDate.localeCompare(b.effectiveDate),
+  );
+  let income = settings.incomePerPeriod;
+  for (const change of sorted) {
+    if (change.effectiveDate <= date) income = change.incomePerPeriod;
+    else break;
+  }
+  return income;
+}
+
 function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
   const ev: FixedEvent[] = [];
-  const saved = settings.incomePerPeriod - settings.pocketPerPeriod;
 
   const pausedMonths = new Set(
     settings.goals
@@ -139,6 +152,8 @@ function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
   const paydays = getPaydays(settings.firstPayday, settings.payFrequency);
   for (const payday of paydays) {
     if (!pausedMonths.has(payday.slice(0, 7))) {
+      const income = getIncomeForDate(settings, payday);
+      const saved = income - settings.pocketPerPeriod;
       ev.push({
         date: payday,
         label: 'payday',
@@ -225,6 +240,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
     const settings = raw as unknown as BudgetSettings;
     return {
       ...settings,
+      incomeChanges: settings.incomeChanges ?? [],
       goals: (settings.goals as unknown as Record<string, unknown>[]).map(
         migrateGoal,
       ),
@@ -248,6 +264,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
     pocketPerPeriod: weeklyPocket,
     payFrequency: 'weekly',
     firstPayday: '2000-01-01',
+    incomeChanges: [],
     goals: old.tripMonth
       ? [
           {
@@ -325,7 +342,12 @@ export function useBudget() {
     }
   }, [expenses, spentPerPeriod, settings, isLoaded]);
 
-  const savedPerPeriod = settings.incomePerPeriod - settings.pocketPerPeriod;
+  const currentIncome = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return getIncomeForDate(settings, today);
+  }, [settings]);
+
+  const savedPerPeriod = currentIncome - settings.pocketPerPeriod;
 
   const paydays = useMemo(
     () => getPaydays(settings.firstPayday, settings.payFrequency),
@@ -645,6 +667,32 @@ export function useBudget() {
     }));
   }, []);
 
+  const addIncomeChange = useCallback((change: Omit<IncomeChange, 'id'>) => {
+    setSettings((prev) => ({
+      ...prev,
+      incomeChanges: [
+        ...prev.incomeChanges,
+        { ...change, id: crypto.randomUUID() },
+      ],
+    }));
+  }, []);
+
+  const updateIncomeChange = useCallback((change: IncomeChange) => {
+    setSettings((prev) => ({
+      ...prev,
+      incomeChanges: prev.incomeChanges.map((c) =>
+        c.id === change.id ? change : c,
+      ),
+    }));
+  }, []);
+
+  const removeIncomeChange = useCallback((id: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      incomeChanges: prev.incomeChanges.filter((c) => c.id !== id),
+    }));
+  }, []);
+
   return {
     isLoaded,
     expenses,
@@ -667,5 +715,8 @@ export function useBudget() {
     addRecurringExpense,
     updateRecurringExpense,
     removeRecurringExpense,
+    addIncomeChange,
+    updateIncomeChange,
+    removeIncomeChange,
   };
 }

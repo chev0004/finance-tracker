@@ -40,6 +40,9 @@ export default function Home() {
     addRecurringExpense,
     updateRecurringExpense,
     removeRecurringExpense,
+    addIncomeChange,
+    updateIncomeChange,
+    removeIncomeChange,
   } = useBudget();
 
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
@@ -96,6 +99,9 @@ export default function Home() {
           settings={settings}
           savedPerPeriod={savedPerPeriod}
           onUpdate={updateSettings}
+          onAddIncomeChange={addIncomeChange}
+          onUpdateIncomeChange={updateIncomeChange}
+          onRemoveIncomeChange={removeIncomeChange}
         />
 
         {/* --- Savings --- */}

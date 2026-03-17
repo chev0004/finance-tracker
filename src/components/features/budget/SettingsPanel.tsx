@@ -13,18 +13,25 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import type { BudgetSettings } from '@/types';
+import type { BudgetSettings, IncomeChange } from '@/types';
+import { IncomeChangeManager } from './IncomeChangeManager';
 
 interface SettingsPanelProps {
   settings: BudgetSettings;
   savedPerPeriod: number;
   onUpdate: (patch: Partial<BudgetSettings>) => void;
+  onAddIncomeChange: (change: Omit<IncomeChange, 'id'>) => void;
+  onUpdateIncomeChange: (change: IncomeChange) => void;
+  onRemoveIncomeChange: (id: string) => void;
 }
 
 export function SettingsPanel({
   settings,
   savedPerPeriod,
   onUpdate,
+  onAddIncomeChange,
+  onUpdateIncomeChange,
+  onRemoveIncomeChange,
 }: SettingsPanelProps) {
   const firstPaydayDate = parseISO(settings.firstPayday);
   const freqLabel =
@@ -178,6 +185,23 @@ export function SettingsPanel({
           {settings.incomePerPeriod} income minus ${settings.pocketPerPeriod}{' '}
           pocket)
         </p>
+
+        <div className="space-y-2 border-border/50 border-t pt-4">
+          <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+            Scheduled Rate Changes
+          </Label>
+          <p className="text-muted-foreground/60 text-xs">
+            Add upcoming raises or income changes. The projection will use the
+            new rate from the effective date onward.
+          </p>
+          <IncomeChangeManager
+            changes={settings.incomeChanges}
+            baseIncome={settings.incomePerPeriod}
+            onAdd={onAddIncomeChange}
+            onUpdate={onUpdateIncomeChange}
+            onRemove={onRemoveIncomeChange}
+          />
+        </div>
       </CardContent>
     </Card>
   );
