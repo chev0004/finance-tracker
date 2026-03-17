@@ -23,10 +23,15 @@ const ORANGE = '#f59e0b';
 const GRAY = '#6b7280';
 const BLUE = '#3b82f6';
 
-function getSavingsColor(type: SavingsPoint['type']): string {
-  if (type === 'payday') return GREEN;
-  if (type === 'payday-recurring') return ORANGE;
+function getSavingsColor(
+  type: SavingsPoint['type'],
+  events: SavingsPoint['events'],
+): string {
   if (type === 'start') return GRAY;
+  const hasGain = events.some((e) => e.delta > 0);
+  const hasLoss = events.some((e) => e.delta < 0);
+  if (hasGain && hasLoss) return ORANGE;
+  if (hasGain) return GREEN;
   return RED;
 }
 
@@ -69,7 +74,7 @@ export function SavingsChart({ data }: SavingsChartProps) {
       balance: point.balance,
       label: point.label,
       type: point.type,
-      color: getSavingsColor(point.type),
+      color: getSavingsColor(point.type, point.events),
       radius: getSavingsRadius(point.type),
       events: point.events,
     }));
