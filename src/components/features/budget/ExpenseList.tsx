@@ -110,10 +110,10 @@ export function ExpenseList({
     setEditValue('');
   };
 
-  if (expenses.length === 0) {
+  if (periods.length === 0) {
     return (
       <div className="py-4 text-muted-foreground/60 text-sm">
-        No expenses logged yet.
+        No periods yet. Set pocket start date in settings.
       </div>
     );
   }
