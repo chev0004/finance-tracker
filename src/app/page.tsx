@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  Briefcase,
-  ChevronLeft,
-  ChevronRight,
-  Gift,
-  Repeat,
-  Target,
-} from 'lucide-react';
+import { Briefcase, Gift, Repeat, Target } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
 import { ExpenseList } from '@/components/features/budget/ExpenseList';
@@ -31,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { NavStepper } from '@/components/ui/nav-stepper';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
@@ -274,33 +268,18 @@ export default function Home() {
               errors={validation.errors}
               isCritical={validation.isCritical}
             />
-            <div className="flex items-center justify-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                disabled={chartYearClamped <= chartStartYear}
-                onClick={() =>
-                  setChartYear((y) => Math.max(chartStartYear, y - 1))
-                }
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
+            <NavStepper
+              disablePrev={chartYearClamped <= chartStartYear}
+              disableNext={chartYearClamped >= chartEndYear}
+              onPrev={() =>
+                setChartYear((y) => Math.max(chartStartYear, y - 1))
+              }
+              onNext={() => setChartYear((y) => Math.min(chartEndYear, y + 1))}
+            >
               <span className="min-w-16 text-center font-medium font-mono text-sm">
                 {chartYearClamped}
               </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                disabled={chartYearClamped >= chartEndYear}
-                onClick={() =>
-                  setChartYear((y) => Math.min(chartEndYear, y + 1))
-                }
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            </NavStepper>
             <SavingsChart data={savingsChartData} />
             <p className="text-muted-foreground/70 text-xs leading-relaxed">
               ~${Math.round(monthlySavings).toLocaleString()} saved per month ($
@@ -513,33 +492,18 @@ export default function Home() {
               ${settings.pocketPerPeriod} allocated {pocketFreqLabel}. Click any
               dot to edit what you actually spent. Unspent balance carries over.
             </p>
-            <div className="flex items-center justify-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                disabled={chartYearClamped <= chartStartYear}
-                onClick={() =>
-                  setChartYear((y) => Math.max(chartStartYear, y - 1))
-                }
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
+            <NavStepper
+              disablePrev={chartYearClamped <= chartStartYear}
+              disableNext={chartYearClamped >= chartEndYear}
+              onPrev={() =>
+                setChartYear((y) => Math.max(chartStartYear, y - 1))
+              }
+              onNext={() => setChartYear((y) => Math.min(chartEndYear, y + 1))}
+            >
               <span className="min-w-16 text-center font-medium font-mono text-sm">
                 {chartYearClamped}
               </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                disabled={chartYearClamped >= chartEndYear}
-                onClick={() =>
-                  setChartYear((y) => Math.min(chartEndYear, y + 1))
-                }
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            </NavStepper>
             <PocketChart
               data={pocketChartData}
               onUpdateSpent={updateSpentForPeriod}

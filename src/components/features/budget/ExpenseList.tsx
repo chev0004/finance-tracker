@@ -1,10 +1,11 @@
 'use client';
 
 import { format, parseISO } from 'date-fns';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NavStepper } from '@/components/ui/nav-stepper';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { normalizeNumInputBlur, normalizeNumInputLeading } from '@/lib/utils';
 import type { Expense, PayFrequency } from '@/types';
@@ -127,32 +128,19 @@ export function ExpenseList({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-          disabled={activeIdx <= 0}
-          onClick={() => setActiveIdx(clampIdx(activeIdx - 1))}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
+      <NavStepper
+        disablePrev={activeIdx <= 0}
+        disableNext={activeIdx >= periods.length - 1}
+        onPrev={() => setActiveIdx(clampIdx(activeIdx - 1))}
+        onNext={() => setActiveIdx(clampIdx(activeIdx + 1))}
+      >
         <div className="text-center">
           <span className="text-muted-foreground text-xs">
             {periodLabel} {activeIdx + 1} of {periods.length}
           </span>
           {active && <div className="font-medium text-sm">{active.label}</div>}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-          disabled={activeIdx >= periods.length - 1}
-          onClick={() => setActiveIdx(clampIdx(activeIdx + 1))}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
+      </NavStepper>
 
       {active && active.expenses.length > 0 ? (
         <ScrollArea className="h-[180px] w-full">
