@@ -129,7 +129,9 @@ export function SavingsChart({ data }: SavingsChartProps) {
           <div className="mt-2 flex items-baseline justify-between gap-4 border-border/50 border-t pt-1">
             <span className="text-muted-foreground text-xs">Balance</span>
             <span className="font-mono text-sm">
-              ${point.balance.toLocaleString()}
+              {point.balance < 0
+                ? '-$' + Math.abs(point.balance).toLocaleString()
+                : '$' + point.balance.toLocaleString()}
             </span>
           </div>
         </div>
@@ -174,7 +176,11 @@ export function SavingsChart({ data }: SavingsChartProps) {
             tickCount={10}
             tickMargin={0}
             minTickGap={0}
-            tickFormatter={(value) => `$${value.toLocaleString()}`}
+            tickFormatter={(value) =>
+              value < 0
+                ? '-$' + Math.abs(value).toLocaleString()
+                : '$' + value.toLocaleString()
+            }
             domain={[0, 'auto']}
           />
           <Tooltip content={<CustomTooltip />} />

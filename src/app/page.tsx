@@ -152,6 +152,9 @@ export default function Home() {
 
   const eoyCombined = eoySavings + eoyPocket;
 
+  const formatMoney = (n: number): string =>
+    n < 0 ? `-$${Math.abs(n).toLocaleString()}` : `$${n.toLocaleString()}`;
+
   const pocketFreqLabel =
     settings.pocketFrequency === 'custom' && settings.pocketInterval
       ? `every ${settings.pocketInterval} days`
@@ -307,13 +310,13 @@ export default function Home() {
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-muted-foreground text-xs">Savings</span>
                   <span className="font-mono text-sm">
-                    ${currentSavings.toLocaleString()}
+                    {formatMoney(currentSavings)}
                   </span>
                 </div>
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-muted-foreground text-xs">Pocket</span>
                   <span className="font-mono text-sm">
-                    ${currentPocketBalance.toLocaleString()}
+                    {formatMoney(currentPocketBalance)}
                   </span>
                 </div>
                 <div className="flex items-baseline justify-between gap-2 border-border/50 border-t pt-1.5">
@@ -321,7 +324,7 @@ export default function Home() {
                     Combined
                   </span>
                   <span className="font-bold font-mono text-xl">
-                    ${combinedBalance.toLocaleString()}
+                    {formatMoney(combinedBalance)}
                   </span>
                 </div>
               </div>
@@ -330,8 +333,8 @@ export default function Home() {
           <StatsCard
             label="Savings /mo"
             value={Math.round(monthlySavings)}
-            variant="success"
-            prefix="+"
+            variant={monthlySavings >= 0 ? 'success' : 'danger'}
+            prefix={monthlySavings >= 0 ? '+' : ''}
           />
           <Card className="border-border/50 bg-card/50 hover:border-border hover:shadow-md">
             <CardContent className="p-4">
@@ -342,13 +345,13 @@ export default function Home() {
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-muted-foreground text-xs">Savings</span>
                   <span className="font-mono text-sm">
-                    ${eoySavings.toLocaleString()}
+                    {formatMoney(eoySavings)}
                   </span>
                 </div>
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-muted-foreground text-xs">Pocket</span>
                   <span className="font-mono text-sm">
-                    ${eoyPocket.toLocaleString()}
+                    {formatMoney(eoyPocket)}
                   </span>
                 </div>
                 <div className="flex items-baseline justify-between gap-2 border-border/50 border-t pt-1.5">
@@ -356,7 +359,7 @@ export default function Home() {
                     Combined
                   </span>
                   <span className={`font-bold font-mono text-xl ${eoyColor}`}>
-                    ${eoyCombined.toLocaleString()}
+                    {formatMoney(eoyCombined)}
                   </span>
                 </div>
               </div>

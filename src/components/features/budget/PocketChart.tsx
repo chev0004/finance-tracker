@@ -225,7 +225,11 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
               tickCount={10}
               tickMargin={0}
               minTickGap={0}
-              tickFormatter={(value) => `$${value}`}
+              tickFormatter={(value) =>
+                value < 0
+                  ? '-$' + Math.abs(value).toLocaleString()
+                  : '$' + value.toLocaleString()
+              }
               domain={[0, 'auto']}
             />
             <Tooltip content={<CustomTooltip />} />

@@ -16,8 +16,11 @@ export function StatsCard({
   variant = 'default',
   isCurrency = true,
 }: StatsCardProps) {
+  const num = Number(value);
   const displayValue = isCurrency
-    ? `$${Number(value).toLocaleString()}`
+    ? num < 0
+      ? `-$${Math.abs(num).toLocaleString()}`
+      : `$${num.toLocaleString()}`
     : value;
 
   const colorClass = {
