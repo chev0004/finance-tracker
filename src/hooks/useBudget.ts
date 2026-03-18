@@ -16,48 +16,13 @@ import type {
 
 const DEFAULT_SETTINGS: BudgetSettings = {
   startingBalance: 0,
-  startDate: '2000-01-01',
+  startDate: '2026-01-01',
   pocketPerPeriod: 0,
   pocketFrequency: 'weekly',
-  pocketFirstPayday: '2000-01-01',
-  goals: [
-    {
-      id: 'default-goal',
-      name: 'Goal',
-      startDate: '2000-01-01',
-      endDate: '2026-07-31',
-      lineItems: [
-        {
-          id: 'default-goal-cost',
-          label: 'Trip Cost',
-          amount: 0,
-        },
-      ],
-      pauseIncome: true,
-      pausePocket: false,
-      pausedExpenseIds: ['default-rent'],
-    },
-  ],
-  recurringExpenses: [
-    {
-      id: 'default-rent',
-      label: 'Rent',
-      amount: 0,
-      dayOfMonth: 15,
-      startMonth: '2000-01',
-      endMonth: '2000-12',
-    },
-  ],
-  incomeSources: [
-    {
-      id: 'default-income',
-      name: 'Income',
-      amount: 0,
-      payFrequency: 'weekly',
-      firstPayday: '2000-01-01',
-      rateChanges: [],
-    },
-  ],
+  pocketFirstPayday: '2026-01-01',
+  goals: [],
+  recurringExpenses: [],
+  incomeSources: [],
   oneTimeIncome: [],
 };
 
