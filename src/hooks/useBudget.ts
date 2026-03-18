@@ -697,6 +697,8 @@ export function useBudget() {
       grouped[e.date].push(e);
     }
 
+    let carriedPocket = 0;
+
     for (const date of Object.keys(grouped).sort()) {
       const evs = grouped[date];
       for (const e of evs.filter((x) => x.delta > 0)) running += e.delta;
@@ -705,22 +707,37 @@ export function useBudget() {
       const pocketTotal = evs
         .filter((e) => e.type === 'pocket')
         .reduce((s, e) => s + e.delta, 0);
+      if (pocketTotal < 0) {
+        carriedPocket += Math.abs(pocketTotal);
+      }
+
       const paydays = evs.filter((e) => e.type === 'payday');
       const others = evs.filter(
         (e) => e.type !== 'pocket' && e.type !== 'payday',
       );
 
       const displayPaydays: FixedEvent[] = [];
-      if (paydays.length > 0 && pocketTotal < 0) {
-        const totalIncome = paydays.reduce((s, e) => s + e.delta, 0);
+      if (paydays.length > 0 && carriedPocket > 0) {
+        const sorted = [...paydays].sort((a, b) => b.delta - a.delta);
+        const allocation = new Map<FixedEvent, number>();
+        let remaining = carriedPocket;
+
+        for (const p of sorted) {
+          if (remaining <= 0) break;
+          const take = Math.min(remaining, p.delta);
+          allocation.set(p, take);
+          remaining -= take;
+        }
+
+        carriedPocket = remaining;
+
         for (const p of paydays) {
-          const share =
-            totalIncome > 0 ? (p.delta / totalIncome) * pocketTotal : 0;
-          const net = p.delta + share;
+          const taken = allocation.get(p) || 0;
+          const net = p.delta - taken;
           displayPaydays.push({
             ...p,
-            delta: Math.round(net),
-            label: p.label.replace(/\$\d+/, `$${Math.round(net)}`),
+            delta: net,
+            label: p.label.replace(/\$\d+/, `$${net}`),
           });
         }
       } else {
