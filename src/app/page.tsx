@@ -107,6 +107,14 @@ export default function Home() {
     ];
   }, [savingsTimeline, chartYearClamped]);
 
+  const pocketChartData = useMemo(() => {
+    const yearStart = `${chartYearClamped}-01-01`;
+    const yearEnd = `${chartYearClamped}-12-31`;
+    return pocketTimeline.filter(
+      (p) => p.rawDate >= yearStart && p.rawDate <= yearEnd,
+    );
+  }, [pocketTimeline, chartYearClamped]);
+
   const togglePanel = (panel: typeof addPanel) =>
     setAddPanel((prev) => (prev === panel ? null : panel));
 
@@ -505,8 +513,35 @@ export default function Home() {
               ${settings.pocketPerPeriod} allocated {pocketFreqLabel}. Click any
               dot to edit what you actually spent. Unspent balance carries over.
             </p>
+            <div className="flex items-center justify-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                disabled={chartYearClamped <= chartStartYear}
+                onClick={() =>
+                  setChartYear((y) => Math.max(chartStartYear, y - 1))
+                }
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="min-w-16 text-center font-medium font-mono text-sm">
+                {chartYearClamped}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                disabled={chartYearClamped >= chartEndYear}
+                onClick={() =>
+                  setChartYear((y) => Math.min(chartEndYear, y + 1))
+                }
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
             <PocketChart
-              data={pocketTimeline}
+              data={pocketChartData}
               onUpdateSpent={updateSpentForPeriod}
             />
           </CardContent>
