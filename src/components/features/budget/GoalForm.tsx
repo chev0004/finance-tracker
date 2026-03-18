@@ -314,10 +314,7 @@ export function GoalForm({
         )}
 
         <div className="flex gap-2">
-          <Button
-            onClick={handleSave}
-            className="bg-foreground text-background hover:bg-foreground/90"
-          >
+          <Button onClick={handleSave} variant="muted">
             {goal ? 'Update Goal' : 'Add Goal'}
           </Button>
           <Button variant="ghost" onClick={onCancel}>

@@ -166,10 +166,7 @@ export function ExpenseForm({ onAdd }: ExpenseFormProps) {
           </div>
         </div>
 
-        <Button
-          onClick={handleSubmit}
-          className="border border-border bg-muted text-foreground hover:bg-muted/80"
-        >
+        <Button onClick={handleSubmit} variant="muted">
           + Add Expense
         </Button>
       </div>

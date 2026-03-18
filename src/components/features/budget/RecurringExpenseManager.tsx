@@ -244,11 +244,7 @@ export function RecurringExpenseManager({
         </div>
       </div>
       <div className="flex gap-2">
-        <Button
-          size="sm"
-          onClick={handleSave}
-          className="bg-foreground text-background hover:bg-foreground/90"
-        >
+        <Button size="sm" onClick={handleSave} variant="muted">
           {formMode === 'edit' ? 'Save' : 'Add'}
         </Button>
         <Button size="sm" variant="ghost" onClick={resetForm}>
