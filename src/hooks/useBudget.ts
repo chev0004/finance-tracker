@@ -913,12 +913,37 @@ export function useBudget() {
         });
       }
     }
+
+    const pocketPeriods = periodsPerYear(
+      settings.pocketFrequency,
+      settings.pocketInterval,
+    );
+    const monthlyPocket =
+      pocketPeriods > 0 ? (settings.pocketPerPeriod * pocketPeriods) / 12 : 0;
+    if (monthlyPocket > 0 && monthlyPocket > monthlyIncome) {
+      errors.push({
+        field: 'pocket',
+        message: `Your pocket exceeds your income. Reduce your pocket/period or increase income.`,
+      });
+    }
+
     return {
       errors,
       hasError: errors.length > 0,
-      isCritical: !!negPt || goalStats.some((s) => !s.isFeasible),
+      isCritical:
+        !!negPt ||
+        goalStats.some((s) => !s.isFeasible) ||
+        monthlyPocket > monthlyIncome,
     };
-  }, [settings.goals, goalStats, savingsTimeline]);
+  }, [
+    settings.goals,
+    goalStats,
+    savingsTimeline,
+    settings.pocketPerPeriod,
+    settings.pocketFrequency,
+    settings.pocketInterval,
+    monthlyIncome,
+  ]);
 
   // --- Actions ---
 
