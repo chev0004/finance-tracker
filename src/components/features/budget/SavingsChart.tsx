@@ -66,6 +66,8 @@ function deltaColor(delta: number): string {
   return delta >= 0 ? GREEN : RED;
 }
 
+const MAX_VISIBLE_TICKS = 70;
+
 export function SavingsChart({ data }: SavingsChartProps) {
   const chartData = useMemo<ChartDataPoint[]>(() => {
     return data.map((point) => ({
@@ -79,6 +81,11 @@ export function SavingsChart({ data }: SavingsChartProps) {
       events: point.events,
     }));
   }, [data]);
+
+  const tickInterval =
+    chartData.length > MAX_VISIBLE_TICKS
+      ? Math.floor(chartData.length / MAX_VISIBLE_TICKS)
+      : 0;
 
   const CustomTooltip = ({
     active,
@@ -160,7 +167,7 @@ export function SavingsChart({ data }: SavingsChartProps) {
             }}
             axisLine={{ stroke: 'transparent' }}
             tickLine={false}
-            interval={0}
+            interval={tickInterval}
             angle={-35}
             textAnchor="end"
             height={50}

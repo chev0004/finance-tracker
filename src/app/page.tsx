@@ -114,13 +114,20 @@ export default function Home() {
     const inYear = savingsTimeline.filter(
       (p) => p.rawDate >= yearStart && p.rawDate <= yearEnd,
     );
+    const hasJan1 = inYear.some((p) => p.rawDate === yearStart);
+    if (hasJan1) return inYear;
     const beforeYear = savingsTimeline
       .filter((p) => p.rawDate < yearStart)
       .sort((a, b) => b.rawDate.localeCompare(a.rawDate));
     const carryOver = beforeYear[0];
     if (!carryOver) return inYear;
+    const d = new Date(`${yearStart}T00:00:00`);
+    const fmtDate = d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
     return [
-      { ...carryOver, date: yearStart, rawDate: yearStart, label: '…' },
+      { ...carryOver, date: fmtDate, rawDate: yearStart, label: '…' },
       ...inYear,
     ];
   }, [savingsTimeline, chartYearClamped]);

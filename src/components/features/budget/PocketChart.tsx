@@ -89,6 +89,9 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
     }));
   }, [data, selectedIdx]);
 
+  const tickInterval =
+    chartData.length > 80 ? Math.floor(chartData.length / 80) : 0;
+
   const selectedPoint = selectedIdx !== null ? data[selectedIdx] : null;
 
   const handleDotClick = (idx: number) => {
@@ -209,7 +212,7 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
               }}
               axisLine={{ stroke: 'transparent' }}
               tickLine={false}
-              interval={0}
+              interval={tickInterval}
               angle={-35}
               textAnchor="end"
               height={50}
