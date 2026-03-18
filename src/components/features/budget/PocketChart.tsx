@@ -194,7 +194,7 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={chartData}
-            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+            margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
           >
             <CartesianGrid
               strokeDasharray="3 3"
@@ -209,8 +209,10 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
               }}
               axisLine={{ stroke: 'transparent' }}
               tickLine={false}
-              interval="preserveStartEnd"
-              minTickGap={20}
+              interval={0}
+              angle={-35}
+              textAnchor="end"
+              height={50}
             />
             <YAxis
               tick={{
