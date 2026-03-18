@@ -143,7 +143,7 @@ export function SavingsChart({ data }: SavingsChartProps) {
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={chartData}
-          margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+          margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
@@ -158,17 +158,22 @@ export function SavingsChart({ data }: SavingsChartProps) {
             }}
             axisLine={{ stroke: 'transparent' }}
             tickLine={false}
-            interval="preserveStartEnd"
-            minTickGap={30}
+            interval={0}
+            angle={-35}
+            textAnchor="end"
+            height={50}
           />
           <YAxis
             tick={{
               fill: '#6b7280',
-              fontSize: 10,
+              fontSize: 9,
               fontFamily: 'var(--font-space-mono)',
             }}
             axisLine={{ stroke: 'transparent' }}
             tickLine={false}
+            tickCount={10}
+            tickMargin={0}
+            minTickGap={0}
             tickFormatter={(value) => `$${value.toLocaleString()}`}
             domain={[0, 'auto']}
           />

@@ -215,11 +215,14 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
             <YAxis
               tick={{
                 fill: '#6b7280',
-                fontSize: 10,
+                fontSize: 9,
                 fontFamily: 'var(--font-space-mono)',
               }}
               axisLine={{ stroke: 'transparent' }}
               tickLine={false}
+              tickCount={10}
+              tickMargin={0}
+              minTickGap={0}
               tickFormatter={(value) => `$${value}`}
               domain={[0, 'auto']}
             />
