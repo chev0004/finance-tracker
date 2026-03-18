@@ -20,6 +20,7 @@ interface RecurringExpenseManagerProps {
   onAdd: (expense: Omit<RecurringExpense, 'id'>) => void;
   onUpdate: (expense: RecurringExpense) => void;
   onRemove: (id: string) => void;
+  startOpen?: boolean;
 }
 
 const MONTHS_2026 = [
@@ -61,8 +62,11 @@ export function RecurringExpenseManager({
   onAdd,
   onUpdate,
   onRemove,
+  startOpen = false,
 }: RecurringExpenseManagerProps) {
-  const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null);
+  const [formMode, setFormMode] = useState<'add' | 'edit' | null>(
+    startOpen ? 'add' : null,
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
@@ -154,9 +158,9 @@ export function RecurringExpenseManager({
   );
 
   const formUI = (
-    <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
+    <div className="min-w-0 space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Label
           </Label>
@@ -166,7 +170,7 @@ export function RecurringExpenseManager({
             onChange={(e) => setLabel(e.target.value)}
           />
         </div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Amount
           </Label>
@@ -184,7 +188,7 @@ export function RecurringExpenseManager({
             />
           </div>
         </div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Day
           </Label>
@@ -206,13 +210,13 @@ export function RecurringExpenseManager({
             />
           )}
         </div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1 sm:col-span-2">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Months
           </Label>
-          <div className="flex items-center gap-1">
+          <div className="flex min-w-0 items-center gap-2">
             <Select value={startMonth} onValueChange={setStartMonth}>
-              <SelectTrigger className="flex-1 text-xs">
+              <SelectTrigger className="w-full min-w-0 flex-1 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -223,9 +227,9 @@ export function RecurringExpenseManager({
                 ))}
               </SelectContent>
             </Select>
-            <span className="text-muted-foreground text-xs">-</span>
+            <span className="shrink-0 text-muted-foreground text-xs">-</span>
             <Select value={endMonth} onValueChange={setEndMonth}>
-              <SelectTrigger className="flex-1 text-xs">
+              <SelectTrigger className="w-full min-w-0 flex-1 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
