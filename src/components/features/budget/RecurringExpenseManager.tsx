@@ -3,6 +3,7 @@
 import { Pencil, Plus, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -285,15 +286,19 @@ export function RecurringExpenseManager({
                 </SelectContent>
               </Select>
             )}
-            <label className="flex cursor-pointer items-center gap-1.5 text-muted-foreground text-xs">
-              <input
-                type="checkbox"
+            <div className="flex cursor-pointer items-center gap-1.5 text-muted-foreground text-xs">
+              <Checkbox
+                id="end-ongoing"
                 checked={endOngoing}
-                onChange={(e) => setEndOngoing(e.target.checked)}
-                className="rounded border-border"
+                onCheckedChange={(v) => setEndOngoing(v === true)}
               />
-              Through end of projection
-            </label>
+              <Label
+                htmlFor="end-ongoing"
+                className="cursor-pointer text-muted-foreground text-xs"
+              >
+                Ongoing
+              </Label>
+            </div>
           </div>
         </div>
       </div>
