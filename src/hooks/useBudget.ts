@@ -43,9 +43,10 @@ function lastDayOf(y: number, m: number): number {
 function getPocketPaydays(
   firstPayday: string,
   frequency: PayFrequency,
-  interval?: number,
+  interval: number | undefined,
+  startDate: string,
 ): string[] {
-  return getPaydaysForFrequency(firstPayday, frequency, interval);
+  return getPaydaysForFrequency(firstPayday, frequency, interval, startDate);
 }
 
 function advancePayday(
@@ -79,15 +80,21 @@ function getPaydaysForFrequency(
   firstPayday: string,
   frequency: PayFrequency,
   payInterval?: number,
+  startDate?: string,
 ): string[] {
   const result: string[] = [];
   const d = new Date(`${firstPayday}T00:00:00`);
 
-  while (d.getFullYear() < 2026) {
+  const base = startDate ? new Date(`${startDate}T00:00:00`) : new Date();
+  const startYear = base.getFullYear();
+  const rangeStart = new Date(startYear, 0, 1);
+  const rangeEnd = new Date(startYear + 4, 11, 31);
+
+  while (d < rangeStart) {
     if (!advancePayday(d, frequency, payInterval)) return result;
   }
 
-  while (d.getFullYear() === 2026) {
+  while (d <= rangeEnd) {
     result.push(d.toISOString().slice(0, 10));
     if (!advancePayday(d, frequency, payInterval)) break;
   }
@@ -225,6 +232,7 @@ function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
       source.firstPayday,
       source.payFrequency,
       source.payInterval,
+      settings.startDate,
     );
     for (const payday of sourcePaydays) {
       if (!isPaydayPaused(payday)) {
@@ -249,6 +257,7 @@ function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
     settings.pocketFirstPayday,
     settings.pocketFrequency,
     settings.pocketInterval,
+    settings.startDate,
   );
   for (const payday of pocketPaydays) {
     if (!pausedPocketMonths.has(payday.slice(0, 7))) {
@@ -509,6 +518,7 @@ export function useBudget() {
           DEFAULT_SETTINGS.pocketFirstPayday,
           DEFAULT_SETTINGS.pocketFrequency,
           DEFAULT_SETTINGS.pocketInterval,
+          DEFAULT_SETTINGS.startDate,
         );
         setSpentPerPeriod(pd.map(() => 0));
       }
@@ -517,6 +527,7 @@ export function useBudget() {
         DEFAULT_SETTINGS.pocketFirstPayday,
         DEFAULT_SETTINGS.pocketFrequency,
         DEFAULT_SETTINGS.pocketInterval,
+        DEFAULT_SETTINGS.startDate,
       );
       setSpentPerPeriod(pd.map(() => 0));
     }
@@ -554,11 +565,13 @@ export function useBudget() {
         settings.pocketFirstPayday,
         settings.pocketFrequency,
         settings.pocketInterval,
+        settings.startDate,
       ),
     [
       settings.pocketFirstPayday,
       settings.pocketFrequency,
       settings.pocketInterval,
+      settings.startDate,
     ],
   );
 
