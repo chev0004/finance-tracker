@@ -50,6 +50,13 @@ export interface IncomeSource {
   rateChanges: IncomeRateChange[];
 }
 
+export interface OneTimeIncome {
+  id: string;
+  date: string;
+  label: string;
+  amount: number;
+}
+
 export interface BudgetSettings {
   startingBalance: number;
   startDate: string;
@@ -60,6 +67,7 @@ export interface BudgetSettings {
   goals: SavingsGoal[];
   recurringExpenses: RecurringExpense[];
   incomeSources: IncomeSource[];
+  oneTimeIncome: OneTimeIncome[];
 }
 
 export interface FixedEvent {
@@ -73,7 +81,8 @@ export interface FixedEvent {
     | 'goal'
     | 'start'
     | 'user-expense'
-    | 'payday-recurring';
+    | 'payday-recurring'
+    | 'one-time';
 }
 
 export interface SavingsPointEvent {
