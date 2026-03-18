@@ -43,7 +43,6 @@ export default function Home() {
     pocketTimeline,
     currentPocketBalance,
     goalStats,
-    stats,
     validation,
     paydays,
     addExpense,
@@ -112,6 +111,22 @@ export default function Home() {
   const togglePanel = (panel: typeof addPanel) =>
     setAddPanel((prev) => (prev === panel ? null : panel));
 
+  const eoySavings = useMemo(() => {
+    const yearEnd = `${chartYearClamped}-12-31`;
+    const inYear = savingsTimeline.filter((p) => p.rawDate <= yearEnd);
+    const last = inYear[inYear.length - 1];
+    return last ? last.balance : settings.startingBalance;
+  }, [savingsTimeline, chartYearClamped, settings.startingBalance]);
+
+  const eoyPocket = useMemo(() => {
+    const yearEnd = `${chartYearClamped}-12-31`;
+    const inYear = pocketTimeline.filter((p) => p.rawDate <= yearEnd);
+    const last = inYear[inYear.length - 1];
+    return last ? last.balance : 0;
+  }, [pocketTimeline, chartYearClamped]);
+
+  const eoyCombined = eoySavings + eoyPocket;
+
   const pocketFreqLabel =
     settings.pocketFrequency === 'custom' && settings.pocketInterval
       ? `every ${settings.pocketInterval} days`
@@ -138,7 +153,12 @@ export default function Home() {
   }
 
   const eoyVariant =
-    stats.eoy < 0 ? 'danger' : stats.eoy < 500 ? 'warning' : 'success';
+    eoyCombined < 0 ? 'danger' : eoyCombined < 500 ? 'warning' : 'success';
+  const eoyColor = {
+    danger: 'text-red-500',
+    warning: 'text-amber-500',
+    success: 'text-emerald-500',
+  }[eoyVariant];
 
   const today = new Date().toISOString().slice(0, 10);
   const currentSavings =
@@ -155,7 +175,7 @@ export default function Home() {
               chev.dev / budget tracker
             </h1>
             <p className="mt-1 text-muted-foreground/60 text-xs">
-              2026 full-year projection
+              {chartStartYear}-{chartEndYear} projection
             </p>
           </div>
           <ExportMenu
@@ -167,7 +187,7 @@ export default function Home() {
               savingsTimeline,
               pocketTimeline,
               goalStats,
-              eoyBalance: stats.eoy,
+              eoyBalance: eoyCombined,
               validationErrors: validation.errors,
             }}
           />
@@ -209,11 +229,35 @@ export default function Home() {
             variant="success"
             prefix="+"
           />
-          <StatsCard
-            label="End of Year"
-            value={stats.eoy}
-            variant={eoyVariant}
-          />
+          <Card className="border-border/50 bg-card/50 hover:border-border hover:shadow-md">
+            <CardContent className="p-4">
+              <div className="mb-2 text-muted-foreground text-xs uppercase tracking-wider">
+                End of {chartYearClamped}
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-muted-foreground text-xs">Savings</span>
+                  <span className="font-mono text-sm">
+                    ${eoySavings.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-muted-foreground text-xs">Pocket</span>
+                  <span className="font-mono text-sm">
+                    ${eoyPocket.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2 border-border/50 border-t pt-1.5">
+                  <span className="text-muted-foreground text-xs">
+                    Combined
+                  </span>
+                  <span className={`font-bold font-mono text-xl ${eoyColor}`}>
+                    ${eoyCombined.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <SettingsPanel
@@ -337,6 +381,7 @@ export default function Home() {
             </DialogHeader>
             <RecurringExpenseManager
               expenses={[]}
+              projectionStartDate={settings.startDate}
               onAdd={(e) => {
                 addRecurringExpense(e);
                 setAddPanel(null);
@@ -453,6 +498,7 @@ export default function Home() {
             <CardContent>
               <RecurringExpenseManager
                 expenses={settings.recurringExpenses}
+                projectionStartDate={settings.startDate}
                 onAdd={addRecurringExpense}
                 onUpdate={updateRecurringExpense}
                 onRemove={removeRecurringExpense}
