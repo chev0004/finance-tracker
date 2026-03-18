@@ -1,12 +1,14 @@
 'use client';
 
-import { Plus } from 'lucide-react';
+import { Briefcase, Gift, Repeat, Target } from 'lucide-react';
 import { useState } from 'react';
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
 import { ExpenseList } from '@/components/features/budget/ExpenseList';
 import { ExportMenu } from '@/components/features/budget/ExportMenu';
 import { GoalCard } from '@/components/features/budget/GoalCard';
 import { GoalForm } from '@/components/features/budget/GoalForm';
+import { IncomeSourceManager } from '@/components/features/budget/IncomeSourceManager';
+import { OneTimeIncomeManager } from '@/components/features/budget/OneTimeIncomeManager';
 import { PocketChart } from '@/components/features/budget/PocketChart';
 import { RecurringExpenseManager } from '@/components/features/budget/RecurringExpenseManager';
 import { SavingsChart } from '@/components/features/budget/SavingsChart';
@@ -15,7 +17,20 @@ import { StatsCard } from '@/components/features/budget/StatsCard';
 import { ValidationAlert } from '@/components/features/budget/ValidationAlert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useBudget } from '@/hooks/useBudget';
 
 export default function Home() {
@@ -45,10 +60,18 @@ export default function Home() {
     addIncomeSource,
     updateIncomeSource,
     removeIncomeSource,
+    addOneTimeIncome,
+    updateOneTimeIncome,
+    removeOneTimeIncome,
   } = useBudget();
 
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
-  const [showAddGoal, setShowAddGoal] = useState(false);
+  const [addPanel, setAddPanel] = useState<
+    'goal' | 'recurring' | 'one-time' | 'income' | null
+  >(null);
+
+  const togglePanel = (panel: typeof addPanel) =>
+    setAddPanel((prev) => (prev === panel ? null : panel));
 
   const pocketFreqLabel =
     settings.pocketFrequency === 'custom' && settings.pocketInterval
@@ -132,10 +155,40 @@ export default function Home() {
 
         {/* --- Savings --- */}
         <Card className="border-border/50 bg-card/50 hover:border-border/80">
-          <CardHeader className="pb-2">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
               Savings
             </CardTitle>
+            <TooltipProvider delayDuration={200}>
+              <div className="flex items-center gap-1">
+                {(
+                  [
+                    { id: 'goal', icon: Target, tip: 'Add savings goal' },
+                    {
+                      id: 'recurring',
+                      icon: Repeat,
+                      tip: 'Add recurring expense',
+                    },
+                    { id: 'one-time', icon: Gift, tip: 'Add one-time income' },
+                    { id: 'income', icon: Briefcase, tip: 'Add income source' },
+                  ] as const
+                ).map(({ id, icon: Icon, tip }) => (
+                  <Tooltip key={id}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={addPanel === id ? 'secondary' : 'ghost'}
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => togglePanel(id)}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{tip}</TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
+            </TooltipProvider>
           </CardHeader>
           <CardContent className="space-y-4">
             <ValidationAlert
@@ -163,90 +216,181 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        {/* --- Goals --- */}
-        <Card className="border-border/50 bg-card/50 hover:border-border/80">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
-              Savings Goals
-            </CardTitle>
-            {!showAddGoal && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground text-xs hover:text-foreground"
-                onClick={() => setShowAddGoal(true)}
-              >
-                <Plus className="mr-1 h-3 w-3" /> Add Goal
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {settings.goals.length === 0 && !showAddGoal && (
-              <p className="py-4 text-muted-foreground/60 text-sm">
-                No goals yet. Add one to start tracking.
-              </p>
-            )}
+        <Dialog
+          open={addPanel === 'goal'}
+          onOpenChange={(open) => !open && setAddPanel(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Savings Goal</DialogTitle>
+              <DialogDescription>
+                Set a target date and line items for something you're saving
+                toward.
+              </DialogDescription>
+            </DialogHeader>
+            <GoalForm
+              recurringExpenses={settings.recurringExpenses}
+              onSave={(goal) => {
+                addGoal(goal);
+                setAddPanel(null);
+              }}
+              onCancel={() => setAddPanel(null)}
+            />
+          </DialogContent>
+        </Dialog>
 
-            {settings.goals.map((goal) => {
-              const stat = goalStats.find((s) => s.goalId === goal.id);
-              if (!stat) return null;
-
-              if (editingGoalId === goal.id) {
-                return (
-                  <GoalForm
-                    key={goal.id}
-                    goal={goal}
-                    recurringExpenses={settings.recurringExpenses}
-                    onSave={(updated) => {
-                      updateGoal(updated);
-                      setEditingGoalId(null);
-                    }}
-                    onCancel={() => setEditingGoalId(null)}
-                  />
-                );
-              }
-
-              return (
-                <GoalCard
-                  key={goal.id}
-                  goal={goal}
-                  stat={stat}
-                  recurringExpenses={settings.recurringExpenses}
-                  onEdit={() => setEditingGoalId(goal.id)}
-                  onDelete={() => removeGoal(goal.id)}
-                />
-              );
-            })}
-
-            {showAddGoal && (
-              <GoalForm
-                recurringExpenses={settings.recurringExpenses}
-                onSave={(goal) => {
-                  addGoal(goal);
-                  setShowAddGoal(false);
-                }}
-                onCancel={() => setShowAddGoal(false)}
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        {/* --- Recurring Expenses --- */}
-        <Card className="border-border/50 bg-card/50 hover:border-border/80">
-          <CardHeader className="pb-2">
-            <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
-              Recurring Expenses
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        <Dialog
+          open={addPanel === 'recurring'}
+          onOpenChange={(open) => !open && setAddPanel(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Recurring Expense</DialogTitle>
+              <DialogDescription>
+                A fixed cost that repeats monthly (rent, subscriptions, etc.).
+              </DialogDescription>
+            </DialogHeader>
             <RecurringExpenseManager
-              expenses={settings.recurringExpenses}
-              onAdd={addRecurringExpense}
+              expenses={[]}
+              onAdd={(e) => {
+                addRecurringExpense(e);
+                setAddPanel(null);
+              }}
               onUpdate={updateRecurringExpense}
               onRemove={removeRecurringExpense}
+              startOpen
             />
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={addPanel === 'one-time'}
+          onOpenChange={(open) => !open && setAddPanel(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add One-time Income</DialogTitle>
+              <DialogDescription>
+                Gifts, refunds, or other one-off money in.
+              </DialogDescription>
+            </DialogHeader>
+            <OneTimeIncomeManager
+              items={[]}
+              onAdd={(o) => {
+                addOneTimeIncome(o);
+                setAddPanel(null);
+              }}
+              onUpdate={updateOneTimeIncome}
+              onRemove={removeOneTimeIncome}
+              startOpen
+            />
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={addPanel === 'income'}
+          onOpenChange={(open) => !open && setAddPanel(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Income Source</DialogTitle>
+              <DialogDescription>
+                A recurring income stream with its own frequency and rate.
+              </DialogDescription>
+            </DialogHeader>
+            <IncomeSourceManager
+              sources={[]}
+              onAdd={(s) => {
+                addIncomeSource(s);
+                setAddPanel(null);
+              }}
+              onUpdate={updateIncomeSource}
+              onRemove={removeIncomeSource}
+              startOpen
+            />
+          </DialogContent>
+        </Dialog>
+
+        {/* --- Goals --- */}
+        {settings.goals.length > 0 && (
+          <Card className="border-border/50 bg-card/50 hover:border-border/80">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
+                Savings Goals
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {settings.goals.map((goal) => {
+                const stat = goalStats.find((s) => s.goalId === goal.id);
+                if (!stat) return null;
+
+                if (editingGoalId === goal.id) {
+                  return (
+                    <GoalForm
+                      key={goal.id}
+                      goal={goal}
+                      recurringExpenses={settings.recurringExpenses}
+                      onSave={(updated) => {
+                        updateGoal(updated);
+                        setEditingGoalId(null);
+                      }}
+                      onCancel={() => setEditingGoalId(null)}
+                    />
+                  );
+                }
+
+                return (
+                  <GoalCard
+                    key={goal.id}
+                    goal={goal}
+                    stat={stat}
+                    recurringExpenses={settings.recurringExpenses}
+                    onEdit={() => setEditingGoalId(goal.id)}
+                    onDelete={() => removeGoal(goal.id)}
+                  />
+                );
+              })}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* --- Recurring Expenses --- */}
+        {settings.recurringExpenses.length > 0 && (
+          <Card className="border-border/50 bg-card/50 hover:border-border/80">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
+                Recurring Expenses
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RecurringExpenseManager
+                expenses={settings.recurringExpenses}
+                onAdd={addRecurringExpense}
+                onUpdate={updateRecurringExpense}
+                onRemove={removeRecurringExpense}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* --- One-time income --- */}
+        {settings.oneTimeIncome.length > 0 && (
+          <Card className="border-border/50 bg-card/50 hover:border-border/80">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
+                One-time income
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <OneTimeIncomeManager
+                items={settings.oneTimeIncome}
+                onAdd={addOneTimeIncome}
+                onUpdate={updateOneTimeIncome}
+                onRemove={removeOneTimeIncome}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {/* --- Pocket Money --- */}
         <Card className="border-border/50 bg-card/50 hover:border-border/80">
