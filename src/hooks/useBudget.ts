@@ -16,10 +16,10 @@ import type {
 
 const DEFAULT_SETTINGS: BudgetSettings = {
   startingBalance: 0,
-  startDate: '2026-01-01',
+  startDate: new Date().toISOString().slice(0, 10),
   pocketPerPeriod: 0,
   pocketFrequency: 'weekly',
-  pocketFirstPayday: '2026-01-01',
+  pocketFirstPayday: new Date().toISOString().slice(0, 10),
   goals: [],
   recurringExpenses: [],
   incomeSources: [],
@@ -508,6 +508,7 @@ export function useBudget() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [spentPerPeriod, setSpentPerPeriod] = useState<number[]>([]);
   const [settings, setSettings] = useState<BudgetSettings>(DEFAULT_SETTINGS);
+  const [needsStartDatePrompt, setNeedsStartDatePrompt] = useState(false);
 
   useEffect(() => {
     try {
@@ -517,7 +518,9 @@ export function useBudget() {
         setExpenses(data.expenses || []);
         setSpentPerPeriod(data.spentPerPeriod || data.spentPerWeek || []);
         setSettings(migrateSettings(data.settings || {}));
+        setNeedsStartDatePrompt(false);
       } else {
+        setNeedsStartDatePrompt(true);
         const pd = getPocketPaydays(
           DEFAULT_SETTINGS.pocketFirstPayday,
           DEFAULT_SETTINGS.pocketFrequency,
@@ -534,6 +537,7 @@ export function useBudget() {
         DEFAULT_SETTINGS.startDate,
       );
       setSpentPerPeriod(pd.map(() => 0));
+      setNeedsStartDatePrompt(false);
     }
     setIsLoaded(true);
   }, []);
@@ -1142,6 +1146,7 @@ export function useBudget() {
 
   return {
     isLoaded,
+    needsStartDatePrompt,
     expenses,
     settings,
     currentIncome,

@@ -55,6 +55,7 @@ export function SettingsPanel({
   onRemoveIncomeSource,
 }: SettingsPanelProps) {
   const pocketStartDate = parseISO(settings.pocketFirstPayday);
+  const balanceStartDate = parseISO(settings.startDate);
 
   const [pocketStr, setPocketStr] = useState(String(settings.pocketPerPeriod));
   const [pocketFocused, setPocketFocused] = useState(false);
@@ -205,6 +206,44 @@ export function SettingsPanel({
                 className="pl-7 font-mono"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+              Balance Start
+            </Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    'w-full justify-start text-left font-normal',
+                    !isValid(balanceStartDate) && 'text-muted-foreground',
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {isValid(balanceStartDate)
+                    ? format(balanceStartDate, 'MMM d, yyyy')
+                    : 'Select date'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={balanceStartDate}
+                  onSelect={(d) => {
+                    if (d && isValid(d)) {
+                      const formatted = format(d, 'yyyy-MM-dd');
+                      onUpdate({
+                        startDate: formatted,
+                        pocketFirstPayday: formatted,
+                      });
+                    }
+                  }}
+                  defaultMonth={balanceStartDate}
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="space-y-2">

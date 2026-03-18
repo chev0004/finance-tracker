@@ -1,7 +1,7 @@
 'use client';
 
 import { Briefcase, Gift, Repeat, Target } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
 import { ExpenseList } from '@/components/features/budget/ExpenseList';
 import { ExportMenu } from '@/components/features/budget/ExportMenu';
@@ -24,6 +24,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { NavStepper } from '@/components/ui/nav-stepper';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -37,6 +39,7 @@ import { useBudget } from '@/hooks/useBudget';
 export default function Home() {
   const {
     isLoaded,
+    needsStartDatePrompt,
     expenses,
     settings,
     savingsTimeline,
@@ -83,6 +86,16 @@ export default function Home() {
     chartStartYear,
     Math.min(chartEndYear, chartYear),
   );
+
+  const [startDateDraft, setStartDateDraft] = useState<string>('');
+  const [startDatePromptDismissed, setStartDatePromptDismissed] =
+    useState(false);
+  const showStartDatePrompt = needsStartDatePrompt && !startDatePromptDismissed;
+
+  useEffect(() => {
+    if (!showStartDatePrompt) return;
+    setStartDateDraft(settings.startDate);
+  }, [showStartDatePrompt, settings.startDate]);
   const savingsChartData = useMemo(() => {
     const yearStart = `${chartYearClamped}-01-01`;
     const yearEnd = `${chartYearClamped}-12-31`;
@@ -169,6 +182,49 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
+        <Dialog open={showStartDatePrompt}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Starting Balance Date</DialogTitle>
+              <DialogDescription>
+                When did you start tracking this budget? This date sets the
+                start of the projection.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+                Balance Start
+              </Label>
+              <Input
+                type="date"
+                value={startDateDraft}
+                onChange={(e) => setStartDateDraft(e.target.value)}
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setStartDatePromptDismissed(true)}
+              >
+                Skip
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!startDateDraft) return;
+                  updateSettings({
+                    startDate: startDateDraft,
+                    pocketFirstPayday: startDateDraft,
+                  });
+                  setStartDatePromptDismissed(true);
+                }}
+                disabled={!startDateDraft}
+              >
+                Set date
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <header className="mb-6 flex flex-row items-start justify-between gap-4">
           <div>
             <h1 className="font-mono text-muted-foreground text-sm uppercase tracking-wider">
