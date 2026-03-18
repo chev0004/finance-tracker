@@ -83,6 +83,14 @@ export function buildExportText(payload: ExportPayload): string {
         })
       : ['None'];
 
+  const oneTimeIncomeLines =
+    settings.oneTimeIncome?.length > 0
+      ? settings.oneTimeIncome
+          .slice()
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .map((o) => `${o.date} | ${o.label} | +$${o.amount.toLocaleString()}`)
+      : ['None'];
+
   const goalLines = settings.goals.map((goal) => {
     const total = goal.lineItems.reduce((s, i) => s + i.amount, 0);
     const items = goal.lineItems
@@ -130,6 +138,7 @@ export function buildExportText(payload: ExportPayload): string {
     section('Settings', settingsLines),
     section('Recurring expenses', recurringLines),
     section('Income sources', incomeSourceLines),
+    section('One-time income', oneTimeIncomeLines),
     section('Savings goals', goalLines.length ? goalLines : ['None']),
     section('Goal feasibility', goalStatLines),
     section('Logged expenses', expenseLines),
