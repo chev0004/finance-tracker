@@ -30,7 +30,7 @@ export interface RecurringExpense {
   amount: number;
   dayOfMonth: number;
   startMonth: string;
-  endMonth: string;
+  endMonth: string | null;
 }
 
 export type PayFrequency = 'weekly' | 'biweekly' | 'monthly' | 'custom';

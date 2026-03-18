@@ -282,8 +282,12 @@ function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
     }
   }
 
+  const projectionEndYear =
+    new Date(`${settings.startDate}T00:00:00`).getFullYear() + 4;
+
   for (const rec of settings.recurringExpenses) {
-    const [endY, endM] = rec.endMonth.split('-').map(Number);
+    const endBound = rec.endMonth ?? `${projectionEndYear}-12`;
+    const [endY, endM] = endBound.split('-').map(Number);
     let [y, m] = rec.startMonth.split('-').map(Number);
 
     while (y < endY || (y === endY && m <= endM)) {

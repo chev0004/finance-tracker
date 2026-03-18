@@ -1,7 +1,7 @@
 'use client';
 
 import { Pencil, Plus, X } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,27 +20,45 @@ interface RecurringExpenseManagerProps {
   onAdd: (expense: Omit<RecurringExpense, 'id'>) => void;
   onUpdate: (expense: RecurringExpense) => void;
   onRemove: (id: string) => void;
+  projectionStartDate?: string;
   startOpen?: boolean;
   onCancel?: () => void;
 }
 
-const MONTHS_2026 = [
-  { value: '2026-01', label: 'Jan' },
-  { value: '2026-02', label: 'Feb' },
-  { value: '2026-03', label: 'Mar' },
-  { value: '2026-04', label: 'Apr' },
-  { value: '2026-05', label: 'May' },
-  { value: '2026-06', label: 'Jun' },
-  { value: '2026-07', label: 'Jul' },
-  { value: '2026-08', label: 'Aug' },
-  { value: '2026-09', label: 'Sep' },
-  { value: '2026-10', label: 'Oct' },
-  { value: '2026-11', label: 'Nov' },
-  { value: '2026-12', label: 'Dec' },
+const MONTH_NAMES = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
+function buildMonthOptions(
+  projectionStartDate: string,
+): { value: string; label: string }[] {
+  const startYear = new Date(
+    `${projectionStartDate.slice(0, 7)}-01T00:00:00`,
+  ).getFullYear();
+  const out: { value: string; label: string }[] = [];
+  for (let y = startYear; y <= startYear + 4; y++) {
+    for (let m = 1; m <= 12; m++) {
+      const value = `${y}-${m < 10 ? '0' : ''}${m}`;
+      out.push({ value, label: `${MONTH_NAMES[m - 1]} ${y}` });
+    }
+  }
+  return out;
+}
+
 function monthLabel(value: string): string {
-  return MONTHS_2026.find((m) => m.value === value)?.label ?? value;
+  const [y, m] = value.split('-').map(Number);
+  return `${MONTH_NAMES[(m ?? 1) - 1]} ${y}`;
 }
 
 function ordinal(n: number): string {
@@ -58,14 +76,29 @@ function presetForDay(d: number): DayPreset {
   return 'custom';
 }
 
+const DEFAULT_START = '2026-01-01';
+
 export function RecurringExpenseManager({
   expenses,
   onAdd,
   onUpdate,
   onRemove,
+  projectionStartDate = DEFAULT_START,
   startOpen = false,
   onCancel,
 }: RecurringExpenseManagerProps) {
+  const monthOptions = useMemo(
+    () => buildMonthOptions(projectionStartDate),
+    [projectionStartDate],
+  );
+  const projectionEndMonth = useMemo(() => {
+    const y = new Date(
+      `${projectionStartDate.slice(0, 7)}-01T00:00:00`,
+    ).getFullYear();
+    return `${y + 4}-12`;
+  }, [projectionStartDate]);
+  const projectionStartMonth = projectionStartDate.slice(0, 7);
+
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(
     startOpen ? 'add' : null,
   );
@@ -74,8 +107,9 @@ export function RecurringExpenseManager({
   const [amount, setAmount] = useState('');
   const [dayPreset, setDayPreset] = useState<DayPreset>('1');
   const [customDay, setCustomDay] = useState('');
-  const [startMonth, setStartMonth] = useState('2026-04');
-  const [endMonth, setEndMonth] = useState('2026-12');
+  const [startMonth, setStartMonth] = useState(projectionStartMonth);
+  const [endMonth, setEndMonth] = useState(projectionEndMonth);
+  const [endOngoing, setEndOngoing] = useState(true);
 
   const resolvedDay =
     dayPreset === 'end'
@@ -95,8 +129,9 @@ export function RecurringExpenseManager({
     setAmount('');
     setDayPreset('1');
     setCustomDay('');
-    setStartMonth('2026-04');
-    setEndMonth('2026-12');
+    setStartMonth(projectionStartMonth);
+    setEndMonth(projectionEndMonth);
+    setEndOngoing(true);
     setFormMode(null);
     setEditingId(null);
   };
@@ -115,13 +150,15 @@ export function RecurringExpenseManager({
     setDayPreset(p);
     setCustomDay(p === 'custom' ? String(exp.dayOfMonth) : '');
     setStartMonth(exp.startMonth);
-    setEndMonth(exp.endMonth);
+    setEndOngoing(exp.endMonth == null);
+    setEndMonth(exp.endMonth ?? projectionEndMonth);
   };
 
   const handleSave = () => {
     const numAmount = Number.parseFloat(amount) || 0;
     if (!label.trim() || numAmount <= 0) return;
     const day = resolvedDay === 0 ? 0 : Math.min(31, Math.max(1, resolvedDay));
+    const resolvedEndMonth = endOngoing ? null : endMonth;
 
     if (formMode === 'edit' && editingId) {
       onUpdate({
@@ -130,7 +167,7 @@ export function RecurringExpenseManager({
         amount: numAmount,
         dayOfMonth: day,
         startMonth,
-        endMonth,
+        endMonth: resolvedEndMonth,
       });
     } else {
       onAdd({
@@ -138,7 +175,7 @@ export function RecurringExpenseManager({
         amount: numAmount,
         dayOfMonth: day,
         startMonth,
-        endMonth,
+        endMonth: resolvedEndMonth,
       });
     }
     resetForm();
@@ -216,13 +253,13 @@ export function RecurringExpenseManager({
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Months
           </Label>
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Select value={startMonth} onValueChange={setStartMonth}>
-              <SelectTrigger className="w-full min-w-0 flex-1 text-xs">
-                <SelectValue />
+              <SelectTrigger className="min-w-0 flex-1 text-xs sm:max-w-[140px]">
+                <SelectValue placeholder="Start" />
               </SelectTrigger>
               <SelectContent>
-                {MONTHS_2026.map((m) => (
+                {monthOptions.map((m) => (
                   <SelectItem key={m.value} value={m.value}>
                     {m.label}
                   </SelectItem>
@@ -230,18 +267,33 @@ export function RecurringExpenseManager({
               </SelectContent>
             </Select>
             <span className="shrink-0 text-muted-foreground text-xs">-</span>
-            <Select value={endMonth} onValueChange={setEndMonth}>
-              <SelectTrigger className="w-full min-w-0 flex-1 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MONTHS_2026.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {endOngoing ? (
+              <span className="text-muted-foreground text-xs">ongoing</span>
+            ) : (
+              <Select value={endMonth} onValueChange={setEndMonth}>
+                <SelectTrigger className="min-w-0 flex-1 text-xs sm:max-w-[140px]">
+                  <SelectValue placeholder="End" />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthOptions
+                    .filter((m) => m.value >= startMonth)
+                    .map((m) => (
+                      <SelectItem key={m.value} value={m.value}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            )}
+            <label className="flex cursor-pointer items-center gap-1.5 text-muted-foreground text-xs">
+              <input
+                type="checkbox"
+                checked={endOngoing}
+                onChange={(e) => setEndOngoing(e.target.checked)}
+                className="rounded border-border"
+              />
+              Through end of projection
+            </label>
           </div>
         </div>
       </div>
@@ -280,7 +332,9 @@ export function RecurringExpenseManager({
                   <span className="text-muted-foreground text-xs">
                     {exp.dayOfMonth === 0 ? 'Last' : ordinal(exp.dayOfMonth)}{' '}
                     &middot; {monthLabel(exp.startMonth)}-
-                    {monthLabel(exp.endMonth)}
+                    {exp.endMonth == null
+                      ? 'ongoing'
+                      : monthLabel(exp.endMonth)}
                   </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
