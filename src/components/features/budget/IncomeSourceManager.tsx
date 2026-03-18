@@ -38,6 +38,7 @@ interface IncomeSourceManagerProps {
   onAdd: (source: Omit<IncomeSource, 'id'>) => void;
   onUpdate: (source: IncomeSource) => void;
   onRemove: (id: string) => void;
+  startOpen?: boolean;
 }
 
 function RateChangeList({
@@ -435,8 +436,9 @@ export function IncomeSourceManager({
   onAdd,
   onUpdate,
   onRemove,
+  startOpen = false,
 }: IncomeSourceManagerProps) {
-  const [addingSource, setAddingSource] = useState(false);
+  const [addingSource, setAddingSource] = useState(startOpen);
   const [newName, setNewName] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newFrequency, setNewFrequency] = useState<PayFrequency>('weekly');
