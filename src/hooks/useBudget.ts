@@ -860,6 +860,41 @@ export function useBudget() {
     expensesPerPeriod,
   ]);
 
+  const currentPocketBalance = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const periodIdx = getPeriodIndexForDate(
+      today,
+      paydays,
+      settings.pocketFrequency,
+      settings.pocketInterval,
+    );
+    if (periodIdx === null) return 0;
+    const prevBalance =
+      periodIdx === 0 ? 0 : (pocketTimeline[periodIdx - 1]?.balance ?? 0);
+    const range = getPeriodRange(
+      paydays[periodIdx],
+      settings.pocketFrequency,
+      settings.pocketInterval,
+    );
+    const periodExpenses = expenses.filter(
+      (e) => dateInPeriod(e.date, range.start, range.end) && e.date <= today,
+    );
+    const spentSoFar =
+      periodExpenses.length > 0
+        ? periodExpenses.reduce((s, e) => s + e.amount, 0)
+        : (spentPerPeriod[periodIdx] ?? 0);
+    const available = prevBalance + settings.pocketPerPeriod;
+    return Math.max(0, Math.round(available - spentSoFar));
+  }, [
+    paydays,
+    pocketTimeline,
+    expenses,
+    spentPerPeriod,
+    settings.pocketPerPeriod,
+    settings.pocketFrequency,
+    settings.pocketInterval,
+  ]);
+
   const goalStats = useMemo((): GoalStat[] => {
     return settings.goals.map((goal) => {
       const total = goal.lineItems.reduce((s, item) => s + item.amount, 0);
@@ -1121,6 +1156,7 @@ export function useBudget() {
     paydays,
     savingsTimeline,
     pocketTimeline,
+    currentPocketBalance,
     goalStats,
     stats,
     validation,
