@@ -1,7 +1,14 @@
 'use client';
 
-import { Briefcase, Gift, Repeat, Target } from 'lucide-react';
-import { useState } from 'react';
+import {
+  Briefcase,
+  ChevronLeft,
+  ChevronRight,
+  Gift,
+  Repeat,
+  Target,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
 import { ExpenseList } from '@/components/features/budget/ExpenseList';
 import { ExportMenu } from '@/components/features/budget/ExportMenu';
@@ -70,6 +77,35 @@ export default function Home() {
   const [addPanel, setAddPanel] = useState<
     'goal' | 'recurring' | 'one-time' | 'income' | null
   >(null);
+
+  const chartStartYear = Number(settings.startDate.slice(0, 4));
+  const chartEndYear = chartStartYear + 4;
+  const [chartYear, setChartYear] = useState(() => {
+    const y = new Date().getFullYear();
+    if (y < chartStartYear) return chartStartYear;
+    if (y > chartEndYear) return chartEndYear;
+    return y;
+  });
+  const chartYearClamped = Math.max(
+    chartStartYear,
+    Math.min(chartEndYear, chartYear),
+  );
+  const savingsChartData = useMemo(() => {
+    const yearStart = `${chartYearClamped}-01-01`;
+    const yearEnd = `${chartYearClamped}-12-31`;
+    const inYear = savingsTimeline.filter(
+      (p) => p.rawDate >= yearStart && p.rawDate <= yearEnd,
+    );
+    const beforeYear = savingsTimeline
+      .filter((p) => p.rawDate < yearStart)
+      .sort((a, b) => b.rawDate.localeCompare(a.rawDate));
+    const carryOver = beforeYear[0];
+    if (!carryOver) return inYear;
+    return [
+      { ...carryOver, date: yearStart, rawDate: yearStart, label: '…' },
+      ...inYear,
+    ];
+  }, [savingsTimeline, chartYearClamped]);
 
   const togglePanel = (panel: typeof addPanel) =>
     setAddPanel((prev) => (prev === panel ? null : panel));
@@ -230,7 +266,34 @@ export default function Home() {
               errors={validation.errors}
               isCritical={validation.isCritical}
             />
-            <SavingsChart data={savingsTimeline} />
+            <div className="flex items-center justify-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                disabled={chartYearClamped <= chartStartYear}
+                onClick={() =>
+                  setChartYear((y) => Math.max(chartStartYear, y - 1))
+                }
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="min-w-16 text-center font-medium font-mono text-sm">
+                {chartYearClamped}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                disabled={chartYearClamped >= chartEndYear}
+                onClick={() =>
+                  setChartYear((y) => Math.min(chartEndYear, y + 1))
+                }
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <SavingsChart data={savingsChartData} />
             <p className="text-muted-foreground/70 text-xs leading-relaxed">
               ~${Math.round(monthlySavings).toLocaleString()} saved per month ($
               {Math.round(monthlyIncome).toLocaleString()} income minus $
