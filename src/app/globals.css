@@ -114,6 +114,11 @@ body {
   outline-offset: 2px;
 }
 
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
 input[type="number"] {
   -moz-appearance: textfield;
 }
