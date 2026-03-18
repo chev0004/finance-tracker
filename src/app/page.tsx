@@ -1,6 +1,7 @@
 'use client';
 
-import { Briefcase, Gift, Repeat, Target } from 'lucide-react';
+import { format, isValid, parseISO } from 'date-fns';
+import { Briefcase, CalendarIcon, Gift, Repeat, Target } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
 import { ExpenseList } from '@/components/features/budget/ExpenseList';
@@ -16,6 +17,7 @@ import { SettingsPanel } from '@/components/features/budget/SettingsPanel';
 import { StatsCard } from '@/components/features/budget/StatsCard';
 import { ValidationAlert } from '@/components/features/budget/ValidationAlert';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
@@ -24,9 +26,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NavStepper } from '@/components/ui/nav-stepper';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
@@ -96,6 +102,12 @@ export default function Home() {
     if (!showStartDatePrompt) return;
     setStartDateDraft(settings.startDate);
   }, [showStartDatePrompt, settings.startDate]);
+
+  const parsedBalanceStartDate = startDateDraft
+    ? parseISO(startDateDraft)
+    : parseISO(settings.startDate);
+  const isParsedBalanceStartDateValid = isValid(parsedBalanceStartDate);
+
   const savingsChartData = useMemo(() => {
     const yearStart = `${chartYearClamped}-01-01`;
     const yearEnd = `${chartYearClamped}-12-31`;
@@ -182,8 +194,13 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
-        <Dialog open={showStartDatePrompt}>
-          <DialogContent>
+        <Dialog
+          open={showStartDatePrompt}
+          onOpenChange={(open) => {
+            if (!open) setStartDatePromptDismissed(true);
+          }}
+        >
+          <DialogContent onOpenAutoFocus={(e) => e.preventDefault()}>
             <DialogHeader>
               <DialogTitle>Starting Balance Date</DialogTitle>
               <DialogDescription>
@@ -195,11 +212,40 @@ export default function Home() {
               <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                 Balance Start
               </Label>
-              <Input
-                type="date"
-                value={startDateDraft}
-                onChange={(e) => setStartDateDraft(e.target.value)}
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={
+                      'w-full justify-start border-border/50 bg-transparent text-left font-normal text-white hover:bg-white/10 focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-transparent' +
+                      (!isParsedBalanceStartDateValid
+                        ? 'text-muted-foreground'
+                        : '')
+                    }
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 text-white" />
+                    {isParsedBalanceStartDateValid
+                      ? format(parsedBalanceStartDate, 'MMM d, yyyy')
+                      : 'Select date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={
+                      isParsedBalanceStartDateValid
+                        ? parsedBalanceStartDate
+                        : undefined
+                    }
+                    defaultMonth={parsedBalanceStartDate}
+                    onSelect={(d) => {
+                      if (d && isValid(d)) {
+                        setStartDateDraft(format(d, 'yyyy-MM-dd'));
+                      }
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <Button
@@ -209,6 +255,8 @@ export default function Home() {
                 Skip
               </Button>
               <Button
+                variant="ghost"
+                className="bg-white! text-black! hover:bg-white/90!"
                 onClick={() => {
                   if (!startDateDraft) return;
                   updateSettings({
