@@ -198,7 +198,7 @@ export default function Home() {
               <div className="flex items-center gap-1">
                 {(
                   [
-                    { id: 'goal', icon: Target, tip: 'Add savings goal' },
+                    { id: 'goal', icon: Target, tip: 'Add goal' },
                     {
                       id: 'recurring',
                       icon: Repeat,
@@ -257,10 +257,10 @@ export default function Home() {
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add Savings Goal</DialogTitle>
+              <DialogTitle>Add Goal</DialogTitle>
               <DialogDescription>
-                Set a target date and line items for something you're saving
-                toward.
+                Trips, a car, a big purchase, anything. Pick one date or a date
+                range for a period like a trip.
               </DialogDescription>
             </DialogHeader>
             <GoalForm

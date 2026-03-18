@@ -31,7 +31,7 @@ interface LineItemDraft {
 }
 
 function formatRangeLabel(range: DateRange | undefined): string {
-  if (!range?.from) return 'Select dates';
+  if (!range?.from) return 'Select date or range';
   if (!range.to || range.from.getTime() === range.to.getTime())
     return format(range.from, 'MMM d, yyyy');
   if (
@@ -159,7 +159,7 @@ export function GoalForm({
               Goal Name
             </Label>
             <Input
-              placeholder="e.g. Goal"
+              placeholder="e.g. trip, new car, laptop"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -167,7 +167,7 @@ export function GoalForm({
 
           <div className="space-y-2">
             <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-              Dates
+              Date or range
             </Label>
             <Popover>
               <PopoverTrigger asChild>
@@ -210,7 +210,7 @@ export function GoalForm({
             {lineItems.map((item) => (
               <div key={item.id} className="flex items-center gap-2">
                 <Input
-                  placeholder="Item name"
+                  placeholder="e.g. plane ticket, accommodation"
                   value={item.label}
                   onChange={(e) =>
                     updateLineItem(item.id, 'label', e.target.value)
