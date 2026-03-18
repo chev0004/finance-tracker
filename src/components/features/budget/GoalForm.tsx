@@ -60,7 +60,6 @@ export function GoalForm({
       : undefined,
   );
   const [pauseIncome, setPauseIncome] = useState(goal?.pauseIncome ?? false);
-  const [pausePocket, setPausePocket] = useState(goal?.pausePocket ?? false);
   const [pausedExpenseIds, setPausedExpenseIds] = useState<Set<string>>(
     new Set(goal?.pausedExpenseIds ?? []),
   );
@@ -135,7 +134,7 @@ export function GoalForm({
       endDate: format(to, 'yyyy-MM-dd'),
       lineItems: parsedItems,
       pauseIncome,
-      pausePocket,
+      pausePocket: false,
       pausedExpenseIds: [...pausedExpenseIds],
     });
   };
@@ -268,18 +267,6 @@ export function GoalForm({
             onClick={() => setPauseIncome(!pauseIncome)}
           >
             {pauseIncome && '\u2713 '}No income during this period
-          </button>
-          <button
-            type="button"
-            className={cn(
-              'cursor-pointer rounded-md border px-3 py-1.5 text-xs transition-colors',
-              pausePocket
-                ? 'border-border bg-muted text-foreground'
-                : 'border-border text-muted-foreground hover:text-foreground',
-            )}
-            onClick={() => setPausePocket(!pausePocket)}
-          >
-            {pausePocket && '\u2713 '}No pocket allowance during this period
           </button>
         </div>
 
