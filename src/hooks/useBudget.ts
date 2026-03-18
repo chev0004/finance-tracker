@@ -202,11 +202,23 @@ function getMonthlySavings(settings: BudgetSettings): number {
 function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
   const ev: FixedEvent[] = [];
 
+  const goalsPausingIncome = settings.goals.filter((g) => g.pauseIncome);
   const pausedMonths = new Set(
-    settings.goals
-      .filter((g) => g.pauseIncome)
-      .flatMap((g) => getMonthsInRange(g.startDate, g.endDate)),
+    goalsPausingIncome.flatMap((g) => getMonthsInRange(g.startDate, g.endDate)),
   );
+
+  const isPaydayPaused = (payday: string): boolean => {
+    if (pausedMonths.has(payday.slice(0, 7))) return true;
+    for (const g of goalsPausingIncome) {
+      if (
+        g.incomeResumeDate &&
+        payday > g.endDate &&
+        payday < g.incomeResumeDate
+      )
+        return true;
+    }
+    return false;
+  };
 
   for (const source of settings.incomeSources) {
     const sourcePaydays = getPaydaysForFrequency(
@@ -215,7 +227,7 @@ function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
       source.payInterval,
     );
     for (const payday of sourcePaydays) {
-      if (!pausedMonths.has(payday.slice(0, 7))) {
+      if (!isPaydayPaused(payday)) {
         const amount = getSourceAmountForDate(source, payday);
         ev.push({
           date: payday,
@@ -330,6 +342,7 @@ function migrateGoal(g: Record<string, unknown>): SavingsGoal {
         };
   return {
     ...base,
+    incomeResumeDate: base.incomeResumeDate,
     pausePocket: base.pausePocket ?? false,
     pausedExpenseIds: base.pausedExpenseIds ?? [],
   };

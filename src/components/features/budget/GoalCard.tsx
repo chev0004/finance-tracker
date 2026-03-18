@@ -49,7 +49,13 @@ export function GoalCard({
       : 'border-border/50';
 
   const details: string[] = [dateLabel, `$${stat.totalCost.toLocaleString()}`];
-  if (goal.pauseIncome) details.push('no income');
+  if (goal.pauseIncome) {
+    details.push('no income');
+    if (goal.incomeResumeDate)
+      details.push(
+        `resumes ${format(parseISO(goal.incomeResumeDate), 'MMM d')}`,
+      );
+  }
   if (pausedNames.length > 0) details.push(`pauses ${pausedNames.join(', ')}`);
 
   return (

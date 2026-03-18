@@ -2,7 +2,7 @@
 
 import { format, isValid, parseISO } from 'date-fns';
 import { CalendarIcon, Plus, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -60,6 +60,9 @@ export function GoalForm({
       : undefined,
   );
   const [pauseIncome, setPauseIncome] = useState(goal?.pauseIncome ?? false);
+  const [incomeResumeDate, setIncomeResumeDate] = useState<string | undefined>(
+    goal?.incomeResumeDate,
+  );
   const [pausedExpenseIds, setPausedExpenseIds] = useState<Set<string>>(
     new Set(goal?.pausedExpenseIds ?? []),
   );
@@ -71,6 +74,13 @@ export function GoalForm({
     })) ?? [{ id: crypto.randomUUID(), label: '', amount: '' }],
   );
   const [error, setError] = useState<string | null>(null);
+
+  const goalEnd = dateRange?.to ?? dateRange?.from;
+  const goalEndStr = goalEnd ? format(goalEnd, 'yyyy-MM-dd') : null;
+  useEffect(() => {
+    if (goalEndStr && incomeResumeDate && incomeResumeDate < goalEndStr)
+      setIncomeResumeDate(undefined);
+  }, [goalEndStr, incomeResumeDate]);
 
   const toggleExpense = (id: string) => {
     setPausedExpenseIds((prev) => {
@@ -126,6 +136,11 @@ export function GoalForm({
 
     const from = dateRange.from;
     const to = dateRange.to ?? from;
+    const goalEndStr = format(to, 'yyyy-MM-dd');
+    if (pauseIncome && incomeResumeDate && incomeResumeDate < goalEndStr) {
+      setError('Income resume date must be on or after the goal end date.');
+      return;
+    }
 
     onSave({
       id: goal?.id ?? crypto.randomUUID(),
@@ -134,6 +149,7 @@ export function GoalForm({
       endDate: format(to, 'yyyy-MM-dd'),
       lineItems: parsedItems,
       pauseIncome,
+      incomeResumeDate: pauseIncome ? incomeResumeDate : undefined,
       pausePocket: false,
       pausedExpenseIds: [...pausedExpenseIds],
     });
@@ -269,6 +285,63 @@ export function GoalForm({
             {pauseIncome && '\u2713 '}No income during this period
           </button>
         </div>
+
+        {pauseIncome && (
+          <div className="space-y-2">
+            <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+              Income resumes on
+            </Label>
+            <p className="text-[11px] text-muted-foreground/70">
+              Optional. When you get paid again after the goal. Leave empty to
+              resume on the first payday after the goal end.
+            </p>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    'w-full justify-start text-left font-normal sm:w-auto',
+                    !incomeResumeDate && 'text-muted-foreground',
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {incomeResumeDate
+                    ? format(parseISO(incomeResumeDate), 'MMM d, yyyy')
+                    : 'Select date'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={
+                    incomeResumeDate ? parseISO(incomeResumeDate) : undefined
+                  }
+                  onSelect={(d) => {
+                    if (d && isValid(d))
+                      setIncomeResumeDate(format(d, 'yyyy-MM-dd'));
+                  }}
+                  defaultMonth={
+                    incomeResumeDate
+                      ? parseISO(incomeResumeDate)
+                      : (dateRange?.to ?? dateRange?.from)
+                  }
+                  disabled={goalEnd ? { before: goalEnd } : undefined}
+                />
+              </PopoverContent>
+            </Popover>
+            {incomeResumeDate && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground text-xs hover:text-foreground"
+                onClick={() => setIncomeResumeDate(undefined)}
+              >
+                Clear (resume first payday after goal)
+              </Button>
+            )}
+          </div>
+        )}
 
         {recurringExpenses.length > 0 && (
           <div className="space-y-2">

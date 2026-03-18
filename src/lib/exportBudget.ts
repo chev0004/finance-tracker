@@ -100,7 +100,10 @@ export function buildExportText(payload: ExportPayload): string {
     const paused = goal.pausedExpenseIds.length
       ? ` (paused: ${goal.pausedExpenseIds.join(', ')})`
       : '';
-    return `${goal.name} (${goal.startDate} to ${goal.endDate}): $${total.toLocaleString()}\n${items}\n  Pause income: ${pause}${paused}`;
+    const resume = goal.incomeResumeDate
+      ? `\n  Income resumes: ${goal.incomeResumeDate}`
+      : '';
+    return `${goal.name} (${goal.startDate} to ${goal.endDate}): $${total.toLocaleString()}\n${items}\n  Pause income: ${pause}${paused}${resume}`;
   });
 
   const expenseLines =

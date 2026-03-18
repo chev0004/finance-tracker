@@ -19,6 +19,7 @@ export interface SavingsGoal {
   endDate: string;
   lineItems: GoalLineItem[];
   pauseIncome: boolean;
+  incomeResumeDate?: string;
   pausePocket: boolean;
   pausedExpenseIds: string[];
 }
