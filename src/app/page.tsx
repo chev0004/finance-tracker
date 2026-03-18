@@ -259,6 +259,7 @@ export default function Home() {
               onUpdate={updateRecurringExpense}
               onRemove={removeRecurringExpense}
               startOpen
+              onCancel={() => setAddPanel(null)}
             />
           </DialogContent>
         </Dialog>
@@ -283,6 +284,7 @@ export default function Home() {
               onUpdate={updateOneTimeIncome}
               onRemove={removeOneTimeIncome}
               startOpen
+              onCancel={() => setAddPanel(null)}
             />
           </DialogContent>
         </Dialog>
@@ -307,6 +309,7 @@ export default function Home() {
               onUpdate={updateIncomeSource}
               onRemove={removeIncomeSource}
               startOpen
+              onCancel={() => setAddPanel(null)}
             />
           </DialogContent>
         </Dialog>

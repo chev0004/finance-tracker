@@ -21,6 +21,7 @@ interface RecurringExpenseManagerProps {
   onUpdate: (expense: RecurringExpense) => void;
   onRemove: (id: string) => void;
   startOpen?: boolean;
+  onCancel?: () => void;
 }
 
 const MONTHS_2026 = [
@@ -63,6 +64,7 @@ export function RecurringExpenseManager({
   onUpdate,
   onRemove,
   startOpen = false,
+  onCancel,
 }: RecurringExpenseManagerProps) {
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(
     startOpen ? 'add' : null,
@@ -247,7 +249,11 @@ export function RecurringExpenseManager({
         <Button size="sm" onClick={handleSave} variant="muted">
           {formMode === 'edit' ? 'Save' : 'Add'}
         </Button>
-        <Button size="sm" variant="ghost" onClick={resetForm}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => (onCancel ? onCancel() : resetForm())}
+        >
           Cancel
         </Button>
       </div>

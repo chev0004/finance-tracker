@@ -39,6 +39,7 @@ interface IncomeSourceManagerProps {
   onUpdate: (source: IncomeSource) => void;
   onRemove: (id: string) => void;
   startOpen?: boolean;
+  onCancel?: () => void;
 }
 
 function RateChangeList({
@@ -433,6 +434,7 @@ export function IncomeSourceManager({
   onUpdate,
   onRemove,
   startOpen = false,
+  onCancel,
 }: IncomeSourceManagerProps) {
   const [addingSource, setAddingSource] = useState(startOpen);
   const [newName, setNewName] = useState('');
@@ -607,7 +609,11 @@ export function IncomeSourceManager({
             <Button size="sm" onClick={handleAddSource} variant="muted">
               Add
             </Button>
-            <Button size="sm" variant="ghost" onClick={resetAddForm}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => (onCancel ? onCancel() : resetAddForm())}
+            >
               Cancel
             </Button>
           </div>

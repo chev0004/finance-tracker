@@ -25,6 +25,7 @@ interface OneTimeIncomeManagerProps {
   onUpdate: (item: OneTimeIncome) => void;
   onRemove: (id: string) => void;
   startOpen?: boolean;
+  onCancel?: () => void;
 }
 
 export function OneTimeIncomeManager({
@@ -33,6 +34,7 @@ export function OneTimeIncomeManager({
   onUpdate,
   onRemove,
   startOpen = false,
+  onCancel,
 }: OneTimeIncomeManagerProps) {
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(
     startOpen ? 'add' : null,
@@ -155,7 +157,11 @@ export function OneTimeIncomeManager({
         <Button size="sm" onClick={handleSave} variant="muted">
           {formMode === 'edit' ? 'Save' : 'Add'}
         </Button>
-        <Button size="sm" variant="ghost" onClick={resetForm}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => (onCancel ? onCancel() : resetForm())}
+        >
           Cancel
         </Button>
       </div>
