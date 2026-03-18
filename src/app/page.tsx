@@ -40,6 +40,7 @@ export default function Home() {
     settings,
     savingsTimeline,
     pocketTimeline,
+    currentPocketBalance,
     goalStats,
     stats,
     validation,
@@ -101,6 +102,12 @@ export default function Home() {
   const eoyVariant =
     stats.eoy < 0 ? 'danger' : stats.eoy < 500 ? 'warning' : 'success';
 
+  const today = new Date().toISOString().slice(0, 10);
+  const currentSavings =
+    [...savingsTimeline].filter((p) => p.rawDate <= today).pop()?.balance ??
+    settings.startingBalance;
+  const combinedBalance = currentSavings + currentPocketBalance;
+
   return (
     <div className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
@@ -129,7 +136,35 @@ export default function Home() {
         </header>
 
         <div className="grid grid-cols-3 gap-3">
-          <StatsCard label="Current Balance" value={settings.startingBalance} />
+          <Card className="border-border/50 bg-card/50 hover:border-border hover:shadow-md">
+            <CardContent className="p-4">
+              <div className="mb-2 text-muted-foreground text-xs uppercase tracking-wider">
+                Balances
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-muted-foreground text-xs">Savings</span>
+                  <span className="font-mono text-sm">
+                    ${currentSavings.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-muted-foreground text-xs">Pocket</span>
+                  <span className="font-mono text-sm">
+                    ${currentPocketBalance.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2 border-border/50 border-t pt-1.5">
+                  <span className="text-muted-foreground text-xs">
+                    Combined
+                  </span>
+                  <span className="font-bold font-mono text-xl">
+                    ${combinedBalance.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           <StatsCard
             label="Savings /mo"
             value={Math.round(monthlySavings)}
