@@ -6,6 +6,7 @@ import type {
   FixedEvent,
   GoalStat,
   IncomeSource,
+  OneTimeIncome,
   PayFrequency,
   PocketPoint,
   RecurringExpense,
@@ -57,6 +58,7 @@ const DEFAULT_SETTINGS: BudgetSettings = {
       rateChanges: [],
     },
   ],
+  oneTimeIncome: [],
 };
 
 const STORAGE_KEY = 'budget-tracker-data';
@@ -323,6 +325,15 @@ function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
     }
   }
 
+  for (const o of settings.oneTimeIncome ?? []) {
+    ev.push({
+      date: o.date,
+      label: `${o.label} $${o.amount}`,
+      delta: o.amount,
+      type: 'one-time',
+    });
+  }
+
   for (const goal of settings.goals) {
     const total = goal.lineItems.reduce((s, i) => s + i.amount, 0);
     if (total > 0) {
@@ -437,6 +448,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
         migrateGoal,
       ),
       incomeSources: migrateIncomeSources(raw),
+      oneTimeIncome: settings.oneTimeIncome ?? [],
     };
   }
 
@@ -486,6 +498,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
           },
         ]
       : [],
+    oneTimeIncome: [],
     recurringExpenses: [
       {
         id: crypto.randomUUID(),
@@ -721,6 +734,7 @@ export function useBudget() {
       const hasRecurring = others.some((e) => e.type === 'recurring');
       const hasGoal = others.some((e) => e.type === 'goal');
       const hasUser = others.some((e) => e.type === 'user-expense');
+      const hasOneTime = others.some((e) => e.type === 'one-time');
 
       let type: FixedEvent['type'] = 'payday';
       if (hasGoal && !hasPayday) type = 'goal';
@@ -729,6 +743,14 @@ export function useBudget() {
         type = hasRecurring ? 'recurring' : 'user-expense';
       else if (hasPayday && (hasRecurring || hasUser))
         type = 'payday-recurring';
+      else if (
+        hasOneTime &&
+        !hasPayday &&
+        !hasRecurring &&
+        !hasGoal &&
+        !hasUser
+      )
+        type = 'one-time';
       else if (hasRecurring) type = 'recurring';
 
       const d = new Date(`${date}T00:00:00`);
@@ -1020,6 +1042,32 @@ export function useBudget() {
     }));
   }, []);
 
+  const addOneTimeIncome = useCallback((item: Omit<OneTimeIncome, 'id'>) => {
+    setSettings((prev) => ({
+      ...prev,
+      oneTimeIncome: [
+        ...prev.oneTimeIncome,
+        { ...item, id: crypto.randomUUID() },
+      ],
+    }));
+  }, []);
+
+  const updateOneTimeIncome = useCallback((item: OneTimeIncome) => {
+    setSettings((prev) => ({
+      ...prev,
+      oneTimeIncome: prev.oneTimeIncome.map((o) =>
+        o.id === item.id ? item : o,
+      ),
+    }));
+  }, []);
+
+  const removeOneTimeIncome = useCallback((id: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      oneTimeIncome: prev.oneTimeIncome.filter((o) => o.id !== id),
+    }));
+  }, []);
+
   return {
     isLoaded,
     expenses,
@@ -1048,5 +1096,8 @@ export function useBudget() {
     addIncomeSource,
     updateIncomeSource,
     removeIncomeSource,
+    addOneTimeIncome,
+    updateOneTimeIncome,
+    removeOneTimeIncome,
   };
 }
