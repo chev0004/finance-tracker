@@ -1118,6 +1118,14 @@ export function useBudget() {
     }));
   }, []);
 
+  const importState = useCallback((state: BudgetState) => {
+    setExpenses(state.expenses);
+    setSpentPerPeriod(state.spentPerPeriod);
+    setSettings(
+      migrateSettings(state.settings as unknown as Record<string, unknown>),
+    );
+  }, []);
+
   const addOneTimeIncome = useCallback((item: Omit<OneTimeIncome, 'id'>) => {
     setSettings((prev) => ({
       ...prev,
@@ -1148,6 +1156,7 @@ export function useBudget() {
     isLoaded,
     needsStartDatePrompt,
     expenses,
+    spentPerPeriod,
     settings,
     currentIncome,
     savedPerPeriod,
@@ -1174,6 +1183,7 @@ export function useBudget() {
     addIncomeSource,
     updateIncomeSource,
     removeIncomeSource,
+    importState,
     addOneTimeIncome,
     updateOneTimeIncome,
     removeOneTimeIncome,

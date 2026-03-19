@@ -47,6 +47,7 @@ export default function Home() {
     isLoaded,
     needsStartDatePrompt,
     expenses,
+    spentPerPeriod,
     settings,
     savingsTimeline,
     pocketTimeline,
@@ -70,6 +71,7 @@ export default function Home() {
     addIncomeSource,
     updateIncomeSource,
     removeIncomeSource,
+    importState,
     addOneTimeIncome,
     updateOneTimeIncome,
     removeOneTimeIncome,
@@ -293,17 +295,8 @@ export default function Home() {
             </p>
           </div>
           <ExportMenu
-            payload={{
-              settings,
-              expenses,
-              monthlyIncome,
-              monthlySavings,
-              savingsTimeline,
-              pocketTimeline,
-              goalStats,
-              eoyBalance: eoyCombined,
-              validationErrors: validation.errors,
-            }}
+            state={{ settings, expenses, spentPerPeriod }}
+            onImport={importState}
           />
         </header>
 
