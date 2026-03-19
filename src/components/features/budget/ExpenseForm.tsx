@@ -1,8 +1,8 @@
 'use client';
 
-import { format, isValid } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 import { CalendarIcon, ChevronDown, ChevronUp } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
@@ -15,25 +15,47 @@ import {
 import { cn } from '@/lib/utils';
 
 interface ExpenseFormProps {
+  balanceStartDate: string;
   onAdd: (date: string, label: string, amount: number) => boolean;
 }
 
-function getDefaultDate(): Date {
+function getDefaultDate(minDate: Date, maxDate: Date): Date {
   const today = new Date();
-  const minDate = new Date('2026-03-16');
-  const maxDate = new Date('2026-12-31');
+  today.setHours(0, 0, 0, 0);
 
   if (today < minDate) return minDate;
   if (today > maxDate) return maxDate;
   return today;
 }
 
-export function ExpenseForm({ onAdd }: ExpenseFormProps) {
-  const [date, setDate] = useState<Date | undefined>(getDefaultDate());
+export function ExpenseForm({ balanceStartDate, onAdd }: ExpenseFormProps) {
+  const { minDate, maxDate } = useMemo(() => {
+    const parsedMin = parseISO(balanceStartDate);
+    const parsedMinValid = isValid(parsedMin) ? parsedMin : new Date();
+    parsedMinValid.setHours(0, 0, 0, 0);
+
+    const startYear = parsedMinValid.getFullYear();
+    const chartEndYear = startYear + 4;
+    const parsedMax = parseISO(`${chartEndYear}-12-31`);
+    const parsedMaxValid = isValid(parsedMax) ? parsedMax : parsedMinValid;
+    parsedMaxValid.setHours(0, 0, 0, 0);
+
+    return { minDate: parsedMinValid, maxDate: parsedMaxValid };
+  }, [balanceStartDate]);
+
+  const [date, setDate] = useState<Date | undefined>(() =>
+    getDefaultDate(minDate, maxDate),
+  );
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
   const amountRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!date || !isValid(date) || date < minDate || date > maxDate) {
+      setDate(getDefaultDate(minDate, maxDate));
+    }
+  }, [date, minDate, maxDate]);
 
   const stepAmount = (dir: 1 | -1) => {
     const current = Number.parseFloat(amount) || 0;
@@ -63,7 +85,7 @@ export function ExpenseForm({ onAdd }: ExpenseFormProps) {
     const success = onAdd(dateStr, label.trim(), numAmount);
 
     if (success) {
-      setDate(getDefaultDate());
+      setDate(getDefaultDate(minDate, maxDate));
       setLabel('');
       setAmount('');
     }
@@ -108,9 +130,7 @@ export function ExpenseForm({ onAdd }: ExpenseFormProps) {
                 mode="single"
                 selected={date}
                 onSelect={setDate}
-                disabled={(d) =>
-                  d < new Date('2026-03-16') || d > new Date('2026-12-31')
-                }
+                disabled={(d) => d < minDate || d > maxDate}
                 defaultMonth={date}
               />
             </PopoverContent>

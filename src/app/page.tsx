@@ -672,7 +672,10 @@ export default function Home() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <ExpenseForm onAdd={addExpense} />
+            <ExpenseForm
+              balanceStartDate={settings.startDate}
+              onAdd={addExpense}
+            />
             <div className="border-border/50 border-t pt-4">
               <ExpenseList
                 expenses={expenses}
