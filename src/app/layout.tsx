@@ -17,6 +17,7 @@ const spaceMono = Space_Mono({
 export const metadata: Metadata = {
   title: 'Finance Tracker',
   description: '2026 full-year budget projection',
+  icons: { icon: '/icon.svg' },
 };
 
 export default function RootLayout({
