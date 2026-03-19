@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  getCalendarPocketPeriodStarts,
+  getPocketPeriodRange,
+  pocketPeriodEndsOnOrAfterBalance,
+} from '@/lib/pocketPeriods';
 import type {
   BudgetSettings,
   BudgetState,
@@ -46,7 +51,17 @@ function getPocketPaydays(
   interval: number | undefined,
   startDate: string,
 ): string[] {
-  return getPaydaysForFrequency(firstPayday, frequency, interval, startDate);
+  const all =
+    frequency === 'custom'
+      ? getPaydaysForFrequency(firstPayday, frequency, interval, startDate)
+      : getCalendarPocketPeriodStarts(
+          frequency,
+          new Date(`${startDate}T00:00:00`).getFullYear(),
+        );
+  return all.filter((start, i) => {
+    const range = getPocketPeriodRange(start, all[i + 1], frequency, interval);
+    return pocketPeriodEndsOnOrAfterBalance(range.end, startDate);
+  });
 }
 
 function advancePayday(
@@ -101,33 +116,6 @@ function getPaydaysForFrequency(
   return result;
 }
 
-function periodDaysBack(frequency: PayFrequency, payInterval?: number): number {
-  if (frequency === 'biweekly') return 13;
-  if (frequency === 'monthly') return 29;
-  if (frequency === 'custom' && payInterval && payInterval > 0)
-    return payInterval - 1;
-  return 6;
-}
-
-function getPeriodRange(
-  payday: string,
-  frequency: PayFrequency,
-  payInterval?: number,
-): { start: string; end: string; label: string } {
-  const end = new Date(`${payday}T00:00:00`);
-  const start = new Date(end);
-  start.setDate(end.getDate() - periodDaysBack(frequency, payInterval));
-
-  const fmt = (d: Date) =>
-    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-  return {
-    start: start.toISOString().slice(0, 10),
-    end: payday,
-    label: `${fmt(start)}-${fmt(end)}`,
-  };
-}
-
 function dateInPeriod(date: string, start: string, end: string): boolean {
   return date >= start && date <= end;
 }
@@ -139,7 +127,12 @@ function getPeriodIndexForDate(
   payInterval?: number,
 ): number | null {
   for (let i = 0; i < paydays.length; i++) {
-    const range = getPeriodRange(paydays[i], frequency, payInterval);
+    const range = getPocketPeriodRange(
+      paydays[i],
+      paydays[i + 1],
+      frequency,
+      payInterval,
+    );
     if (dateInPeriod(date, range.start, range.end)) return i;
   }
   return null;
@@ -253,7 +246,7 @@ function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
       .flatMap((g) => getMonthsInRange(g.startDate, g.endDate)),
   );
 
-  const pocketPaydays = getPaydaysForFrequency(
+  const pocketPaydays = getPocketPaydays(
     settings.pocketFirstPayday,
     settings.pocketFrequency,
     settings.pocketInterval,
@@ -425,7 +418,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
     };
     return {
       startingBalance: settings.startingBalance,
-      startDate: settings.startDate,
+      startDate: settings.startDate ?? new Date().toISOString().slice(0, 10),
       pocketPerPeriod: settings.pocketPerPeriod,
       pocketFrequency:
         settings.pocketFrequency ?? settings.pocketFrequency ?? 'weekly',
@@ -618,8 +611,9 @@ export function useBudget() {
 
     for (let i = 0; i < paydays.length; i++) {
       pocketBal += settings.pocketPerPeriod;
-      const range = getPeriodRange(
+      const range = getPocketPeriodRange(
         paydays[i],
+        paydays[i + 1],
         settings.pocketFrequency,
         settings.pocketInterval,
       );
@@ -803,8 +797,9 @@ export function useBudget() {
   const pocketTimeline = useMemo((): PocketPoint[] => {
     let balance = 0;
     return paydays.map((payday, i) => {
-      const range = getPeriodRange(
+      const range = getPocketPeriodRange(
         payday,
+        paydays[i + 1],
         settings.pocketFrequency,
         settings.pocketInterval,
       );
@@ -870,8 +865,9 @@ export function useBudget() {
     if (periodIdx === null) return 0;
     const prevBalance =
       periodIdx === 0 ? 0 : (pocketTimeline[periodIdx - 1]?.balance ?? 0);
-    const range = getPeriodRange(
+    const range = getPocketPeriodRange(
       paydays[periodIdx],
+      paydays[periodIdx + 1],
       settings.pocketFrequency,
       settings.pocketInterval,
     );

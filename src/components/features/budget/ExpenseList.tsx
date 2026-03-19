@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NavStepper } from '@/components/ui/nav-stepper';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { getPocketPeriodRange } from '@/lib/pocketPeriods';
 import { normalizeNumInputBlur, normalizeNumInputLeading } from '@/lib/utils';
 import type { Expense, PayFrequency } from '@/types';
 
@@ -26,13 +27,6 @@ interface PeriodGroup {
   expenses: Expense[];
 }
 
-function periodDaysBack(frequency: PayFrequency, interval?: number): number {
-  if (frequency === 'biweekly') return 13;
-  if (frequency === 'monthly') return 29;
-  if (frequency === 'custom' && interval && interval > 0) return interval - 1;
-  return 6;
-}
-
 export function ExpenseList({
   expenses,
   paydays,
@@ -44,30 +38,26 @@ export function ExpenseList({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
-  const daysBack = periodDaysBack(payFrequency, payInterval);
-
   const periods = useMemo<PeriodGroup[]>(() => {
     const sorted = [...expenses].sort((a, b) => a.date.localeCompare(b.date));
 
-    return paydays.map((payday) => {
-      const endD = new Date(`${payday}T00:00:00`);
-      const startD = new Date(endD);
-      startD.setDate(endD.getDate() - daysBack);
-      const start = startD.toISOString().slice(0, 10);
-      const fmtD = (d: Date) =>
-        d.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-        });
-
+    return paydays.map((payday, i) => {
+      const range = getPocketPeriodRange(
+        payday,
+        paydays[i + 1],
+        payFrequency,
+        payInterval,
+      );
       return {
-        start,
-        end: payday,
-        label: `${fmtD(startD)} - ${fmtD(endD)}`,
-        expenses: sorted.filter((e) => e.date >= start && e.date <= payday),
+        start: range.start,
+        end: range.end,
+        label: range.label,
+        expenses: sorted.filter(
+          (e) => e.date >= range.start && e.date <= range.end,
+        ),
       };
     });
-  }, [paydays, expenses, daysBack]);
+  }, [paydays, expenses, payFrequency, payInterval]);
 
   const defaultIdx = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -114,7 +104,7 @@ export function ExpenseList({
   if (periods.length === 0) {
     return (
       <div className="py-4 text-muted-foreground/60 text-sm">
-        No periods yet. Set pocket start date in settings.
+        No pocket periods in range.
       </div>
     );
   }

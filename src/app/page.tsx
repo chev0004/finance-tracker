@@ -41,6 +41,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useBudget } from '@/hooks/useBudget';
+import { pocketPeriodEndsOnOrAfterBalance } from '@/lib/pocketPeriods';
 
 export default function Home() {
   const {
@@ -138,9 +139,12 @@ export default function Home() {
     const yearStart = `${chartYearClamped}-01-01`;
     const yearEnd = `${chartYearClamped}-12-31`;
     return pocketTimeline.filter(
-      (p) => p.rawDate >= yearStart && p.rawDate <= yearEnd,
+      (p) =>
+        p.rawDate >= yearStart &&
+        p.rawDate <= yearEnd &&
+        pocketPeriodEndsOnOrAfterBalance(p.weekEnd, settings.startDate),
     );
-  }, [pocketTimeline, chartYearClamped]);
+  }, [pocketTimeline, chartYearClamped, settings.startDate]);
 
   const togglePanel = (panel: typeof addPanel) =>
     setAddPanel((prev) => (prev === panel ? null : panel));

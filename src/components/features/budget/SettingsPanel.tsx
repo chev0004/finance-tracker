@@ -246,40 +246,53 @@ export function SettingsPanel({
             </Popover>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-              Pocket Start
-            </Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    'w-full justify-start text-left font-normal',
-                    !settings.pocketFirstPayday && 'text-muted-foreground',
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {isValid(pocketStartDate)
-                    ? format(pocketStartDate, 'MMM d, yyyy')
-                    : 'Select date'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={pocketStartDate}
-                  onSelect={(d) => {
-                    if (d && isValid(d))
-                      onUpdate({
-                        pocketFirstPayday: format(d, 'yyyy-MM-dd'),
-                      });
-                  }}
-                  defaultMonth={pocketStartDate}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
+          {settings.pocketFrequency === 'custom' ? (
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+                Pocket Start
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      'w-full justify-start text-left font-normal',
+                      !settings.pocketFirstPayday && 'text-muted-foreground',
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {isValid(pocketStartDate)
+                      ? format(pocketStartDate, 'MMM d, yyyy')
+                      : 'Select date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={pocketStartDate}
+                    onSelect={(d) => {
+                      if (d && isValid(d))
+                        onUpdate({
+                          pocketFirstPayday: format(d, 'yyyy-MM-dd'),
+                        });
+                    }}
+                    defaultMonth={pocketStartDate}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+                Pocket periods
+              </Label>
+              <p className="text-muted-foreground/70 text-xs leading-relaxed">
+                Weekly uses month bands (days 1 to 7, 8 to 14, and so on).
+                Monthly uses full calendar months. Biweekly uses fixed two week
+                blocks from a shared Monday anchor.
+              </p>
+            </div>
+          )}
         </div>
 
         <p className="text-muted-foreground/70 text-xs">
