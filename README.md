@@ -50,6 +50,12 @@ Auth uses [Better Auth](https://www.better-auth.com/) with Drizzle and Turso. En
 
 Run `bun db:push` to sync the auth schema to your database.
 
+## Netlify
+
+Set the same env vars as in Auth Setup in **Site configuration → Environment variables** (use production URLs for `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL`).
+
+In **Build & deploy → Build settings**, leave **Publish directory** empty so `@netlify/plugin-nextjs` can manage output (do not set it to `.next`).
+
 ## Available Scripts
 
 - `bun dev` - Start development server
