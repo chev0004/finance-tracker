@@ -54,7 +54,7 @@ Run `bun db:push` to sync the auth schema to your database.
 
 Set the same env vars as in Auth Setup in **Site configuration → Environment variables** (use production URLs for `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL`).
 
-In **Build & deploy → Build settings**, leave **Publish directory** empty so `@netlify/plugin-nextjs` can manage output (do not set it to `.next`).
+In **Build & deploy → Build settings**, set **Publish directory** to `.next`, or rely on `netlify.toml` (repo sets `publish = ".next"`). Do not leave Netlify’s default publish path as the repo root: `@netlify/plugin-nextjs` errors when publish equals the site base directory.
 
 ## Available Scripts
 
