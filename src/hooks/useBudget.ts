@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { BUDGET_STORAGE_KEY } from '@/lib/budget-constants';
 import {
+  alignPaydayContainingDate,
   getCalendarPocketPeriodStarts,
   getPocketPeriodRange,
   pocketPeriodEndsOnOrAfterBalance,
@@ -28,6 +29,7 @@ const DEFAULT_SETTINGS: BudgetSettings = {
   pocketPerPeriod: 0,
   pocketFrequency: 'weekly',
   pocketFirstPayday: getLocalDateString(),
+  pocketIncomeSourceId: undefined,
   goals: [],
   recurringExpenses: [],
   incomeSources: [],
@@ -47,14 +49,29 @@ function lastDayOf(y: number, m: number): number {
 }
 
 function getPocketPaydays(
-  firstPayday: string,
-  frequency: PayFrequency,
-  interval: number | undefined,
-  startDate: string,
+  settings: BudgetSettings,
+  coverDates?: readonly string[],
 ): string[] {
-  const all =
-    frequency === 'custom'
-      ? getPaydaysForFrequency(firstPayday, frequency, interval, startDate)
+  const source =
+    settings.pocketIncomeSourceId &&
+    settings.incomeSources.find((s) => s.id === settings.pocketIncomeSourceId);
+  const firstPayday = source ? source.firstPayday : settings.pocketFirstPayday;
+  const frequency = source ? source.payFrequency : settings.pocketFrequency;
+  const interval = source ? source.payInterval : settings.pocketInterval;
+  const startDate = settings.startDate;
+  const merged = [startDate, ...(coverDates ?? [])].filter((s) =>
+    /^\d{4}-\d{2}-\d{2}$/.test((s ?? '').slice(0, 10)),
+  );
+  const minCover =
+    merged.length === 0 ? startDate : merged.reduce((a, b) => (a < b ? a : b));
+  const listStart =
+    source || frequency === 'custom'
+      ? alignPaydayContainingDate(minCover, firstPayday, frequency, interval)
+      : firstPayday;
+  const all = source
+    ? getPaydaysForFrequency(listStart, frequency, interval, startDate)
+    : frequency === 'custom'
+      ? getPaydaysForFrequency(listStart, frequency, interval, startDate)
       : getCalendarPocketPeriodStarts(
           frequency,
           new Date(`${startDate}T00:00:00`).getFullYear(),
@@ -194,13 +211,22 @@ function getMonthlyIncome(settings: BudgetSettings): number {
 
 function getMonthlySavings(settings: BudgetSettings): number {
   const monthlyIncome = getMonthlyIncome(settings);
+  const pocketSource =
+    settings.pocketIncomeSourceId &&
+    settings.incomeSources.find((s) => s.id === settings.pocketIncomeSourceId);
   const pocketPeriods =
-    periodsPerYear(settings.pocketFrequency, settings.pocketInterval) || 26;
+    periodsPerYear(
+      pocketSource ? pocketSource.payFrequency : settings.pocketFrequency,
+      pocketSource ? pocketSource.payInterval : settings.pocketInterval,
+    ) || 26;
   const monthlyPocket = (settings.pocketPerPeriod * pocketPeriods) / 12;
   return monthlyIncome - monthlyPocket;
 }
 
-function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
+function genFixedEvents(
+  settings: BudgetSettings,
+  coverDates?: readonly string[],
+): FixedEvent[] {
   const ev: FixedEvent[] = [];
 
   const goalsPausingIncome = settings.goals.filter((g) => g.pauseIncome);
@@ -222,8 +248,14 @@ function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
   };
 
   for (const source of settings.incomeSources) {
-    const sourcePaydays = getPaydaysForFrequency(
+    const incomeListStart = alignPaydayContainingDate(
+      settings.startDate,
       source.firstPayday,
+      source.payFrequency,
+      source.payInterval,
+    );
+    const sourcePaydays = getPaydaysForFrequency(
+      incomeListStart,
       source.payFrequency,
       source.payInterval,
       settings.startDate,
@@ -247,12 +279,7 @@ function genFixedEvents(settings: BudgetSettings): FixedEvent[] {
       .flatMap((g) => getMonthsInRange(g.startDate, g.endDate)),
   );
 
-  const pocketPaydays = getPocketPaydays(
-    settings.pocketFirstPayday,
-    settings.pocketFrequency,
-    settings.pocketInterval,
-    settings.startDate,
-  );
+  const pocketPaydays = getPocketPaydays(settings, coverDates);
   for (const payday of pocketPaydays) {
     if (!pausedPocketMonths.has(payday.slice(0, 7))) {
       ev.push({
@@ -428,6 +455,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
         settings.firstPayday ??
         getLocalDateString(),
       pocketInterval: settings.pocketInterval,
+      pocketIncomeSourceId: settings.pocketIncomeSourceId,
       recurringExpenses: migrateRecurringExpenses(
         settings.recurringExpenses ?? [],
       ),
@@ -454,6 +482,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
     pocketPerPeriod: weeklyPocket,
     pocketFrequency: 'weekly',
     pocketFirstPayday: payday,
+    pocketIncomeSourceId: undefined,
     incomeSources: [
       {
         id: crypto.randomUUID(),
@@ -477,12 +506,7 @@ function parseAndApplyStored(raw: unknown): {
   needsStartDatePrompt: boolean;
 } {
   if (!raw || typeof raw !== 'object') {
-    const pd = getPocketPaydays(
-      DEFAULT_SETTINGS.pocketFirstPayday,
-      DEFAULT_SETTINGS.pocketFrequency,
-      DEFAULT_SETTINGS.pocketInterval,
-      DEFAULT_SETTINGS.startDate,
-    );
+    const pd = getPocketPaydays(DEFAULT_SETTINGS);
     return {
       expenses: [],
       spentPerPeriod: pd.map(() => 0),
@@ -491,13 +515,22 @@ function parseAndApplyStored(raw: unknown): {
     };
   }
   const data = raw as Record<string, unknown>;
+  const expenses = (data.expenses as Expense[]) || [];
+  const settings = migrateSettings(
+    (data.settings as Record<string, unknown>) || {},
+  );
+  const pd = getPocketPaydays(
+    settings,
+    expenses.map((e) => e.date),
+  );
+  const storedSpent =
+    (data.spentPerPeriod as number[]) || (data.spentPerWeek as number[]) || [];
+  const spentPerPeriod =
+    storedSpent.length === pd.length ? storedSpent : pd.map(() => 0);
   return {
-    expenses: (data.expenses as Expense[]) || [],
-    spentPerPeriod:
-      (data.spentPerPeriod as number[]) ||
-      (data.spentPerWeek as number[]) ||
-      [],
-    settings: migrateSettings((data.settings as Record<string, unknown>) || {}),
+    expenses,
+    spentPerPeriod,
+    settings,
     needsStartDatePrompt: false,
   };
 }
@@ -546,22 +579,12 @@ export function useBudget() {
             setNeedsStartDatePrompt(false);
           } else {
             setNeedsStartDatePrompt(true);
-            const pd = getPocketPaydays(
-              DEFAULT_SETTINGS.pocketFirstPayday,
-              DEFAULT_SETTINGS.pocketFrequency,
-              DEFAULT_SETTINGS.pocketInterval,
-              DEFAULT_SETTINGS.startDate,
-            );
+            const pd = getPocketPaydays(DEFAULT_SETTINGS);
             setSpentPerPeriod(pd.map(() => 0));
           }
         } catch {
           setNeedsStartDatePrompt(true);
-          const pd = getPocketPaydays(
-            DEFAULT_SETTINGS.pocketFirstPayday,
-            DEFAULT_SETTINGS.pocketFrequency,
-            DEFAULT_SETTINGS.pocketInterval,
-            DEFAULT_SETTINGS.startDate,
-          );
+          const pd = getPocketPaydays(DEFAULT_SETTINGS);
           setSpentPerPeriod(pd.map(() => 0));
         }
       } else {
@@ -575,21 +598,11 @@ export function useBudget() {
             setNeedsStartDatePrompt(parsed.needsStartDatePrompt);
           } else {
             setNeedsStartDatePrompt(true);
-            const pd = getPocketPaydays(
-              DEFAULT_SETTINGS.pocketFirstPayday,
-              DEFAULT_SETTINGS.pocketFrequency,
-              DEFAULT_SETTINGS.pocketInterval,
-              DEFAULT_SETTINGS.startDate,
-            );
+            const pd = getPocketPaydays(DEFAULT_SETTINGS);
             setSpentPerPeriod(pd.map(() => 0));
           }
         } catch {
-          const pd = getPocketPaydays(
-            DEFAULT_SETTINGS.pocketFirstPayday,
-            DEFAULT_SETTINGS.pocketFrequency,
-            DEFAULT_SETTINGS.pocketInterval,
-            DEFAULT_SETTINGS.startDate,
-          );
+          const pd = getPocketPaydays(DEFAULT_SETTINGS);
           setSpentPerPeriod(pd.map(() => 0));
           setNeedsStartDatePrompt(false);
         }
@@ -640,21 +653,40 @@ export function useBudget() {
 
   const savedPerPeriod = currentIncome - settings.pocketPerPeriod;
 
+  const pocketSchedule = useMemo(() => {
+    const source =
+      settings.pocketIncomeSourceId &&
+      settings.incomeSources.find(
+        (s) => s.id === settings.pocketIncomeSourceId,
+      );
+    return {
+      frequency: source ? source.payFrequency : settings.pocketFrequency,
+      interval: source ? source.payInterval : settings.pocketInterval,
+    };
+  }, [
+    settings.pocketIncomeSourceId,
+    settings.incomeSources,
+    settings.pocketFrequency,
+    settings.pocketInterval,
+  ]);
+
+  const expenseDates = useMemo(() => expenses.map((e) => e.date), [expenses]);
+
   const paydays = useMemo(
-    () =>
-      getPocketPaydays(
-        settings.pocketFirstPayday,
-        settings.pocketFrequency,
-        settings.pocketInterval,
-        settings.startDate,
-      ),
-    [
-      settings.pocketFirstPayday,
-      settings.pocketFrequency,
-      settings.pocketInterval,
-      settings.startDate,
-    ],
+    () => getPocketPaydays(settings, expenseDates),
+    [settings, expenseDates],
   );
+
+  useEffect(() => {
+    if (settings.pocketIncomeSourceId) {
+      const exists = settings.incomeSources.some(
+        (s) => s.id === settings.pocketIncomeSourceId,
+      );
+      if (!exists) {
+        setSettings((prev) => ({ ...prev, pocketIncomeSourceId: undefined }));
+      }
+    }
+  }, [settings.pocketIncomeSourceId, settings.incomeSources]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -663,7 +695,10 @@ export function useBudget() {
     }
   }, [paydays.length, isLoaded, spentPerPeriod.length, paydays]);
 
-  const fixedEvents = useMemo(() => genFixedEvents(settings), [settings]);
+  const fixedEvents = useMemo(
+    () => genFixedEvents(settings, expenseDates),
+    [settings, expenseDates],
+  );
 
   const expensesPerPeriod = useMemo(() => {
     const totals: number[] = paydays.map(() => 0);
@@ -673,8 +708,8 @@ export function useBudget() {
       const idx = getPeriodIndexForDate(
         expense.date,
         paydays,
-        settings.pocketFrequency,
-        settings.pocketInterval,
+        pocketSchedule.frequency,
+        pocketSchedule.interval,
       );
       if (idx !== null) {
         totals[idx] += expense.amount;
@@ -683,7 +718,7 @@ export function useBudget() {
     }
 
     return { totals, counts };
-  }, [expenses, paydays, settings.pocketFrequency, settings.pocketInterval]);
+  }, [expenses, paydays, pocketSchedule.frequency, pocketSchedule.interval]);
 
   const savingsTimeline = useMemo((): SavingsPoint[] => {
     const overflowEvents: FixedEvent[] = [];
@@ -694,8 +729,8 @@ export function useBudget() {
       const range = getPocketPeriodRange(
         paydays[i],
         paydays[i + 1],
-        settings.pocketFrequency,
-        settings.pocketInterval,
+        pocketSchedule.frequency,
+        pocketSchedule.interval,
       );
 
       const periodExpenses = expenses
@@ -727,8 +762,8 @@ export function useBudget() {
         getPeriodIndexForDate(
           exp.date,
           paydays,
-          settings.pocketFrequency,
-          settings.pocketInterval,
+          pocketSchedule.frequency,
+          pocketSchedule.interval,
         ) === null
       ) {
         overflowEvents.push({
@@ -868,8 +903,8 @@ export function useBudget() {
     settings.startDate,
     settings.startingBalance,
     settings.pocketPerPeriod,
-    settings.pocketFrequency,
-    settings.pocketInterval,
+    pocketSchedule.frequency,
+    pocketSchedule.interval,
     paydays,
     spentPerPeriod,
   ]);
@@ -880,8 +915,8 @@ export function useBudget() {
       const range = getPocketPeriodRange(
         payday,
         paydays[i + 1],
-        settings.pocketFrequency,
-        settings.pocketInterval,
+        pocketSchedule.frequency,
+        pocketSchedule.interval,
       );
       const expenseTotal = expensesPerPeriod.totals[i] || 0;
       const expenseCount = expensesPerPeriod.counts[i] || 0;
@@ -929,8 +964,8 @@ export function useBudget() {
     expenses,
     spentPerPeriod,
     settings.pocketPerPeriod,
-    settings.pocketFrequency,
-    settings.pocketInterval,
+    pocketSchedule.frequency,
+    pocketSchedule.interval,
     expensesPerPeriod,
   ]);
 
@@ -939,8 +974,8 @@ export function useBudget() {
     const periodIdx = getPeriodIndexForDate(
       today,
       paydays,
-      settings.pocketFrequency,
-      settings.pocketInterval,
+      pocketSchedule.frequency,
+      pocketSchedule.interval,
     );
     if (periodIdx === null) return 0;
     const prevBalance =
@@ -948,8 +983,8 @@ export function useBudget() {
     const range = getPocketPeriodRange(
       paydays[periodIdx],
       paydays[periodIdx + 1],
-      settings.pocketFrequency,
-      settings.pocketInterval,
+      pocketSchedule.frequency,
+      pocketSchedule.interval,
     );
     const periodExpenses = expenses.filter(
       (e) => dateInPeriod(e.date, range.start, range.end) && e.date <= today,
@@ -966,8 +1001,8 @@ export function useBudget() {
     expenses,
     spentPerPeriod,
     settings.pocketPerPeriod,
-    settings.pocketFrequency,
-    settings.pocketInterval,
+    pocketSchedule.frequency,
+    pocketSchedule.interval,
   ]);
 
   const goalStats = useMemo((): GoalStat[] => {
@@ -1025,8 +1060,8 @@ export function useBudget() {
     }
 
     const pocketPeriods = periodsPerYear(
-      settings.pocketFrequency,
-      settings.pocketInterval,
+      pocketSchedule.frequency,
+      pocketSchedule.interval,
     );
     const monthlyPocket =
       pocketPeriods > 0 ? (settings.pocketPerPeriod * pocketPeriods) / 12 : 0;
@@ -1050,8 +1085,8 @@ export function useBudget() {
     goalStats,
     savingsTimeline,
     settings.pocketPerPeriod,
-    settings.pocketFrequency,
-    settings.pocketInterval,
+    pocketSchedule.frequency,
+    pocketSchedule.interval,
     monthlyIncome,
   ]);
 
@@ -1063,8 +1098,8 @@ export function useBudget() {
       const periodIdx = getPeriodIndexForDate(
         date,
         paydays,
-        settings.pocketFrequency,
-        settings.pocketInterval,
+        pocketSchedule.frequency,
+        pocketSchedule.interval,
       );
       setExpenses((prev) => [
         ...prev,
@@ -1078,7 +1113,7 @@ export function useBudget() {
       ]);
       return true;
     },
-    [paydays, settings.pocketFrequency, settings.pocketInterval],
+    [paydays, pocketSchedule.frequency, pocketSchedule.interval],
   );
 
   const removeExpense = useCallback((id: string) => {

@@ -65,6 +65,7 @@ export interface BudgetSettings {
   pocketFrequency: PayFrequency;
   pocketFirstPayday: string;
   pocketInterval?: number;
+  pocketIncomeSourceId?: string;
   goals: SavingsGoal[];
   recurringExpenses: RecurringExpense[];
   incomeSources: IncomeSource[];

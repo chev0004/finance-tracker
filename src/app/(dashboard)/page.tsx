@@ -170,14 +170,26 @@ export default function Home() {
   const formatMoney = (n: number): string =>
     n < 0 ? `-$${Math.abs(n).toLocaleString()}` : `$${n.toLocaleString()}`;
 
+  const selectedPocketSource = settings.pocketIncomeSourceId
+    ? settings.incomeSources.find((s) => s.id === settings.pocketIncomeSourceId)
+    : undefined;
+
   const pocketFreqLabel =
-    settings.pocketFrequency === 'custom' && settings.pocketInterval
-      ? `every ${settings.pocketInterval} days`
-      : settings.pocketFrequency === 'monthly'
+    selectedPocketSource?.payFrequency === 'custom' &&
+    selectedPocketSource.payInterval
+      ? `every ${selectedPocketSource.payInterval} days`
+      : selectedPocketSource?.payFrequency === 'monthly' ||
+          (!selectedPocketSource && settings.pocketFrequency === 'monthly')
         ? 'monthly'
-        : settings.pocketFrequency === 'biweekly'
+        : selectedPocketSource?.payFrequency === 'biweekly' ||
+            (!selectedPocketSource && settings.pocketFrequency === 'biweekly')
           ? 'every 2 weeks'
           : 'weekly';
+
+  const effectivePocketFrequency =
+    selectedPocketSource?.payFrequency ?? settings.pocketFrequency;
+  const effectivePocketInterval =
+    selectedPocketSource?.payInterval ?? settings.pocketInterval;
 
   if (!isLoaded) {
     return (
@@ -689,8 +701,8 @@ export default function Home() {
               <ExpenseList
                 expenses={expenses}
                 paydays={paydays}
-                payFrequency={settings.pocketFrequency}
-                payInterval={settings.pocketInterval}
+                payFrequency={effectivePocketFrequency}
+                payInterval={effectivePocketInterval}
                 onRemove={removeExpense}
                 onUpdateAmount={updateExpenseAmount}
               />

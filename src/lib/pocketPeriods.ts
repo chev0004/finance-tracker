@@ -13,21 +13,32 @@ import {
 import { getLocalDateString } from '@/lib/utils';
 import type { PayFrequency } from '@/types';
 
-function pad(n: number): string {
-  return String(n).padStart(2, '0');
+const BIWEEK_ANCHOR_SUNDAY = new Date(1970, 0, 4);
+
+export function alignPaydayContainingDate(
+  minCover: string,
+  anchorPayday: string,
+  frequency: PayFrequency,
+  payInterval?: number,
+): string {
+  const anchor = parseISO(anchorPayday.slice(0, 10));
+  const d = parseISO(minCover.slice(0, 10));
+  if (!isValid(anchor) || !isValid(d)) return anchorPayday.slice(0, 10);
+  const diff = differenceInCalendarDays(d, anchor);
+  if (frequency === 'weekly') {
+    const step = Math.floor(diff / 7);
+    return format(addDays(anchor, step * 7), 'yyyy-MM-dd');
+  }
+  if (frequency === 'biweekly') {
+    const step = Math.floor(diff / 14);
+    return format(addDays(anchor, step * 14), 'yyyy-MM-dd');
+  }
+  if (frequency === 'custom' && payInterval && payInterval > 0) {
+    const step = Math.floor(diff / payInterval);
+    return format(addDays(anchor, step * payInterval), 'yyyy-MM-dd');
+  }
+  return anchorPayday.slice(0, 10);
 }
-
-function fmtDate(y: number, m: number, d: number): string {
-  return `${y}-${pad(m)}-${pad(d)}`;
-}
-
-function lastDayOf(y: number, m: number): number {
-  return new Date(y, m, 0).getDate();
-}
-
-const MONTH_WEEK_CHUNK_STARTS = [1, 8, 15, 22, 29] as const;
-
-const BIWEEK_ANCHOR_MONDAY = parseISO('1970-01-05');
 
 function advanceCustomPeriod(d: Date, payInterval?: number): void {
   if (payInterval && payInterval > 0) {
@@ -37,55 +48,28 @@ function advanceCustomPeriod(d: Date, payInterval?: number): void {
   }
 }
 
-export function getMonthWeekChunkPeriodEnds(periodStart: string): string {
-  const [y, m, d] = periodStart.split('-').map(Number);
-  const last = lastDayOf(y, m);
-  let endDay: number;
-  if (d === 1) endDay = Math.min(7, last);
-  else if (d === 8) endDay = Math.min(14, last);
-  else if (d === 15) endDay = Math.min(21, last);
-  else if (d === 22) endDay = Math.min(28, last);
-  else endDay = last;
-  return fmtDate(y, m, endDay);
-}
-
-export function getCalendarMonthWeekChunkStarts(
-  projectionStartYear: number,
-): string[] {
-  const intervalStart = new Date(projectionStartYear, 0, 1);
-  const intervalEnd = new Date(projectionStartYear + 4, 11, 31);
-  const months = eachMonthOfInterval({
-    start: intervalStart,
-    end: intervalEnd,
-  });
-  const out: string[] = [];
-  for (const monthDate of months) {
-    const y = monthDate.getFullYear();
-    const m = monthDate.getMonth() + 1;
-    const last = lastDayOf(y, m);
-    for (const day of MONTH_WEEK_CHUNK_STARTS) {
-      if (day <= last) {
-        out.push(fmtDate(y, m, day));
-      }
-    }
-  }
-  return out;
-}
-
-export function getCalendarIsoBiweekStarts(
-  projectionStartYear: number,
-): string[] {
+function getCalendarSundayWeekStarts(projectionStartYear: number): string[] {
   const intervalStart = new Date(projectionStartYear, 0, 1);
   const intervalEnd = new Date(projectionStartYear + 4, 11, 31);
   const weeks = eachWeekOfInterval(
     { start: intervalStart, end: intervalEnd },
-    { weekStartsOn: 1 },
+    { weekStartsOn: 0 },
+  );
+  return weeks.map((d) => format(d, 'yyyy-MM-dd'));
+}
+
+function getCalendarSundayBiweekStarts(projectionStartYear: number): string[] {
+  const intervalStart = new Date(projectionStartYear, 0, 1);
+  const intervalEnd = new Date(projectionStartYear + 4, 11, 31);
+  const weeks = eachWeekOfInterval(
+    { start: intervalStart, end: intervalEnd },
+    { weekStartsOn: 0 },
   );
   return weeks
-    .filter(
-      (monday) =>
-        differenceInCalendarDays(monday, BIWEEK_ANCHOR_MONDAY) % 14 === 0,
-    )
+    .filter((sunday) => {
+      const diff = differenceInCalendarDays(sunday, BIWEEK_ANCHOR_SUNDAY);
+      return ((diff % 14) + 14) % 14 === 0;
+    })
     .map((d) => format(d, 'yyyy-MM-dd'));
 }
 
@@ -128,17 +112,54 @@ export function getPocketPeriodRange(
 
   if (frequency === 'weekly') {
     const startD = parseISO(periodStart);
-    const endStr = getMonthWeekChunkPeriodEnds(periodStart);
-    const endD = parseISO(endStr);
+    if (!isValid(startD)) {
+      const bad = parseISO(periodStart.slice(0, 10));
+      return {
+        start: periodStart,
+        end: periodStart,
+        label: `${fmt(bad)} - ${fmt(bad)}`,
+      };
+    }
+    if (_nextPeriodStart) {
+      const nextD = parseISO(_nextPeriodStart);
+      if (isValid(nextD)) {
+        const endD = addDays(nextD, -1);
+        return {
+          start: periodStart,
+          end: format(endD, 'yyyy-MM-dd'),
+          label: `${fmt(startD)} - ${fmt(endD)}`,
+        };
+      }
+    }
+    const endD = addDays(startD, 6);
     return {
       start: periodStart,
-      end: endStr,
+      end: format(endD, 'yyyy-MM-dd'),
       label: `${fmt(startD)} - ${fmt(endD)}`,
     };
   }
 
   if (frequency === 'biweekly') {
     const startD = parseISO(periodStart);
+    if (!isValid(startD)) {
+      const bad = parseISO(periodStart.slice(0, 10));
+      return {
+        start: periodStart,
+        end: periodStart,
+        label: `${fmt(bad)} - ${fmt(bad)}`,
+      };
+    }
+    if (_nextPeriodStart) {
+      const nextD = parseISO(_nextPeriodStart);
+      if (isValid(nextD)) {
+        const endD = addDays(nextD, -1);
+        return {
+          start: periodStart,
+          end: format(endD, 'yyyy-MM-dd'),
+          label: `${fmt(startD)} - ${fmt(endD)}`,
+        };
+      }
+    }
     const endD = addDays(startD, 13);
     return {
       start: periodStart,
@@ -181,10 +202,10 @@ export function getCalendarPocketPeriodStarts(
   projectionStartYear: number,
 ): string[] {
   if (frequency === 'weekly') {
-    return getCalendarMonthWeekChunkStarts(projectionStartYear);
+    return getCalendarSundayWeekStarts(projectionStartYear);
   }
   if (frequency === 'biweekly') {
-    return getCalendarIsoBiweekStarts(projectionStartYear);
+    return getCalendarSundayBiweekStarts(projectionStartYear);
   }
   if (frequency === 'monthly') {
     return getCalendarMonthStarts(projectionStartYear);

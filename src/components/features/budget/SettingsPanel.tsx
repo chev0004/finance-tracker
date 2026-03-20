@@ -1,8 +1,8 @@
 'use client';
 
 import { format, isValid, parseISO } from 'date-fns';
-import { CalendarIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { CalendarIcon, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -56,6 +56,22 @@ export function SettingsPanel({
 }: SettingsPanelProps) {
   const pocketStartDate = parseISO(settings.pocketFirstPayday);
   const balanceStartDate = parseISO(settings.startDate);
+  const selectedPocketSource = useMemo(
+    () =>
+      settings.pocketIncomeSourceId
+        ? settings.incomeSources.find(
+            (s) => s.id === settings.pocketIncomeSourceId,
+          )
+        : undefined,
+    [settings.pocketIncomeSourceId, settings.incomeSources],
+  );
+  const isSourceMode = Boolean(selectedPocketSource);
+  const effectivePocketFrequency = isSourceMode
+    ? (selectedPocketSource?.payFrequency ?? settings.pocketFrequency)
+    : settings.pocketFrequency;
+  const effectivePocketInterval = isSourceMode
+    ? selectedPocketSource?.payInterval
+    : settings.pocketInterval;
 
   const [pocketStr, setPocketStr] = useState(String(settings.pocketPerPeriod));
   const [pocketFocused, setPocketFocused] = useState(false);
@@ -69,6 +85,7 @@ export function SettingsPanel({
       : String(settings.pocketInterval),
   );
   const [intervalFocused, setIntervalFocused] = useState(false);
+  const [isModePending, startModeTransition] = useTransition();
 
   useEffect(() => {
     if (!pocketFocused) setPocketStr(String(settings.pocketPerPeriod));
@@ -86,11 +103,11 @@ export function SettingsPanel({
   }, [settings.pocketInterval, intervalFocused]);
 
   const pocketFreqLabel =
-    settings.pocketFrequency === 'custom' && settings.pocketInterval
-      ? `every ${settings.pocketInterval} days`
-      : settings.pocketFrequency === 'monthly'
+    effectivePocketFrequency === 'custom' && effectivePocketInterval
+      ? `every ${effectivePocketInterval} days`
+      : effectivePocketFrequency === 'monthly'
         ? 'monthly'
-        : settings.pocketFrequency === 'biweekly'
+        : effectivePocketFrequency === 'biweekly'
           ? 'every 2 weeks'
           : 'weekly';
 
@@ -132,6 +149,73 @@ export function SettingsPanel({
 
           <div className="space-y-2">
             <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+              Pocket period mode
+            </Label>
+            <Select
+              value={isSourceMode ? 'source' : 'calendar'}
+              onValueChange={(v: 'calendar' | 'source') => {
+                startModeTransition(() => {
+                  if (v === 'source') {
+                    if (settings.incomeSources.length === 0) return;
+                    const fallbackId =
+                      settings.pocketIncomeSourceId ??
+                      settings.incomeSources[0].id;
+                    onUpdate({ pocketIncomeSourceId: fallbackId });
+                    return;
+                  }
+                  onUpdate({ pocketIncomeSourceId: undefined });
+                });
+              }}
+              disabled={isModePending}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="calendar">Calendar schedule</SelectItem>
+                {settings.incomeSources.length > 0 && (
+                  <SelectItem value="source">Match income source</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            {isModePending && (
+              <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Updating period mode
+              </div>
+            )}
+          </div>
+
+          {isSourceMode && settings.incomeSources.length > 1 && (
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+                Matched source
+              </Label>
+              <Select
+                value={settings.pocketIncomeSourceId}
+                onValueChange={(v) => {
+                  startModeTransition(() =>
+                    onUpdate({ pocketIncomeSourceId: v }),
+                  );
+                }}
+                disabled={isModePending}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {settings.incomeSources.map((source) => (
+                    <SelectItem key={source.id} value={source.id}>
+                      {source.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label className="text-muted-foreground text-xs uppercase tracking-wider">
               Pocket Frequency
             </Label>
             <Select
@@ -139,6 +223,7 @@ export function SettingsPanel({
               onValueChange={(v: PayFrequency) =>
                 onUpdate({ pocketFrequency: v })
               }
+              disabled={isSourceMode}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -153,7 +238,7 @@ export function SettingsPanel({
             </Select>
           </div>
 
-          {settings.pocketFrequency === 'custom' && (
+          {!isSourceMode && settings.pocketFrequency === 'custom' && (
             <div className="space-y-2">
               <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                 Days Between
@@ -246,7 +331,7 @@ export function SettingsPanel({
             </Popover>
           </div>
 
-          {settings.pocketFrequency === 'custom' ? (
+          {!isSourceMode && settings.pocketFrequency === 'custom' ? (
             <div className="space-y-2">
               <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                 Pocket Start
@@ -281,18 +366,7 @@ export function SettingsPanel({
                 </PopoverContent>
               </Popover>
             </div>
-          ) : (
-            <div className="space-y-2">
-              <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-                Pocket periods
-              </Label>
-              <p className="text-muted-foreground/70 text-xs leading-relaxed">
-                Weekly uses month bands (days 1 to 7, 8 to 14, and so on).
-                Monthly uses full calendar months. Biweekly uses fixed two week
-                blocks from a shared Monday anchor.
-              </p>
-            </div>
-          )}
+          ) : null}
         </div>
 
         <p className="text-muted-foreground/70 text-xs">
