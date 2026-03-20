@@ -4,6 +4,7 @@ import { LogIn, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth-client';
+import { BUDGET_STORAGE_KEY } from '@/lib/budget-constants';
 
 export function AuthNavButton() {
   const { data: session, isPending } = authClient.useSession();
@@ -19,6 +20,7 @@ export function AuthNavButton() {
           authClient.signOut({
             fetchOptions: {
               onSuccess: () => {
+                localStorage.removeItem(BUDGET_STORAGE_KEY);
                 window.location.href = '/sign-in';
               },
             },

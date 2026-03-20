@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
+import { BUDGET_STORAGE_KEY } from '@/lib/budget-constants';
 import {
   getCalendarPocketPeriodStarts,
   getPocketPeriodRange,
@@ -32,8 +33,6 @@ const DEFAULT_SETTINGS: BudgetSettings = {
   incomeSources: [],
   oneTimeIncome: [],
 };
-
-const STORAGE_KEY = 'budget-tracker-data';
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
@@ -559,7 +558,7 @@ export function useBudget() {
           }
         }
         try {
-          const stored = localStorage.getItem(STORAGE_KEY);
+          const stored = localStorage.getItem(BUDGET_STORAGE_KEY);
           if (stored) {
             const localData = JSON.parse(stored) as BudgetState;
             await fetch('/api/budget', {
@@ -594,7 +593,7 @@ export function useBudget() {
         }
       } else {
         try {
-          const stored = localStorage.getItem(STORAGE_KEY);
+          const stored = localStorage.getItem(BUDGET_STORAGE_KEY);
           if (stored) {
             const parsed = parseAndApplyStored(JSON.parse(stored));
             setExpenses(parsed.expenses);
@@ -647,7 +646,7 @@ export function useBudget() {
       }, 500);
     } else {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        localStorage.setItem(BUDGET_STORAGE_KEY, JSON.stringify(data));
       } catch {
         // localStorage unavailable
       }
