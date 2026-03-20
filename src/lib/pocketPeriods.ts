@@ -10,6 +10,7 @@ import {
   parseISO,
   startOfMonth,
 } from 'date-fns';
+import { getLocalDateString } from '@/lib/utils';
 import type { PayFrequency } from '@/types';
 
 function pad(n: number): string {
@@ -120,7 +121,7 @@ export function getPocketPeriodRange(
     }
     return {
       start: periodStart,
-      end: endD.toISOString().slice(0, 10),
+      end: getLocalDateString(endD),
       label: `${fmt(startD)} - ${fmt(endD)}`,
     };
   }

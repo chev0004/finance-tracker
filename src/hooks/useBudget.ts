@@ -4,6 +4,7 @@ import {
   getPocketPeriodRange,
   pocketPeriodEndsOnOrAfterBalance,
 } from '@/lib/pocketPeriods';
+import { getLocalDateString } from '@/lib/utils';
 import type {
   BudgetSettings,
   BudgetState,
@@ -21,10 +22,10 @@ import type {
 
 const DEFAULT_SETTINGS: BudgetSettings = {
   startingBalance: 0,
-  startDate: new Date().toISOString().slice(0, 10),
+  startDate: getLocalDateString(),
   pocketPerPeriod: 0,
   pocketFrequency: 'weekly',
-  pocketFirstPayday: new Date().toISOString().slice(0, 10),
+  pocketFirstPayday: getLocalDateString(),
   goals: [],
   recurringExpenses: [],
   incomeSources: [],
@@ -110,7 +111,7 @@ function getPaydaysForFrequency(
   }
 
   while (d <= rangeEnd) {
-    result.push(d.toISOString().slice(0, 10));
+    result.push(getLocalDateString(d));
     if (!advancePayday(d, frequency, payInterval)) break;
   }
   return result;
@@ -183,7 +184,7 @@ function periodsPerYear(freq: PayFrequency, interval?: number): number {
 }
 
 function getMonthlyIncome(settings: BudgetSettings): number {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString();
   return settings.incomeSources.reduce((sum, source) => {
     const amount = getSourceAmountForDate(source, today);
     const periods = periodsPerYear(source.payFrequency, source.payInterval);
@@ -418,7 +419,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
     };
     return {
       startingBalance: settings.startingBalance,
-      startDate: settings.startDate ?? new Date().toISOString().slice(0, 10),
+      startDate: settings.startDate ?? getLocalDateString(),
       pocketPerPeriod: settings.pocketPerPeriod,
       pocketFrequency:
         settings.pocketFrequency ?? settings.pocketFrequency ?? 'weekly',
@@ -550,7 +551,7 @@ export function useBudget() {
   }, [expenses, spentPerPeriod, settings, isLoaded]);
 
   const currentIncome = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateString();
     return getIncomeForDate(settings, today);
   }, [settings]);
 
@@ -855,7 +856,7 @@ export function useBudget() {
   ]);
 
   const currentPocketBalance = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateString();
     const periodIdx = getPeriodIndexForDate(
       today,
       paydays,

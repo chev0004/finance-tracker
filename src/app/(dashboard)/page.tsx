@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useBudget } from '@/hooks/useBudget';
 import { pocketPeriodEndsOnOrAfterBalance } from '@/lib/pocketPeriods';
+import { getLocalDateString } from '@/lib/utils';
 
 export default function Home() {
   const {
@@ -202,7 +203,7 @@ export default function Home() {
     success: 'text-emerald-500',
   }[eoyVariant];
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString();
   const currentSavings =
     [...savingsTimeline].filter((p) => p.rawDate <= today).pop()?.balance ??
     settings.startingBalance;

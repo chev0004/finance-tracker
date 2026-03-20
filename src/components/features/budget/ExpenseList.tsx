@@ -8,7 +8,11 @@ import { Input } from '@/components/ui/input';
 import { NavStepper } from '@/components/ui/nav-stepper';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getPocketPeriodRange } from '@/lib/pocketPeriods';
-import { normalizeNumInputBlur, normalizeNumInputLeading } from '@/lib/utils';
+import {
+  getLocalDateString,
+  normalizeNumInputBlur,
+  normalizeNumInputLeading,
+} from '@/lib/utils';
 import type { Expense, PayFrequency } from '@/types';
 
 interface ExpenseListProps {
@@ -60,7 +64,7 @@ export function ExpenseList({
   }, [paydays, expenses, payFrequency, payInterval]);
 
   const defaultIdx = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateString();
     for (let i = periods.length - 1; i >= 0; i--) {
       if (today >= periods[i].start && today <= periods[i].end) return i;
     }
