@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { authClient } from '@/lib/auth-client';
+import { authClient, setLocalOnlyPreference } from '@/lib/auth-client';
 
 type AuthFormProps = {
   mode: 'sign-in' | 'sign-up';
@@ -134,6 +134,18 @@ export function AuthForm({ mode }: AuthFormProps) {
               </Link>
             </>
           )}
+        </p>
+        <p className="mt-2 text-center text-muted-foreground/80 text-xs">
+          <button
+            type="button"
+            onClick={async () => {
+              await setLocalOnlyPreference();
+              window.location.href = '/';
+            }}
+            className="cursor-pointer underline hover:text-muted-foreground"
+          >
+            Skip and use locally
+          </button>
         </p>
       </CardContent>
     </Card>

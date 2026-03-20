@@ -3,7 +3,7 @@
 import { format, isValid, parseISO } from 'date-fns';
 import { Briefcase, CalendarIcon, Gift, Repeat, Target } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { SignOutButton } from '@/components/features/auth/SignOutButton';
+import { AuthNavButton } from '@/components/features/auth/AuthNavButton';
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
 import { ExpenseList } from '@/components/features/budget/ExpenseList';
 import { ExportMenu } from '@/components/features/budget/ExportMenu';
@@ -301,7 +301,7 @@ export default function Home() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <SignOutButton />
+            <AuthNavButton />
             <ExportMenu
               state={{ settings, expenses, spentPerPeriod }}
               onImport={importState}
