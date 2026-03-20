@@ -1,112 +1,39 @@
 # Finance Tracker
 
-A modern Next.js project with TypeScript, Tailwind CSS v4, and a complete developer experience setup.
-
-## Features
-
-- **Authentication** (Better Auth + Drizzle + Turso) with email/password
-- **Next.js 16** with React 19
-- **TypeScript** for type safety
-- **Tailwind CSS v4** for styling
-- **Biome** for fast linting and formatting
-- **React Compiler** enabled for automatic optimizations
-- **Git Hooks** (Husky + Commitlint + lint-staged)
-  - Pre-commit: Auto-format and lint staged files
-  - Commit-msg: Validate conventional commit messages
-  - Pre-push: Run full lint and type checks
+Personal finance tracking. Next.js 16, React 19, TypeScript, Tailwind CSS v4, Better Auth with Drizzle and Turso, Biome, and Husky (commitlint, lint-staged, pre-push checks).
 
 ## Quick Start
 
 ```bash
-# Install dependencies
-bun install
-
-# Start development server
-bun dev
-```
-
-Visit [http://localhost:3000](http://localhost:3000) to see your app.
-
-## Using as a Template
-
-Clone this repo for a new project, then run init to wipe git history and rename everything:
-
-```bash
-git clone https://github.com/chev0004/Nextjs-Template.git my-project && cd my-project
-bun run init my-project
 bun install
 bun dev
 ```
 
-The init script will: remove existing git history, run `git init`, create `develop` branch, set `package.json` name, update README/layout metadata, and commit everything as "Initial commit".
+Open [http://localhost:3000](http://localhost:3000).
 
 ## Auth Setup
 
-Auth uses [Better Auth](https://www.better-auth.com/) with Drizzle and Turso. Ensure `.env` has:
+Auth uses [Better Auth](https://www.better-auth.com/) with Drizzle and Turso. Add to `.env`:
 
 - `DATABASE_URL` and `DATABASE_AUTH_TOKEN` (Turso)
-- `BETTER_AUTH_SECRET` (run `openssl rand -base64 32` to generate)
+- `BETTER_AUTH_SECRET` (e.g. `openssl rand -base64 32`)
 - `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` (e.g. `http://localhost:3000`)
 
-Run `bun db:push` to sync the auth schema to your database.
+Run `bun db:push` to sync the schema to your database.
 
-## Netlify
+For production deploys, set the same keys in your host's environment with your live URL for `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL`.
 
-Set the same env vars as in Auth Setup in **Site configuration → Environment variables** (use production URLs for `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL`).
+## Scripts
 
-In **Build & deploy → Build settings**, set **Publish directory** to `.next`, or rely on `netlify.toml` (repo sets `publish = ".next"`). Do not leave Netlify’s default publish path as the repo root: `@netlify/plugin-nextjs` errors when publish equals the site base directory.
+- `bun dev` - dev server
+- `bun build` - production build
+- `bun start` - production server
+- `bun lint` / `bun lint:fix` - Biome lint
+- `bun format` - Biome format
+- `bun type-check` - TypeScript
+- `bun db:push` - push Drizzle schema
+- `bun db:generate` - generate Drizzle migrations
 
-## Available Scripts
+## Tooling
 
-- `bun dev` - Start development server
-- `bun build` - Build for production
-- `bun start` - Start production server
-- `bun lint` - Run linting checks
-- `bun lint:fix` - Fix linting issues automatically
-- `bun format` - Format code
-- `bun type-check` - Run TypeScript type checking
-- `bun db:push` - Push Drizzle schema to Turso
-- `bun db:generate` - Generate Drizzle migrations
-
-## Biome Configuration
-
-This template includes a comprehensive Biome setup optimized for Next.js:
-
-**Formatter:**
-- 2-space indentation
-- 80 character line width
-- Single quotes for JavaScript/TypeScript
-- Auto-organize imports
-
-**Linter:**
-- Next.js domain rules enabled
-- Strict rules for unused imports/variables
-- Next.js-specific rules (no `<img>`, no `<head>` in pages, etc.)
-- Tailwind CSS directive support
-- Auto-fix for safe transformations
-
-**Overrides:**
-- Allows default exports in Next.js app/pages directories
-- Config files and middleware exempt from default export rule
-
-## Commit Convention
-
-This template uses [Conventional Commits](https://www.conventionalcommits.org/). Examples:
-
-- `feat: add user authentication`
-- `fix: resolve navigation bug`
-- `docs: update README`
-- `refactor: simplify component structure`
-
-## Project Structure
-
-```
-src/
-  └── app/
-      ├── layout.tsx
-      ├── page.tsx
-      ├── globals.css
-      ├── loading.tsx
-      ├── error.tsx
-      └── not-found.tsx
-```
+Formatting and linting live in `biome.json`; pre-commit runs Biome on staged TS/JS/JSON/CSS via lint-staged. Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (enforced by Commitlint).
