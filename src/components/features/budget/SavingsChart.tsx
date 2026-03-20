@@ -137,8 +137,8 @@ export function SavingsChart({ data }: SavingsChartProps) {
             <span className="text-muted-foreground text-xs">Balance</span>
             <span className="font-mono text-sm">
               {point.balance < 0
-                ? '-$' + Math.abs(point.balance).toLocaleString()
-                : '$' + point.balance.toLocaleString()}
+                ? `-$${Math.abs(point.balance).toLocaleString()}`
+                : `$${point.balance.toLocaleString()}`}
             </span>
           </div>
         </div>
@@ -185,8 +185,8 @@ export function SavingsChart({ data }: SavingsChartProps) {
             minTickGap={0}
             tickFormatter={(value) =>
               value < 0
-                ? '-$' + Math.abs(value).toLocaleString()
-                : '$' + value.toLocaleString()
+                ? `-$${Math.abs(value).toLocaleString()}`
+                : `$${value.toLocaleString()}`
             }
             domain={[0, 'auto']}
           />

@@ -230,8 +230,8 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
               minTickGap={0}
               tickFormatter={(value) =>
                 value < 0
-                  ? '-$' + Math.abs(value).toLocaleString()
-                  : '$' + value.toLocaleString()
+                  ? `-$${Math.abs(value).toLocaleString()}`
+                  : `$${value.toLocaleString()}`
               }
               domain={[0, 'auto']}
             />
