@@ -69,6 +69,17 @@ export const account = sqliteTable(
   (table) => [index('account_userId_idx').on(table.userId)],
 );
 
+export const budget = sqliteTable('budget', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  data: text('data').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
+
 export const verification = sqliteTable(
   'verification',
   {
@@ -87,9 +98,17 @@ export const verification = sqliteTable(
   (table) => [index('verification_identifier_idx').on(table.identifier)],
 );
 
-export const userRelations = relations(user, ({ many }) => ({
+export const userRelations = relations(user, ({ one, many }) => ({
   sessions: many(session),
   accounts: many(account),
+  budget: one(budget),
+}));
+
+export const budgetRelations = relations(budget, ({ one }) => ({
+  user: one(user, {
+    fields: [budget.userId],
+    references: [user.id],
+  }),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({

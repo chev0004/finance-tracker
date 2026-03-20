@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { authClient } from '@/lib/auth-client';
 import {
   getCalendarPocketPeriodStarts,
   getPocketPeriodRange,
@@ -497,58 +498,164 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
   };
 }
 
+function parseAndApplyStored(raw: unknown): {
+  expenses: Expense[];
+  spentPerPeriod: number[];
+  settings: BudgetSettings;
+  needsStartDatePrompt: boolean;
+} {
+  if (!raw || typeof raw !== 'object') {
+    const pd = getPocketPaydays(
+      DEFAULT_SETTINGS.pocketFirstPayday,
+      DEFAULT_SETTINGS.pocketFrequency,
+      DEFAULT_SETTINGS.pocketInterval,
+      DEFAULT_SETTINGS.startDate,
+    );
+    return {
+      expenses: [],
+      spentPerPeriod: pd.map(() => 0),
+      settings: DEFAULT_SETTINGS,
+      needsStartDatePrompt: true,
+    };
+  }
+  const data = raw as Record<string, unknown>;
+  return {
+    expenses: (data.expenses as Expense[]) || [],
+    spentPerPeriod:
+      (data.spentPerPeriod as number[]) ||
+      (data.spentPerWeek as number[]) ||
+      [],
+    settings: migrateSettings((data.settings as Record<string, unknown>) || {}),
+    needsStartDatePrompt: false,
+  };
+}
+
 export function useBudget() {
+  const { data: session, isPending: isSessionPending } =
+    authClient.useSession();
   const [isLoaded, setIsLoaded] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [spentPerPeriod, setSpentPerPeriod] = useState<number[]>([]);
   const [settings, setSettings] = useState<BudgetSettings>(DEFAULT_SETTINGS);
   const [needsStartDatePrompt, setNeedsStartDatePrompt] = useState(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const data = JSON.parse(stored);
-        setExpenses(data.expenses || []);
-        setSpentPerPeriod(data.spentPerPeriod || data.spentPerWeek || []);
-        setSettings(migrateSettings(data.settings || {}));
-        setNeedsStartDatePrompt(false);
+    if (isSessionPending) return;
+
+    async function load() {
+      if (session) {
+        const res = await fetch('/api/budget');
+        if (res.ok) {
+          const body = await res.json();
+          if (body) {
+            const parsed = parseAndApplyStored(body);
+            setExpenses(parsed.expenses);
+            setSpentPerPeriod(parsed.spentPerPeriod);
+            setSettings(parsed.settings);
+            setNeedsStartDatePrompt(parsed.needsStartDatePrompt);
+            setIsLoaded(true);
+            return;
+          }
+        }
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            const localData = JSON.parse(stored) as BudgetState;
+            await fetch('/api/budget', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(localData),
+            });
+            const parsed = parseAndApplyStored(localData);
+            setExpenses(parsed.expenses);
+            setSpentPerPeriod(parsed.spentPerPeriod);
+            setSettings(parsed.settings);
+            setNeedsStartDatePrompt(false);
+          } else {
+            setNeedsStartDatePrompt(true);
+            const pd = getPocketPaydays(
+              DEFAULT_SETTINGS.pocketFirstPayday,
+              DEFAULT_SETTINGS.pocketFrequency,
+              DEFAULT_SETTINGS.pocketInterval,
+              DEFAULT_SETTINGS.startDate,
+            );
+            setSpentPerPeriod(pd.map(() => 0));
+          }
+        } catch {
+          setNeedsStartDatePrompt(true);
+          const pd = getPocketPaydays(
+            DEFAULT_SETTINGS.pocketFirstPayday,
+            DEFAULT_SETTINGS.pocketFrequency,
+            DEFAULT_SETTINGS.pocketInterval,
+            DEFAULT_SETTINGS.startDate,
+          );
+          setSpentPerPeriod(pd.map(() => 0));
+        }
       } else {
-        setNeedsStartDatePrompt(true);
-        const pd = getPocketPaydays(
-          DEFAULT_SETTINGS.pocketFirstPayday,
-          DEFAULT_SETTINGS.pocketFrequency,
-          DEFAULT_SETTINGS.pocketInterval,
-          DEFAULT_SETTINGS.startDate,
-        );
-        setSpentPerPeriod(pd.map(() => 0));
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            const parsed = parseAndApplyStored(JSON.parse(stored));
+            setExpenses(parsed.expenses);
+            setSpentPerPeriod(parsed.spentPerPeriod);
+            setSettings(parsed.settings);
+            setNeedsStartDatePrompt(parsed.needsStartDatePrompt);
+          } else {
+            setNeedsStartDatePrompt(true);
+            const pd = getPocketPaydays(
+              DEFAULT_SETTINGS.pocketFirstPayday,
+              DEFAULT_SETTINGS.pocketFrequency,
+              DEFAULT_SETTINGS.pocketInterval,
+              DEFAULT_SETTINGS.startDate,
+            );
+            setSpentPerPeriod(pd.map(() => 0));
+          }
+        } catch {
+          const pd = getPocketPaydays(
+            DEFAULT_SETTINGS.pocketFirstPayday,
+            DEFAULT_SETTINGS.pocketFrequency,
+            DEFAULT_SETTINGS.pocketInterval,
+            DEFAULT_SETTINGS.startDate,
+          );
+          setSpentPerPeriod(pd.map(() => 0));
+          setNeedsStartDatePrompt(false);
+        }
       }
-    } catch {
-      const pd = getPocketPaydays(
-        DEFAULT_SETTINGS.pocketFirstPayday,
-        DEFAULT_SETTINGS.pocketFrequency,
-        DEFAULT_SETTINGS.pocketInterval,
-        DEFAULT_SETTINGS.startDate,
-      );
-      setSpentPerPeriod(pd.map(() => 0));
-      setNeedsStartDatePrompt(false);
+      setIsLoaded(true);
     }
-    setIsLoaded(true);
-  }, []);
+
+    load();
+  }, [session, isSessionPending]);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    try {
-      const data: BudgetState = {
-        expenses,
-        spentPerPeriod,
-        settings,
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch {
-      // localStorage unavailable
+    if (!isLoaded || isSessionPending) return;
+    const data: BudgetState = {
+      expenses,
+      spentPerPeriod,
+      settings,
+    };
+    if (session) {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        fetch('/api/budget', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        saveTimeoutRef.current = null;
+      }, 500);
+    } else {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch {
+        // localStorage unavailable
+      }
     }
-  }, [expenses, spentPerPeriod, settings, isLoaded]);
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [expenses, spentPerPeriod, settings, isLoaded, isSessionPending, session]);
 
   const currentIncome = useMemo(() => {
     const today = getLocalDateString();
