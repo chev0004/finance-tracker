@@ -340,8 +340,8 @@ function migrateGoal(g: Record<string, unknown>): SavingsGoal {
       : {
           id: (g.id as string) ?? crypto.randomUUID(),
           name: (g.name as string) ?? '',
-          startDate: (g.targetDate as string) ?? '2000-01-01',
-          endDate: (g.targetDate as string) ?? '2000-01-01',
+          startDate: (g.targetDate as string) ?? getLocalDateString(),
+          endDate: (g.targetDate as string) ?? getLocalDateString(),
           lineItems: (g.lineItems as SavingsGoal['lineItems']) ?? [],
           pauseIncome: (g.pauseIncome as boolean) ?? false,
           pausePocket: (g.pausePocket as boolean) ?? false,
@@ -371,7 +371,7 @@ function migrateIncomeSources(raw: Record<string, unknown>): IncomeSource[] {
   const globalPayday =
     (raw.firstPayday as string) ??
     (raw.pocketFirstPayday as string) ??
-    '2000-01-01';
+    getLocalDateString();
 
   if (Array.isArray(raw.incomeSources) && raw.incomeSources.length > 0) {
     return (raw.incomeSources as IncomeSource[]).map((s) => {
@@ -424,7 +424,9 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
       pocketFrequency:
         settings.pocketFrequency ?? settings.pocketFrequency ?? 'weekly',
       pocketFirstPayday:
-        settings.pocketFirstPayday ?? settings.firstPayday ?? '2000-01-01',
+        settings.pocketFirstPayday ??
+        settings.firstPayday ??
+        getLocalDateString(),
       pocketInterval: settings.pocketInterval,
       recurringExpenses: migrateRecurringExpenses(
         settings.recurringExpenses ?? [],
@@ -439,61 +441,32 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
 
   const old = raw as {
     startingBalance?: number;
-    tripCost?: number;
     weeklySave?: number;
     weeklyPocket?: number;
-    tripMonth?: string;
   };
   const weeklySave = old.weeklySave ?? 0;
   const weeklyPocket = old.weeklyPocket ?? 0;
 
+  const payday = getLocalDateString();
   return {
     startingBalance: old.startingBalance ?? 0,
-    startDate: '2000-01-01',
+    startDate: payday,
     pocketPerPeriod: weeklyPocket,
     pocketFrequency: 'weekly',
-    pocketFirstPayday: '2000-01-01',
+    pocketFirstPayday: payday,
     incomeSources: [
       {
         id: crypto.randomUUID(),
         name: 'Income',
         amount: weeklySave + weeklyPocket,
         payFrequency: 'weekly',
-        firstPayday: '2000-01-01',
+        firstPayday: payday,
         rateChanges: [],
       },
     ],
-    goals: old.tripMonth
-      ? [
-          {
-            id: crypto.randomUUID(),
-            name: 'Goal',
-            startDate: `${old.tripMonth}-01`,
-            endDate: `${old.tripMonth}-01`,
-            lineItems: [
-              {
-                id: crypto.randomUUID(),
-                label: 'Trip Cost',
-                amount: old.tripCost ?? 0,
-              },
-            ],
-            pauseIncome: true,
-            pausePocket: false,
-            pausedExpenseIds: [],
-          },
-        ]
-      : [],
+    goals: [],
     oneTimeIncome: [],
-    recurringExpenses: [
-      {
-        id: crypto.randomUUID(),
-        label: 'Rent',
-        amount: 0,
-        dayOfMonth: 15,
-        startMonth: '2000-01',
-        endMonth: '2000-12',
-      },
-    ],
+    recurringExpenses: [],
   };
 }
 
