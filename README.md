@@ -4,6 +4,7 @@ A modern Next.js project with TypeScript, Tailwind CSS v4, and a complete develo
 
 ## Features
 
+- **Authentication** (Better Auth + Drizzle + Turso) with email/password
 - **Next.js 16** with React 19
 - **TypeScript** for type safety
 - **Tailwind CSS v4** for styling
@@ -39,6 +40,16 @@ bun dev
 
 The init script will: remove existing git history, run `git init`, create `develop` branch, set `package.json` name, update README/layout metadata, and commit everything as "Initial commit".
 
+## Auth Setup
+
+Auth uses [Better Auth](https://www.better-auth.com/) with Drizzle and Turso. Ensure `.env` has:
+
+- `DATABASE_URL` and `DATABASE_AUTH_TOKEN` (Turso)
+- `BETTER_AUTH_SECRET` (run `openssl rand -base64 32` to generate)
+- `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` (e.g. `http://localhost:3000`)
+
+Run `bun db:push` to sync the auth schema to your database.
+
 ## Available Scripts
 
 - `bun dev` - Start development server
@@ -48,6 +59,8 @@ The init script will: remove existing git history, run `git init`, create `devel
 - `bun lint:fix` - Fix linting issues automatically
 - `bun format` - Format code
 - `bun type-check` - Run TypeScript type checking
+- `bun db:push` - Push Drizzle schema to Turso
+- `bun db:generate` - Generate Drizzle migrations
 
 ## Biome Configuration
 
