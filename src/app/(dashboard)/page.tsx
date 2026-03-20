@@ -3,6 +3,7 @@
 import { format, isValid, parseISO } from 'date-fns';
 import { Briefcase, CalendarIcon, Gift, Repeat, Target } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { SignOutButton } from '@/components/features/auth/SignOutButton';
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
 import { ExpenseList } from '@/components/features/budget/ExpenseList';
 import { ExportMenu } from '@/components/features/budget/ExportMenu';
@@ -298,10 +299,13 @@ export default function Home() {
               {chartStartYear}-{chartEndYear} projection
             </p>
           </div>
-          <ExportMenu
-            state={{ settings, expenses, spentPerPeriod }}
-            onImport={importState}
-          />
+          <div className="flex items-center gap-2">
+            <SignOutButton />
+            <ExportMenu
+              state={{ settings, expenses, spentPerPeriod }}
+              onImport={importState}
+            />
+          </div>
         </header>
 
         <div className="grid grid-cols-3 gap-3">
