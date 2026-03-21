@@ -555,23 +555,6 @@ export default function Home() {
               </span>
             </NavStepper>
             <SavingsChart data={savingsChartData} />
-            <p className="text-muted-foreground/70 text-xs leading-relaxed">
-              ~${Math.round(monthlySavings).toLocaleString()} saved per month ($
-              {Math.round(monthlyIncome).toLocaleString()} income minus $
-              {settings.pocketPerPeriod} pocket {pocketFreqLabel}).
-              {settings.recurringExpenses.length > 0 && (
-                <>
-                  {' '}
-                  {settings.recurringExpenses
-                    .map(
-                      (e) =>
-                        `${e.label} $${e.amount} on the ${e.dayOfMonth === 0 ? 'last day' : `${e.dayOfMonth}th`}`,
-                    )
-                    .join(', ')}
-                  .
-                </>
-              )}
-            </p>
           </CardContent>
         </Card>
 
