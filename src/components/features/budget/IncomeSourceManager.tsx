@@ -7,18 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { ResponsivePicker } from '@/components/ui/responsive-picker';
+import { ResponsiveSelect } from '@/components/ui/responsive-select';
 import {
   cn,
   normalizeNumInputBlur,
@@ -53,6 +43,7 @@ function RateChangeList({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [effectiveDate, setEffectiveDate] = useState('');
   const [amount, setAmount] = useState('');
+  const [rateDateOpen, setRateDateOpen] = useState(false);
 
   const sorted = [...source.rateChanges].sort((a, b) =>
     a.effectiveDate.localeCompare(b.effectiveDate),
@@ -130,38 +121,47 @@ function RateChangeList({
 
   const formUI = (
     <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Effective Date
           </Label>
-          <Popover>
-            <PopoverTrigger asChild>
+          <ResponsivePicker
+            open={rateDateOpen}
+            onOpenChange={setRateDateOpen}
+            sheetTitle="Effective date"
+            popoverContentClassName="w-auto p-0"
+            trigger={
               <Button
+                type="button"
                 variant="outline"
                 className={cn(
-                  'w-full justify-start text-left font-normal',
+                  'h-11 min-h-11 w-full justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:text-sm',
                   !effectiveDate && 'text-muted-foreground',
                 )}
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
+                <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
                 {effectiveDate ? fmtDate(effectiveDate) : 'Select date'}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            }
+          >
+            {(close) => (
               <Calendar
                 mode="single"
                 selected={effectiveDate ? parseISO(effectiveDate) : undefined}
                 onSelect={(d) => {
-                  if (d && isValid(d))
+                  if (d && isValid(d)) {
                     setEffectiveDate(format(d, 'yyyy-MM-dd'));
+                    close();
+                  }
                 }}
                 defaultMonth={
                   effectiveDate ? parseISO(effectiveDate) : new Date()
                 }
+                className="mx-auto w-full max-w-[100vw] rounded-lg"
               />
-            </PopoverContent>
-          </Popover>
+            )}
+          </ResponsivePicker>
         </div>
         <div className="space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
@@ -212,7 +212,7 @@ function RateChangeList({
               <span className="font-mono text-xs">${change.amount}</span>
               {diffLabel(change.amount)}
             </div>
-            <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
               <Button
                 variant="ghost"
                 size="icon"
@@ -269,6 +269,7 @@ function SourceItem({
     source.payInterval === undefined ? '' : String(source.payInterval),
   );
   const [intervalFocused, setIntervalFocused] = useState(false);
+  const [paydayOpen, setPaydayOpen] = useState(false);
 
   useEffect(() => {
     if (!amountFocused) setAmountStr(String(source.amount));
@@ -282,8 +283,8 @@ function SourceItem({
 
   return (
     <div className="space-y-3 rounded-lg border border-border/50 bg-muted/20 p-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-0 flex-1 space-y-1">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="min-w-0 space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Name
           </Label>
@@ -293,7 +294,7 @@ function SourceItem({
             placeholder="e.g. Main Job"
           />
         </div>
-        <div className="min-w-0 flex-1 space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Base Amount / Period
           </Label>
@@ -319,65 +320,66 @@ function SourceItem({
             />
           </div>
         </div>
-        <div className="min-w-0 flex-1 space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Frequency
           </Label>
-          <Select
+          <ResponsiveSelect
             value={source.payFrequency}
-            onValueChange={(v: PayFrequency) =>
-              onUpdate({ ...source, payFrequency: v })
+            onValueChange={(v) =>
+              onUpdate({ ...source, payFrequency: v as PayFrequency })
             }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PAY_FREQUENCY_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            options={PAY_FREQUENCY_OPTIONS}
+            sheetTitle="Pay frequency"
+            triggerClassName="w-full"
+          />
         </div>
-        <div className="min-w-0 flex-1 space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             First Payday
           </Label>
-          <Popover>
-            <PopoverTrigger asChild>
+          <ResponsivePicker
+            open={paydayOpen}
+            onOpenChange={setPaydayOpen}
+            sheetTitle="First payday"
+            popoverContentClassName="w-auto p-0"
+            trigger={
               <Button
+                type="button"
                 variant="outline"
                 className={cn(
-                  'w-full justify-start text-left font-normal',
+                  'h-11 min-h-11 w-full justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:text-sm',
                   !source.firstPayday && 'text-muted-foreground',
                 )}
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
+                <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
                 {isValid(firstPaydayDate)
                   ? format(firstPaydayDate, 'MMM d, yyyy')
                   : 'Select date'}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            }
+          >
+            {(close) => (
               <Calendar
                 mode="single"
                 selected={firstPaydayDate}
                 onSelect={(d) => {
-                  if (d && isValid(d))
+                  if (d && isValid(d)) {
                     onUpdate({
                       ...source,
                       firstPayday: format(d, 'yyyy-MM-dd'),
                     });
+                    close();
+                  }
                 }}
                 defaultMonth={firstPaydayDate}
+                className="mx-auto w-full max-w-[100vw] rounded-lg"
               />
-            </PopoverContent>
-          </Popover>
+            )}
+          </ResponsivePicker>
         </div>
         {source.payFrequency === 'custom' && (
-          <div className="min-w-0 flex-1 space-y-1">
+          <div className="min-w-0 space-y-1 sm:col-span-2 lg:col-span-1">
             <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
               Days Between
             </Label>
@@ -404,14 +406,16 @@ function SourceItem({
           </div>
         )}
         {canRemove && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 shrink-0 text-muted-foreground hover:text-red-500"
-            onClick={() => onRemove(source.id)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <div className="flex items-end justify-end sm:col-span-2 lg:col-span-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0 text-muted-foreground hover:text-red-500"
+              onClick={() => onRemove(source.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         )}
       </div>
 
@@ -444,6 +448,7 @@ export function IncomeSourceManager({
     format(new Date(), 'yyyy-MM-dd'),
   );
   const [newPayInterval, setNewPayInterval] = useState<number | ''>('');
+  const [newPaydayOpen, setNewPaydayOpen] = useState(false);
 
   const resetAddForm = () => {
     setNewName('');
@@ -495,7 +500,7 @@ export function IncomeSourceManager({
 
       {addingSource ? (
         <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">
               <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
                 Name
@@ -531,54 +536,55 @@ export function IncomeSourceManager({
               <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
                 Frequency
               </Label>
-              <Select
+              <ResponsiveSelect
                 value={newFrequency}
-                onValueChange={(v: PayFrequency) => setNewFrequency(v)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAY_FREQUENCY_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onValueChange={(v) => setNewFrequency(v as PayFrequency)}
+                options={PAY_FREQUENCY_OPTIONS}
+                sheetTitle="Pay frequency"
+                triggerClassName="w-full"
+              />
             </div>
             <div className="space-y-1">
               <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
                 First Payday
               </Label>
-              <Popover>
-                <PopoverTrigger asChild>
+              <ResponsivePicker
+                open={newPaydayOpen}
+                onOpenChange={setNewPaydayOpen}
+                sheetTitle="First payday"
+                popoverContentClassName="w-auto p-0"
+                trigger={
                   <Button
+                    type="button"
                     variant="outline"
-                    className="w-full justify-start text-left font-normal"
+                    className="h-11 min-h-11 w-full justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:text-sm"
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
                     {newFirstPayday
                       ? format(parseISO(newFirstPayday), 'MMM d, yyyy')
                       : 'Select date'}
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                }
+              >
+                {(close) => (
                   <Calendar
                     mode="single"
                     selected={
                       newFirstPayday ? parseISO(newFirstPayday) : undefined
                     }
                     onSelect={(d) => {
-                      if (d && isValid(d))
+                      if (d && isValid(d)) {
                         setNewFirstPayday(format(d, 'yyyy-MM-dd'));
+                        close();
+                      }
                     }}
                     defaultMonth={
                       newFirstPayday ? parseISO(newFirstPayday) : new Date()
                     }
+                    className="mx-auto w-full max-w-[100vw] rounded-lg"
                   />
-                </PopoverContent>
-              </Popover>
+                )}
+              </ResponsivePicker>
             </div>
             {newFrequency === 'custom' && (
               <div className="space-y-1">

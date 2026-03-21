@@ -9,11 +9,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { ResponsivePicker } from '@/components/ui/responsive-picker';
 import { cn } from '@/lib/utils';
 import type { RecurringExpense, SavingsGoal } from '@/types';
 
@@ -74,6 +70,9 @@ export function GoalForm({
     })) ?? [{ id: crypto.randomUUID(), label: '', amount: '' }],
   );
   const [error, setError] = useState<string | null>(null);
+  const [rangeCalendarMonths, setRangeCalendarMonths] = useState(1);
+  const [rangeOpen, setRangeOpen] = useState(false);
+  const [resumeOpen, setResumeOpen] = useState(false);
 
   const goalEnd = dateRange?.to ?? dateRange?.from;
   const goalEndStr = goalEnd ? format(goalEnd, 'yyyy-MM-dd') : null;
@@ -81,6 +80,14 @@ export function GoalForm({
     if (goalEndStr && incomeResumeDate && incomeResumeDate < goalEndStr)
       setIncomeResumeDate(undefined);
   }, [goalEndStr, incomeResumeDate]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 640px)');
+    const apply = () => setRangeCalendarMonths(mq.matches ? 2 : 1);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
 
   const toggleExpense = (id: string) => {
     setPausedExpenseIds((prev) => {
@@ -185,29 +192,39 @@ export function GoalForm({
             <Label className="text-muted-foreground text-xs uppercase tracking-wider">
               Date or range
             </Label>
-            <Popover>
-              <PopoverTrigger asChild>
+            <ResponsivePicker
+              open={rangeOpen}
+              onOpenChange={setRangeOpen}
+              sheetTitle="Goal dates"
+              popoverContentClassName="w-auto p-0"
+              trigger={
                 <Button
+                  type="button"
                   variant="outline"
                   className={cn(
-                    'w-full justify-start text-left font-normal',
+                    'h-11 min-h-11 w-full justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:text-sm',
                     !dateRange?.from && 'text-muted-foreground',
                   )}
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
                   {formatRangeLabel(dateRange)}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
+              }
+            >
+              {(close) => (
                 <Calendar
                   mode="range"
                   selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
+                  onSelect={(r) => {
+                    setDateRange(r);
+                    if (r?.from && r?.to) close();
+                  }}
+                  numberOfMonths={rangeCalendarMonths}
                   defaultMonth={dateRange?.from}
+                  className="mx-auto w-full max-w-[100vw] rounded-lg"
                 />
-              </PopoverContent>
-            </Popover>
+              )}
+            </ResponsivePicker>
           </div>
         </div>
 
@@ -224,16 +241,19 @@ export function GoalForm({
           </div>
           <div className="space-y-2">
             {lineItems.map((item) => (
-              <div key={item.id} className="flex items-center gap-2">
+              <div
+                key={item.id}
+                className="flex flex-col gap-2 sm:flex-row sm:items-center"
+              >
                 <Input
                   placeholder="e.g. plane ticket, accommodation"
                   value={item.label}
                   onChange={(e) =>
                     updateLineItem(item.id, 'label', e.target.value)
                   }
-                  className="flex-1"
+                  className="min-w-0 flex-1"
                 />
-                <div className="relative w-28">
+                <div className="relative w-full sm:w-28">
                   <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground text-sm">
                     $
                   </span>
@@ -295,30 +315,38 @@ export function GoalForm({
               Optional. When you get paid again after the goal. Leave empty to
               resume on the first payday after the goal end.
             </p>
-            <Popover>
-              <PopoverTrigger asChild>
+            <ResponsivePicker
+              open={resumeOpen}
+              onOpenChange={setResumeOpen}
+              sheetTitle="Income resumes on"
+              popoverContentClassName="w-auto p-0"
+              trigger={
                 <Button
+                  type="button"
                   variant="outline"
                   className={cn(
-                    'w-full justify-start text-left font-normal sm:w-auto',
+                    'h-11 min-h-11 w-full justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:w-auto sm:text-sm',
                     !incomeResumeDate && 'text-muted-foreground',
                   )}
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
                   {incomeResumeDate
                     ? format(parseISO(incomeResumeDate), 'MMM d, yyyy')
                     : 'Select date'}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
+              }
+            >
+              {(close) => (
                 <Calendar
                   mode="single"
                   selected={
                     incomeResumeDate ? parseISO(incomeResumeDate) : undefined
                   }
                   onSelect={(d) => {
-                    if (d && isValid(d))
+                    if (d && isValid(d)) {
                       setIncomeResumeDate(format(d, 'yyyy-MM-dd'));
+                      close();
+                    }
                   }}
                   defaultMonth={
                     incomeResumeDate
@@ -326,9 +354,10 @@ export function GoalForm({
                       : (dateRange?.to ?? dateRange?.from)
                   }
                   disabled={goalEnd ? { before: goalEnd } : undefined}
+                  className="mx-auto w-full max-w-[100vw] rounded-lg"
                 />
-              </PopoverContent>
-            </Popover>
+              )}
+            </ResponsivePicker>
             {incomeResumeDate && (
               <Button
                 type="button"

@@ -6,13 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { ResponsiveSelect } from '@/components/ui/responsive-select';
 import { cn } from '@/lib/utils';
 import type { RecurringExpense } from '@/types';
 
@@ -111,6 +105,11 @@ export function RecurringExpenseManager({
   const [startMonth, setStartMonth] = useState(projectionStartMonth);
   const [endMonth, setEndMonth] = useState(projectionEndMonth);
   const [endOngoing, setEndOngoing] = useState(true);
+
+  const endMonthOptions = useMemo(
+    () => monthOptions.filter((m) => m.value >= startMonth),
+    [monthOptions, startMonth],
+  );
 
   const resolvedDay =
     dayPreset === 'end'
@@ -255,36 +254,26 @@ export function RecurringExpenseManager({
             Months
           </Label>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Select value={startMonth} onValueChange={setStartMonth}>
-              <SelectTrigger className="min-w-0 flex-1 text-xs sm:max-w-[140px]">
-                <SelectValue placeholder="Start" />
-              </SelectTrigger>
-              <SelectContent>
-                {monthOptions.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ResponsiveSelect
+              value={startMonth}
+              onValueChange={setStartMonth}
+              options={monthOptions}
+              placeholder="Start"
+              sheetTitle="Start month"
+              triggerClassName="min-h-11 min-w-0 flex-1 sm:max-w-[140px]"
+            />
             <span className="shrink-0 text-muted-foreground text-xs">-</span>
             {endOngoing ? (
               <span className="text-muted-foreground text-xs">ongoing</span>
             ) : (
-              <Select value={endMonth} onValueChange={setEndMonth}>
-                <SelectTrigger className="min-w-0 flex-1 text-xs sm:max-w-[140px]">
-                  <SelectValue placeholder="End" />
-                </SelectTrigger>
-                <SelectContent>
-                  {monthOptions
-                    .filter((m) => m.value >= startMonth)
-                    .map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <ResponsiveSelect
+                value={endMonth}
+                onValueChange={setEndMonth}
+                options={endMonthOptions}
+                placeholder="End"
+                sheetTitle="End month"
+                triggerClassName="min-h-11 min-w-0 flex-1 sm:max-w-[140px]"
+              />
             )}
             <div className="flex cursor-pointer items-center gap-1.5 text-muted-foreground text-xs">
               <Checkbox
@@ -342,7 +331,7 @@ export function RecurringExpenseManager({
                       : monthLabel(exp.endMonth)}
                   </span>
                 </div>
-                <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                   <Button
                     variant="ghost"
                     size="icon"

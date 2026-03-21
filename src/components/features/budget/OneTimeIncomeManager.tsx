@@ -7,11 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { ResponsivePicker } from '@/components/ui/responsive-picker';
 import {
   cn,
   normalizeNumInputBlur,
@@ -45,6 +41,7 @@ export function OneTimeIncomeManager({
   );
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
+  const [dateOpen, setDateOpen] = useState(false);
 
   const sorted = [...items].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -91,35 +88,45 @@ export function OneTimeIncomeManager({
 
   const formUI = (
     <div className="w-full min-w-0 space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
-      <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="min-w-0 space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Date
           </Label>
-          <Popover>
-            <PopoverTrigger asChild>
+          <ResponsivePicker
+            open={dateOpen}
+            onOpenChange={setDateOpen}
+            sheetTitle="One-time income date"
+            popoverContentClassName="w-auto p-0"
+            trigger={
               <Button
+                type="button"
                 variant="outline"
                 className={cn(
-                  'w-full justify-start text-left font-normal',
+                  'h-11 min-h-11 w-full justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:text-sm',
                   !dateValid && 'text-muted-foreground',
                 )}
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
+                <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
                 {dateValid ? format(dateObj, 'MMM d, yyyy') : 'Select date'}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            }
+          >
+            {(close) => (
               <Calendar
                 mode="single"
                 selected={dateValid ? dateObj : undefined}
                 onSelect={(d) => {
-                  if (d && isValid(d)) setDateStr(format(d, 'yyyy-MM-dd'));
+                  if (d && isValid(d)) {
+                    setDateStr(format(d, 'yyyy-MM-dd'));
+                    close();
+                  }
                 }}
                 defaultMonth={dateValid ? dateObj : new Date()}
+                className="mx-auto w-full max-w-[100vw] rounded-lg"
               />
-            </PopoverContent>
-          </Popover>
+            )}
+          </ResponsivePicker>
         </div>
         <div className="min-w-0 space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
@@ -187,7 +194,7 @@ export function OneTimeIncomeManager({
                 +${item.amount.toLocaleString()}
               </span>
             </div>
-            <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
               <Button
                 variant="ghost"
                 size="icon"

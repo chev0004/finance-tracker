@@ -2,16 +2,18 @@
 
 import { format, isValid, parseISO } from 'date-fns';
 import { CalendarIcon, ChevronDown, ChevronUp } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { ResponsivePicker } from '@/components/ui/responsive-picker';
 import { cn } from '@/lib/utils';
 
 interface ExpenseFormProps {
@@ -49,6 +51,7 @@ export function ExpenseForm({ balanceStartDate, onAdd }: ExpenseFormProps) {
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [dateOpen, setDateOpen] = useState(false);
   const amountRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -91,7 +94,7 @@ export function ExpenseForm({ balanceStartDate, onAdd }: ExpenseFormProps) {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSubmit();
     }
@@ -110,31 +113,41 @@ export function ExpenseForm({ balanceStartDate, onAdd }: ExpenseFormProps) {
           <Label className="text-muted-foreground text-xs uppercase tracking-wider">
             Date
           </Label>
-          <Popover>
-            <PopoverTrigger asChild>
+          <ResponsivePicker
+            open={dateOpen}
+            onOpenChange={setDateOpen}
+            sheetTitle="Expense date"
+            popoverContentClassName="w-auto p-0"
+            trigger={
               <Button
+                type="button"
                 variant="outline"
                 className={cn(
-                  'w-full justify-start text-left font-normal',
+                  'h-11 min-h-11 w-full justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:text-sm',
                   !date && 'text-muted-foreground',
                 )}
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
+                <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
                 {date && isValid(date)
                   ? format(date, 'MMM d, yyyy')
                   : 'Select date'}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            }
+          >
+            {(close) => (
               <Calendar
                 mode="single"
                 selected={date}
-                onSelect={setDate}
+                onSelect={(d) => {
+                  setDate(d);
+                  if (d) close();
+                }}
                 disabled={(d) => d < minDate || d > maxDate}
                 defaultMonth={date}
+                className="mx-auto w-full max-w-[100vw] rounded-lg"
               />
-            </PopoverContent>
-          </Popover>
+            )}
+          </ResponsivePicker>
         </div>
 
         <div className="space-y-2">
@@ -163,24 +176,24 @@ export function ExpenseForm({ balanceStartDate, onAdd }: ExpenseFormProps) {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="pr-7 font-mono"
+              className="pr-9 font-mono sm:pr-7"
             />
-            <div className="absolute inset-y-0 right-0 flex w-7 flex-col border-input border-l">
+            <div className="absolute inset-y-0 right-0 flex w-9 flex-col border-input border-l sm:w-7">
               <button
                 type="button"
                 tabIndex={-1}
                 onClick={() => stepAmount(1)}
-                className="flex flex-1 cursor-pointer items-center justify-center rounded-tr-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="flex min-h-[1.375rem] flex-1 cursor-pointer items-center justify-center rounded-tr-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:min-h-0"
               >
-                <ChevronUp className="size-3" />
+                <ChevronUp className="size-4 sm:size-3" />
               </button>
               <button
                 type="button"
                 tabIndex={-1}
                 onClick={() => stepAmount(-1)}
-                className="flex flex-1 cursor-pointer items-center justify-center rounded-br-md border-input border-t text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="flex min-h-[1.375rem] flex-1 cursor-pointer items-center justify-center rounded-br-md border-input border-t text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:min-h-0"
               >
-                <ChevronDown className="size-3" />
+                <ChevronDown className="size-4 sm:size-3" />
               </button>
             </div>
           </div>
