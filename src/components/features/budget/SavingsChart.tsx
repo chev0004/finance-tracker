@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { useChartMaxTicks } from '@/hooks/useChartMaxTicks';
 import type { SavingsPoint, SavingsPointEvent } from '@/types';
 
 interface SavingsChartProps {
@@ -66,9 +67,9 @@ function deltaColor(delta: number): string {
   return delta >= 0 ? GREEN : RED;
 }
 
-const MAX_VISIBLE_TICKS = 70;
-
 export function SavingsChart({ data }: SavingsChartProps) {
+  const maxVisibleTicks = useChartMaxTicks();
+
   const chartData = useMemo<ChartDataPoint[]>(() => {
     return data.map((point) => ({
       date: point.date,
@@ -83,8 +84,8 @@ export function SavingsChart({ data }: SavingsChartProps) {
   }, [data]);
 
   const tickInterval =
-    chartData.length > MAX_VISIBLE_TICKS
-      ? Math.floor(chartData.length / MAX_VISIBLE_TICKS)
+    chartData.length > maxVisibleTicks
+      ? Math.floor(chartData.length / maxVisibleTicks)
       : 0;
 
   const CustomTooltip = ({
