@@ -1,0 +1,141 @@
+'use client';
+
+import { ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+export type MobileBalancesOverviewProps = {
+  currentSavings: number;
+  currentPocketBalance: number;
+  combinedBalance: number;
+  monthlySavings: number;
+  monthlyIncome: number;
+  eoyCombined: number;
+  chartYearClamped: number;
+  pocketPerPeriod: number;
+  pocketFreqLabel: string;
+  formatMoney: (n: number) => string;
+};
+
+export function MobileBalancesOverview({
+  currentSavings,
+  currentPocketBalance,
+  combinedBalance,
+  monthlySavings,
+  monthlyIncome,
+  eoyCombined,
+  chartYearClamped,
+  pocketPerPeriod,
+  pocketFreqLabel,
+  formatMoney,
+}: MobileBalancesOverviewProps) {
+  const eoyVariant =
+    eoyCombined < 0 ? 'danger' : eoyCombined < 500 ? 'warning' : 'success';
+  const eoyColor = {
+    danger: 'text-red-500',
+    warning: 'text-amber-500',
+    success: 'text-emerald-500',
+  }[eoyVariant];
+
+  const savingsRounded = Math.round(monthlySavings);
+  const incomeRounded = Math.round(monthlyIncome);
+  const savingsPrefix = savingsRounded >= 0 ? '+' : '';
+
+  const accountRows = [
+    { label: 'Savings', value: formatMoney(currentSavings) },
+    { label: 'Pocket', value: formatMoney(currentPocketBalance) },
+  ];
+
+  const statTiles: {
+    title: string;
+    value: string;
+    subtitle: string;
+    valueClassName?: string;
+  }[] = [
+    {
+      title: 'Savings / mo',
+      value: `${savingsPrefix}${formatMoney(savingsRounded)}`,
+      subtitle: 'Avg per month',
+      valueClassName: savingsRounded >= 0 ? 'text-emerald-400' : 'text-red-400',
+    },
+    {
+      title: 'Income / mo',
+      value: formatMoney(incomeRounded),
+      subtitle: 'Planned recurring',
+    },
+    {
+      title: `End of ${chartYearClamped}`,
+      value: formatMoney(eoyCombined),
+      subtitle: 'Projected combined',
+      valueClassName: eoyColor,
+    },
+    {
+      title: 'Pocket / period',
+      value: `$${pocketPerPeriod.toLocaleString()}`,
+      subtitle: pocketFreqLabel,
+    },
+  ];
+
+  return (
+    <section className="space-y-5 sm:hidden">
+      <h2 className="font-semibold text-2xl text-foreground tracking-tight">
+        Balances
+      </h2>
+
+      <div className="overflow-hidden rounded-2xl border border-border/50 bg-card/70">
+        {accountRows.map((row, i) => (
+          <div
+            key={row.label}
+            className={cn(
+              'flex items-center justify-between gap-3 px-4 py-3.5',
+              i > 0 && 'border-border/40 border-t',
+            )}
+          >
+            <span className="text-foreground text-sm">{row.label}</span>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-mono font-semibold text-base text-foreground">
+                {row.value}
+              </span>
+              <ChevronRight
+                className="size-4 shrink-0 text-muted-foreground/70"
+                aria-hidden
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-2xl border border-emerald-500/25 bg-card/90 p-5 shadow-sm">
+        <p className="text-muted-foreground text-sm">Combined</p>
+        <p className="mt-1 font-bold font-mono text-3xl text-foreground tracking-tight">
+          {formatMoney(combinedBalance)}
+        </p>
+        <p className="mt-1 text-muted-foreground/80 text-xs">As of today</p>
+      </div>
+
+      <h2 className="pt-1 font-semibold text-foreground text-xl tracking-tight">
+        Overview
+      </h2>
+      <div className="grid grid-cols-2 gap-3">
+        {statTiles.map((tile) => (
+          <div
+            key={tile.title}
+            className="min-w-0 rounded-2xl border border-border/50 bg-card/70 p-4"
+          >
+            <p className="text-muted-foreground text-xs">{tile.title}</p>
+            <p
+              className={cn(
+                'mt-2 break-words font-bold font-mono text-foreground text-lg tracking-tight',
+                tile.valueClassName,
+              )}
+            >
+              {tile.value}
+            </p>
+            <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground/80 leading-snug">
+              {tile.subtitle}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}

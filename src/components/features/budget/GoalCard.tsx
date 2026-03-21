@@ -63,7 +63,7 @@ export function GoalCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium text-sm">{goal.name}</h3>
-          <p className="mt-1 text-muted-foreground text-xs">
+          <p className="mt-1 break-words text-muted-foreground text-xs">
             {details.join(' · ')}
           </p>
         </div>

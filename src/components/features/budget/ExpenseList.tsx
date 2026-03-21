@@ -185,7 +185,7 @@ export function ExpenseList({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-muted-foreground opacity-0 transition-[opacity,color] hover:text-red-500 group-hover:opacity-100"
+                    className="h-8 w-8 text-muted-foreground opacity-100 transition-[opacity,color] hover:text-red-500 sm:h-6 sm:w-6 sm:opacity-0 sm:group-hover:opacity-100"
                     onClick={() => onRemove(expense.id)}
                   >
                     <X className="h-4 w-4" />
