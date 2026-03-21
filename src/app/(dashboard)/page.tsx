@@ -4,12 +4,16 @@ import { format, isValid, parseISO } from 'date-fns';
 import { Briefcase, CalendarIcon, Gift, Repeat, Target } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { AuthNavButton } from '@/components/features/auth/AuthNavButton';
+import { DashboardNavSheet } from '@/components/features/budget/DashboardNavSheet';
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
 import { ExpenseList } from '@/components/features/budget/ExpenseList';
 import { ExportMenu } from '@/components/features/budget/ExportMenu';
 import { GoalCard } from '@/components/features/budget/GoalCard';
 import { GoalForm } from '@/components/features/budget/GoalForm';
 import { IncomeSourceManager } from '@/components/features/budget/IncomeSourceManager';
+import { MobileAddExpenseSheet } from '@/components/features/budget/MobileAddExpenseSheet';
+import { MobileAddIncomeSheet } from '@/components/features/budget/MobileAddIncomeSheet';
+import { MobileBalancesOverview } from '@/components/features/budget/MobileBalancesOverview';
 import { OneTimeIncomeManager } from '@/components/features/budget/OneTimeIncomeManager';
 import { PocketChart } from '@/components/features/budget/PocketChart';
 import { RecurringExpenseManager } from '@/components/features/budget/RecurringExpenseManager';
@@ -29,11 +33,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { NavStepper } from '@/components/ui/nav-stepper';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { ResponsivePicker } from '@/components/ui/responsive-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
@@ -42,8 +42,9 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useBudget } from '@/hooks/useBudget';
+import { useNarrowViewport } from '@/hooks/useNarrowViewport';
 import { pocketPeriodEndsOnOrAfterBalance } from '@/lib/pocketPeriods';
-import { getLocalDateString } from '@/lib/utils';
+import { cn, getLocalDateString } from '@/lib/utils';
 
 export default function Home() {
   const {
@@ -101,6 +102,7 @@ export default function Home() {
   const [startDateDraft, setStartDateDraft] = useState<string>('');
   const [startDatePromptDismissed, setStartDatePromptDismissed] =
     useState(false);
+  const [startDatePickerOpen, setStartDatePickerOpen] = useState(false);
   const showStartDatePrompt = needsStartDatePrompt && !startDatePromptDismissed;
 
   useEffect(() => {
@@ -113,6 +115,22 @@ export default function Home() {
     : parseISO(settings.startDate);
   const isParsedBalanceStartDateValid = isValid(parsedBalanceStartDate);
 
+  const narrow = useNarrowViewport();
+  const currentMonth = new Date().getMonth() + 1;
+  const firstHalf = currentMonth <= 6;
+  const halfYearRange = useMemo(() => {
+    if (firstHalf) {
+      return {
+        start: `${chartYearClamped}-01-01`,
+        end: `${chartYearClamped}-06-30`,
+      };
+    }
+    return {
+      start: `${chartYearClamped}-07-01`,
+      end: `${chartYearClamped}-12-31`,
+    };
+  }, [chartYearClamped, firstHalf]);
+
   const savingsChartData = useMemo(() => {
     const yearStart = `${chartYearClamped}-01-01`;
     const yearEnd = `${chartYearClamped}-12-31`;
@@ -120,33 +138,72 @@ export default function Home() {
       (p) => p.rawDate >= yearStart && p.rawDate <= yearEnd,
     );
     const hasJan1 = inYear.some((p) => p.rawDate === yearStart);
-    if (hasJan1) return inYear;
-    const beforeYear = savingsTimeline
-      .filter((p) => p.rawDate < yearStart)
-      .sort((a, b) => b.rawDate.localeCompare(a.rawDate));
-    const carryOver = beforeYear[0];
-    if (!carryOver) return inYear;
-    const d = new Date(`${yearStart}T00:00:00`);
-    const fmtDate = d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    });
-    return [
-      { ...carryOver, date: fmtDate, rawDate: yearStart, label: '…' },
-      ...inYear,
-    ];
-  }, [savingsTimeline, chartYearClamped]);
+    let fullData: typeof inYear;
+    if (hasJan1) {
+      fullData = inYear;
+    } else {
+      const beforeYear = savingsTimeline
+        .filter((p) => p.rawDate < yearStart)
+        .sort((a, b) => b.rawDate.localeCompare(a.rawDate));
+      const carryOver = beforeYear[0];
+      if (!carryOver) {
+        fullData = inYear;
+      } else {
+        const d = new Date(`${yearStart}T00:00:00`);
+        const fmtDate = d.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        });
+        fullData = [
+          { ...carryOver, date: fmtDate, rawDate: yearStart, label: '…' },
+          ...inYear,
+        ];
+      }
+    }
+    if (!narrow) return fullData;
+    const { start: rangeStart, end: rangeEnd } = halfYearRange;
+    const filtered = fullData.filter(
+      (p) => p.rawDate >= rangeStart && p.rawDate <= rangeEnd,
+    );
+    if (!firstHalf && filtered.length > 0) {
+      const lastBefore = fullData.filter((p) => p.rawDate < rangeStart).pop();
+      if (lastBefore && filtered[0].rawDate !== rangeStart) {
+        const d = new Date(`${rangeStart}T00:00:00`);
+        const fmtDate = d.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        });
+        filtered.unshift({
+          ...lastBefore,
+          date: fmtDate,
+          rawDate: rangeStart,
+          label: '…',
+        });
+        filtered.sort((a, b) => a.rawDate.localeCompare(b.rawDate));
+      }
+    }
+    return filtered;
+  }, [savingsTimeline, chartYearClamped, narrow, halfYearRange, firstHalf]);
 
   const pocketChartData = useMemo(() => {
     const yearStart = `${chartYearClamped}-01-01`;
     const yearEnd = `${chartYearClamped}-12-31`;
-    return pocketTimeline.filter(
+    const full = pocketTimeline.filter(
       (p) =>
         p.rawDate >= yearStart &&
         p.rawDate <= yearEnd &&
         pocketPeriodEndsOnOrAfterBalance(p.weekEnd, settings.startDate),
     );
-  }, [pocketTimeline, chartYearClamped, settings.startDate]);
+    if (!narrow) return full;
+    const { start: rangeStart, end: rangeEnd } = halfYearRange;
+    return full.filter((p) => p.rawDate >= rangeStart && p.rawDate <= rangeEnd);
+  }, [
+    pocketTimeline,
+    chartYearClamped,
+    settings.startDate,
+    narrow,
+    halfYearRange,
+  ]);
 
   const togglePanel = (panel: typeof addPanel) =>
     setAddPanel((prev) => (prev === panel ? null : panel));
@@ -193,10 +250,21 @@ export default function Home() {
 
   if (!isLoaded) {
     return (
-      <div className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
+      <div className="min-h-dvh bg-background p-4 sm:p-6 lg:p-8">
         <div className="mx-auto max-w-6xl space-y-6">
           <Skeleton className="h-8 w-64" />
-          <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-5 sm:hidden">
+            <Skeleton className="h-8 w-40" />
+            <Skeleton className="h-[7.5rem] w-full rounded-2xl" />
+            <Skeleton className="h-28 w-full rounded-2xl" />
+            <Skeleton className="h-7 w-36" />
+            <div className="grid grid-cols-2 gap-3">
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-28 rounded-2xl" />
+              ))}
+            </div>
+          </div>
+          <div className="hidden grid-cols-3 gap-3 sm:grid">
             {[...Array(3)].map((_, i) => (
               <Skeleton key={i} className="h-24" />
             ))}
@@ -222,7 +290,7 @@ export default function Home() {
   const combinedBalance = currentSavings + currentPocketBalance;
 
   return (
-    <div className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
+    <div className="min-h-dvh bg-background p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <Dialog
           open={showStartDatePrompt}
@@ -242,24 +310,28 @@ export default function Home() {
               <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                 Balance Start
               </Label>
-              <Popover>
-                <PopoverTrigger asChild>
+              <ResponsivePicker
+                open={startDatePickerOpen}
+                onOpenChange={setStartDatePickerOpen}
+                sheetTitle="Balance start date"
+                popoverContentClassName="w-auto border-border/50 bg-popover p-0"
+                trigger={
                   <Button
+                    type="button"
                     variant="outline"
-                    className={
-                      'w-full justify-start border-border/50 bg-transparent text-left font-normal text-white hover:bg-white/10 focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-transparent' +
-                      (!isParsedBalanceStartDateValid
-                        ? 'text-muted-foreground'
-                        : '')
-                    }
+                    className={cn(
+                      'h-11 min-h-11 w-full justify-start border-border/50 bg-transparent text-left font-normal text-base text-white hover:bg-white/10 focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-transparent sm:h-9 sm:min-h-9 sm:text-sm',
+                      !isParsedBalanceStartDateValid && 'text-muted-foreground',
+                    )}
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-white" />
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0 text-white" />
                     {isParsedBalanceStartDateValid
                       ? format(parsedBalanceStartDate, 'MMM d, yyyy')
                       : 'Select date'}
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                }
+              >
+                {(close) => (
                   <Calendar
                     mode="single"
                     selected={
@@ -271,11 +343,13 @@ export default function Home() {
                     onSelect={(d) => {
                       if (d && isValid(d)) {
                         setStartDateDraft(format(d, 'yyyy-MM-dd'));
+                        close();
                       }
                     }}
+                    className="mx-auto w-full max-w-[100vw] rounded-lg"
                   />
-                </PopoverContent>
-              </Popover>
+                )}
+              </ResponsivePicker>
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <Button
@@ -303,25 +377,51 @@ export default function Home() {
           </DialogContent>
         </Dialog>
 
-        <header className="mb-6 flex flex-row items-start justify-between gap-4">
-          <div>
-            <h1 className="font-mono text-muted-foreground text-sm uppercase tracking-wider">
+        <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="break-words font-mono text-muted-foreground text-sm uppercase tracking-wider">
               chev.dev / budget tracker
             </h1>
             <p className="mt-1 text-muted-foreground/60 text-xs">
               {chartStartYear}-{chartEndYear} projection
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <AuthNavButton />
-            <ExportMenu
-              state={{ settings, expenses, spentPerPeriod }}
+          <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
+            <DashboardNavSheet
+              exportState={{ settings, expenses, spentPerPeriod }}
               onImport={importState}
+              settings={settings}
+              monthlyIncome={monthlyIncome}
+              monthlySavings={monthlySavings}
+              onUpdateSettings={updateSettings}
+              onAddIncomeSource={addIncomeSource}
+              onUpdateIncomeSource={updateIncomeSource}
+              onRemoveIncomeSource={removeIncomeSource}
             />
+            <div className="hidden items-center gap-2 sm:flex">
+              <AuthNavButton />
+              <ExportMenu
+                state={{ settings, expenses, spentPerPeriod }}
+                onImport={importState}
+              />
+            </div>
           </div>
         </header>
 
-        <div className="grid grid-cols-3 gap-3">
+        <MobileBalancesOverview
+          currentSavings={currentSavings}
+          currentPocketBalance={currentPocketBalance}
+          combinedBalance={combinedBalance}
+          monthlySavings={monthlySavings}
+          monthlyIncome={monthlyIncome}
+          eoyCombined={eoyCombined}
+          chartYearClamped={chartYearClamped}
+          pocketPerPeriod={settings.pocketPerPeriod}
+          pocketFreqLabel={pocketFreqLabel}
+          formatMoney={formatMoney}
+        />
+
+        <div className="hidden grid-cols-3 gap-3 sm:grid">
           <Card className="border-border/50 bg-card/50 hover:border-border hover:shadow-md">
             <CardContent className="p-4">
               <div className="mb-2 text-muted-foreground text-xs uppercase tracking-wider">
@@ -388,19 +488,21 @@ export default function Home() {
           </Card>
         </div>
 
-        <SettingsPanel
-          settings={settings}
-          monthlyIncome={monthlyIncome}
-          monthlySavings={monthlySavings}
-          onUpdate={updateSettings}
-          onAddIncomeSource={addIncomeSource}
-          onUpdateIncomeSource={updateIncomeSource}
-          onRemoveIncomeSource={removeIncomeSource}
-        />
+        <div className="hidden sm:block">
+          <SettingsPanel
+            settings={settings}
+            monthlyIncome={monthlyIncome}
+            monthlySavings={monthlySavings}
+            onUpdate={updateSettings}
+            onAddIncomeSource={addIncomeSource}
+            onUpdateIncomeSource={updateIncomeSource}
+            onRemoveIncomeSource={removeIncomeSource}
+          />
+        </div>
 
         {/* --- Savings --- */}
         <Card className="border-border/50 bg-card/50 hover:border-border/80">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
             <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
               Savings
             </CardTitle>
@@ -423,10 +525,10 @@ export default function Home() {
                       <Button
                         variant={addPanel === id ? 'secondary' : 'ghost'}
                         size="icon"
-                        className="h-7 w-7"
+                        className="size-9 sm:h-7 sm:w-7"
                         onClick={() => togglePanel(id)}
                       >
-                        <Icon className="h-3.5 w-3.5" />
+                        <Icon className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>{tip}</TooltipContent>
@@ -522,8 +624,23 @@ export default function Home() {
           </DialogContent>
         </Dialog>
 
+        {narrow && (addPanel === 'income' || addPanel === 'one-time') && (
+          <MobileAddIncomeSheet
+            open
+            onOpenChange={(open) => !open && setAddPanel(null)}
+            initialView={addPanel === 'income' ? 'recurring' : 'one-time'}
+            onAddIncomeSource={addIncomeSource}
+            onUpdateIncomeSource={updateIncomeSource}
+            onRemoveIncomeSource={removeIncomeSource}
+            onAddOneTimeIncome={addOneTimeIncome}
+            onUpdateOneTimeIncome={updateOneTimeIncome}
+            onRemoveOneTimeIncome={removeOneTimeIncome}
+            incomeSources={settings.incomeSources}
+            oneTimeIncome={settings.oneTimeIncome}
+          />
+        )}
         <Dialog
-          open={addPanel === 'one-time'}
+          open={addPanel === 'one-time' && !narrow}
           onOpenChange={(open) => !open && setAddPanel(null)}
         >
           <DialogContent>
@@ -548,7 +665,7 @@ export default function Home() {
         </Dialog>
 
         <Dialog
-          open={addPanel === 'income'}
+          open={addPanel === 'income' && !narrow}
           onOpenChange={(open) => !open && setAddPanel(null)}
         >
           <DialogContent>
@@ -693,10 +810,27 @@ export default function Home() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <ExpenseForm
-              balanceStartDate={settings.startDate}
-              onAdd={addExpense}
-            />
+            <div className="hidden sm:block">
+              <ExpenseForm
+                balanceStartDate={settings.startDate}
+                onAdd={addExpense}
+              />
+            </div>
+            <div className="sm:hidden">
+              <MobileAddExpenseSheet
+                balanceStartDate={settings.startDate}
+                onAdd={addExpense}
+                trigger={
+                  <Button
+                    variant="muted"
+                    size="lg"
+                    className="h-12 w-full font-semibold text-base"
+                  >
+                    Log expense
+                  </Button>
+                }
+              />
+            </div>
             <div className="border-border/50 border-t pt-4">
               <ExpenseList
                 expenses={expenses}

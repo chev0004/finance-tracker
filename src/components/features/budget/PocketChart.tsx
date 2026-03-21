@@ -92,11 +92,14 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
   const tickInterval =
     chartData.length > 80 ? Math.floor(chartData.length / 80) : 0;
 
-  const selectedPoint = selectedIdx !== null ? data[selectedIdx] : null;
+  const selectedPoint =
+    selectedIdx !== null
+      ? (data.find((p) => p.idx === selectedIdx) ?? null)
+      : null;
 
   const handleDotClick = (idx: number) => {
     setErrorMsg(null);
-    const point = data[idx];
+    const point = data.find((p) => p.idx === idx);
 
     if (point && point.expenseCount > 0) {
       setErrorMsg(
@@ -112,7 +115,7 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
       setInputValue('');
     } else {
       setSelectedIdx(idx);
-      setInputValue(data[idx]?.spent?.toString() || '0');
+      setInputValue(point?.spent?.toString() || '0');
     }
   };
 
@@ -197,7 +200,7 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={chartData}
-            margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
+            margin={{ top: 10, right: 8, left: 4, bottom: 5 }}
           >
             <CartesianGrid
               strokeDasharray="3 3"
@@ -218,6 +221,7 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
               height={50}
             />
             <YAxis
+              width={48}
               tick={{
                 fill: '#6b7280',
                 fontSize: 9,
@@ -226,7 +230,7 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
               axisLine={{ stroke: 'transparent' }}
               tickLine={false}
               tickCount={10}
-              tickMargin={0}
+              tickMargin={4}
               minTickGap={0}
               tickFormatter={(value) =>
                 value < 0

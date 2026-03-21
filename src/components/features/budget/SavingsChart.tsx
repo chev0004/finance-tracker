@@ -152,7 +152,7 @@ export function SavingsChart({ data }: SavingsChartProps) {
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={chartData}
-          margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
+          margin={{ top: 10, right: 8, left: 4, bottom: 5 }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
@@ -173,6 +173,7 @@ export function SavingsChart({ data }: SavingsChartProps) {
             height={50}
           />
           <YAxis
+            width={48}
             tick={{
               fill: '#6b7280',
               fontSize: 9,
@@ -181,7 +182,7 @@ export function SavingsChart({ data }: SavingsChartProps) {
             axisLine={{ stroke: 'transparent' }}
             tickLine={false}
             tickCount={10}
-            tickMargin={0}
+            tickMargin={4}
             minTickGap={0}
             tickFormatter={(value) =>
               value < 0
