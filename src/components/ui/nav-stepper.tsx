@@ -18,11 +18,11 @@ export function NavStepper({
   disableNext,
 }: NavStepperProps) {
   return (
-    <div className="flex items-center justify-center gap-2">
+    <div className="flex min-w-0 items-center justify-center gap-2">
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+        className="size-10 text-muted-foreground hover:text-foreground sm:size-8"
         disabled={disablePrev}
         onClick={onPrev}
       >
@@ -32,7 +32,7 @@ export function NavStepper({
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+        className="size-10 text-muted-foreground hover:text-foreground sm:size-8"
         disabled={disableNext}
         onClick={onNext}
       >
