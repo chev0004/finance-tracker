@@ -74,6 +74,7 @@ export default function Home() {
     applyPaydayIncomeAmounts,
     monthlyIncome,
     monthlySavings,
+    effectivePocketPerPeriod,
     addIncomeSource,
     updateIncomeSource,
     removeIncomeSource,
@@ -418,7 +419,7 @@ export default function Home() {
           monthlyIncome={monthlyIncome}
           eoyCombined={eoyCombined}
           chartYearClamped={chartYearClamped}
-          pocketPerPeriod={settings.pocketPerPeriod}
+          pocketPerPeriod={effectivePocketPerPeriod}
           pocketFreqLabel={pocketFreqLabel}
           formatMoney={formatMoney}
         />
@@ -771,7 +772,7 @@ export default function Home() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground/70 text-xs leading-relaxed">
-              ${settings.pocketPerPeriod} allocated {pocketFreqLabel}. Click any
+              ${effectivePocketPerPeriod} allocated {pocketFreqLabel}. Click any
               dot to edit what you actually spent. Unspent balance carries over.
             </p>
             <NavStepper
