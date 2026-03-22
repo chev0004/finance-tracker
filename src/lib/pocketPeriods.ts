@@ -83,17 +83,13 @@ export function getCalendarMonthStarts(projectionStartYear: number): string[] {
   return months.map((d) => format(startOfMonth(d), 'yyyy-MM-dd'));
 }
 
-export function getPocketPeriodRange(
+export function getPocketPeriodBounds(
   periodStart: string,
   _nextPeriodStart: string | undefined,
   frequency: PayFrequency,
   payInterval?: number,
-): { start: string; end: string; label: string } {
-  const fmt = (d: Date) =>
-    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
+): { start: string; end: string } {
   if (frequency === 'custom') {
-    const startD = new Date(`${periodStart}T00:00:00`);
     let endD: Date;
     if (_nextPeriodStart) {
       endD = new Date(`${_nextPeriodStart}T00:00:00`);
@@ -106,18 +102,15 @@ export function getPocketPeriodRange(
     return {
       start: periodStart,
       end: getLocalDateString(endD),
-      label: `${fmt(startD)} - ${fmt(endD)}`,
     };
   }
 
   if (frequency === 'weekly') {
     const startD = parseISO(periodStart);
     if (!isValid(startD)) {
-      const bad = parseISO(periodStart.slice(0, 10));
       return {
         start: periodStart,
         end: periodStart,
-        label: `${fmt(bad)} - ${fmt(bad)}`,
       };
     }
     if (_nextPeriodStart) {
@@ -127,7 +120,6 @@ export function getPocketPeriodRange(
         return {
           start: periodStart,
           end: format(endD, 'yyyy-MM-dd'),
-          label: `${fmt(startD)} - ${fmt(endD)}`,
         };
       }
     }
@@ -135,18 +127,15 @@ export function getPocketPeriodRange(
     return {
       start: periodStart,
       end: format(endD, 'yyyy-MM-dd'),
-      label: `${fmt(startD)} - ${fmt(endD)}`,
     };
   }
 
   if (frequency === 'biweekly') {
     const startD = parseISO(periodStart);
     if (!isValid(startD)) {
-      const bad = parseISO(periodStart.slice(0, 10));
       return {
         start: periodStart,
         end: periodStart,
-        label: `${fmt(bad)} - ${fmt(bad)}`,
       };
     }
     if (_nextPeriodStart) {
@@ -156,7 +145,6 @@ export function getPocketPeriodRange(
         return {
           start: periodStart,
           end: format(endD, 'yyyy-MM-dd'),
-          label: `${fmt(startD)} - ${fmt(endD)}`,
         };
       }
     }
@@ -164,7 +152,6 @@ export function getPocketPeriodRange(
     return {
       start: periodStart,
       end: format(endD, 'yyyy-MM-dd'),
-      label: `${fmt(startD)} - ${fmt(endD)}`,
     };
   }
 
@@ -173,7 +160,32 @@ export function getPocketPeriodRange(
   return {
     start: periodStart,
     end: format(endD, 'yyyy-MM-dd'),
-    label: `${fmt(startD)} - ${fmt(endD)}`,
+  };
+}
+
+function pocketPeriodLabel(startIso: string, endIso: string): string {
+  const startD = parseISO(startIso);
+  const endD = parseISO(endIso);
+  if (!isValid(startD) || !isValid(endD)) return `${startIso} - ${endIso}`;
+  return `${format(startD, 'MMM d')} - ${format(endD, 'MMM d')}`;
+}
+
+export function getPocketPeriodRange(
+  periodStart: string,
+  _nextPeriodStart: string | undefined,
+  frequency: PayFrequency,
+  payInterval?: number,
+): { start: string; end: string; label: string } {
+  const { start, end } = getPocketPeriodBounds(
+    periodStart,
+    _nextPeriodStart,
+    frequency,
+    payInterval,
+  );
+  return {
+    start,
+    end,
+    label: pocketPeriodLabel(start, end),
   };
 }
 
