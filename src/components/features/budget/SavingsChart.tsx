@@ -478,7 +478,7 @@ export function SavingsChart({
                   type="button"
                   role="menuitem"
                   className={cn(
-                    'flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm transition-colors',
+                    'flex w-full cursor-pointer items-center rounded-xl px-3 py-2.5 text-left text-sm transition-colors',
                     'text-foreground/95 hover:bg-muted/80 active:bg-muted',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   )}
