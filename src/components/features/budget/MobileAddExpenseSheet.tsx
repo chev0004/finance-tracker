@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ResponsivePicker } from '@/components/ui/responsive-picker';
@@ -142,10 +143,7 @@ export function MobileAddExpenseSheet({
               Amount
             </Label>
             <div className="relative">
-              <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-muted-foreground text-xl">
-                $
-              </span>
-              <Input
+              <CurrencyInput
                 ref={amountRef}
                 type="number"
                 placeholder="0.00"
@@ -154,7 +152,9 @@ export function MobileAddExpenseSheet({
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="h-14 pr-12 pl-12 font-mono text-2xl"
+                className="h-14 min-h-14 pr-12 md:h-14 md:min-h-14"
+                inputClassName="py-3.5 font-mono text-2xl md:py-3.5 md:text-2xl"
+                prefixClassName="text-xl md:text-xl"
               />
               <div className="absolute inset-y-0 right-0 flex w-12 flex-col border-input border-l">
                 <button

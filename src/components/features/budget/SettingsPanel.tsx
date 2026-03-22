@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ResponsivePicker } from '@/components/ui/responsive-picker';
@@ -138,27 +139,21 @@ export function SettingsPanel({
           <Label className="text-muted-foreground text-xs uppercase tracking-wider">
             Pocket / Period
           </Label>
-          <div className="relative">
-            <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground text-sm">
-              $
-            </span>
-            <Input
-              type="number"
-              min={0}
-              value={pocketStr === '' ? '0' : pocketStr}
-              onFocus={() => setPocketFocused(true)}
-              onBlur={() => {
-                setPocketFocused(false);
-                const n = normalizeNumInputBlur(pocketStr);
-                setPocketStr(n);
-                onUpdate({ pocketPerPeriod: Number(n) || 0 });
-              }}
-              onChange={(e) =>
-                setPocketStr(normalizeNumInputLeading(e.target.value))
-              }
-              className="pl-7 font-mono"
-            />
-          </div>
+          <CurrencyInput
+            type="number"
+            min={0}
+            value={pocketStr === '' ? '0' : pocketStr}
+            onFocus={() => setPocketFocused(true)}
+            onBlur={() => {
+              setPocketFocused(false);
+              const n = normalizeNumInputBlur(pocketStr);
+              setPocketStr(n);
+              onUpdate({ pocketPerPeriod: Number(n) || 0 });
+            }}
+            onChange={(e) =>
+              setPocketStr(normalizeNumInputLeading(e.target.value))
+            }
+          />
         </div>
 
         <div className="space-y-2">
@@ -260,27 +255,21 @@ export function SettingsPanel({
           <Label className="text-muted-foreground text-xs uppercase tracking-wider">
             Starting Balance
           </Label>
-          <div className="relative">
-            <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground text-sm">
-              $
-            </span>
-            <Input
-              type="number"
-              min={0}
-              value={balanceStr === '' ? '0' : balanceStr}
-              onFocus={() => setBalanceFocused(true)}
-              onBlur={() => {
-                setBalanceFocused(false);
-                const n = normalizeNumInputBlur(balanceStr);
-                setBalanceStr(n);
-                onUpdate({ startingBalance: Number(n) || 0 });
-              }}
-              onChange={(e) =>
-                setBalanceStr(normalizeNumInputLeading(e.target.value))
-              }
-              className="pl-7 font-mono"
-            />
-          </div>
+          <CurrencyInput
+            type="number"
+            min={0}
+            value={balanceStr === '' ? '0' : balanceStr}
+            onFocus={() => setBalanceFocused(true)}
+            onBlur={() => {
+              setBalanceFocused(false);
+              const n = normalizeNumInputBlur(balanceStr);
+              setBalanceStr(n);
+              onUpdate({ startingBalance: Number(n) || 0 });
+            }}
+            onChange={(e) =>
+              setBalanceStr(normalizeNumInputLeading(e.target.value))
+            }
+          />
         </div>
 
         <div className="space-y-2">

@@ -7,6 +7,7 @@ import type { DateRange } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card } from '@/components/ui/card';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ResponsivePicker } from '@/components/ui/responsive-picker';
@@ -253,21 +254,16 @@ export function GoalForm({
                   }
                   className="min-w-0 flex-1"
                 />
-                <div className="relative w-full sm:w-28">
-                  <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground text-sm">
-                    $
-                  </span>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    min={0}
-                    value={item.amount}
-                    onChange={(e) =>
-                      updateLineItem(item.id, 'amount', e.target.value)
-                    }
-                    className="pl-7 font-mono"
-                  />
-                </div>
+                <CurrencyInput
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={item.amount}
+                  onChange={(e) =>
+                    updateLineItem(item.id, 'amount', e.target.value)
+                  }
+                  className="w-full sm:w-28"
+                />
                 {lineItems.length > 1 && (
                   <Button
                     variant="ghost"

@@ -5,6 +5,7 @@ import { CalendarIcon, Pencil, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ResponsivePicker } from '@/components/ui/responsive-picker';
@@ -142,22 +143,16 @@ export function OneTimeIncomeManager({
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Amount
           </Label>
-          <div className="relative">
-            <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground text-sm">
-              $
-            </span>
-            <Input
-              type="number"
-              min={0}
-              placeholder="0"
-              value={amount === '' ? '0' : amount}
-              onChange={(e) =>
-                setAmount(normalizeNumInputLeading(e.target.value))
-              }
-              onBlur={() => setAmount(normalizeNumInputBlur(amount))}
-              className="pl-7 font-mono"
-            />
-          </div>
+          <CurrencyInput
+            type="number"
+            min={0}
+            placeholder="0"
+            value={amount === '' ? '0' : amount}
+            onChange={(e) =>
+              setAmount(normalizeNumInputLeading(e.target.value))
+            }
+            onBlur={() => setAmount(normalizeNumInputBlur(amount))}
+          />
         </div>
       </div>
       <div className="flex gap-2">
