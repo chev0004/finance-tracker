@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@layer utilities {
+  .glass-panel {
+    @apply border border-border/50 bg-card/85 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.04)_inset] backdrop-blur-xl backdrop-saturate-150 dark:bg-card/70 dark:shadow-[0_24px_64px_-12px_rgba(0,0,0,0.65)];
+  }
+}
+
 :root {
   --radius: 0.625rem;
   --background: hsl(240 6% 4%);
