@@ -280,9 +280,10 @@ export function RecurringExpenseManager({
                 triggerClassName="min-h-11 min-w-0 flex-1 sm:max-w-[140px]"
               />
             )}
-            <div className="flex cursor-pointer items-center gap-1.5 text-muted-foreground text-xs">
+            <div className="flex cursor-pointer items-center gap-2 text-muted-foreground text-xs">
               <Checkbox
                 id="end-ongoing"
+                variant="muted"
                 checked={endOngoing}
                 onCheckedChange={(v) => setEndOngoing(v === true)}
               />
@@ -298,6 +299,7 @@ export function RecurringExpenseManager({
         <div className="flex min-w-0 cursor-pointer items-center gap-2 sm:col-span-4">
           <Checkbox
             id="recurring-use-pocket"
+            variant="muted"
             checked={deductFromPocket}
             onCheckedChange={(v) => setDeductFromPocket(v === true)}
           />
