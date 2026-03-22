@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { BUDGET_STORAGE_KEY } from '@/lib/budget-constants';
+import { getPocketPerPeriodForDate } from '@/lib/pocket-per-period';
 import {
   alignPaydayContainingDate,
   getCalendarPocketPeriodStarts,
@@ -20,6 +21,7 @@ import type {
   PaydayEditRow,
   PayFrequency,
   PocketExpenseItem,
+  PocketPerPeriodChange,
   PocketPoint,
   RecurringExpense,
   SavingsGoal,
@@ -30,6 +32,7 @@ const DEFAULT_SETTINGS: BudgetSettings = {
   startingBalance: 0,
   startDate: getLocalDateString(),
   pocketPerPeriod: 0,
+  pocketPerPeriodChanges: [],
   pocketFrequency: 'weekly',
   pocketFirstPayday: getLocalDateString(),
   pocketIncomeSourceId: undefined,
@@ -298,7 +301,9 @@ function getMonthlySavings(settings: BudgetSettings): number {
       pocketSource ? pocketSource.payFrequency : settings.pocketFrequency,
       pocketSource ? pocketSource.payInterval : settings.pocketInterval,
     ) || 26;
-  const monthlyPocket = (settings.pocketPerPeriod * pocketPeriods) / 12;
+  const today = getLocalDateString();
+  const pocketNow = getPocketPerPeriodForDate(settings, today);
+  const monthlyPocket = (pocketNow * pocketPeriods) / 12;
   return monthlyIncome - monthlyPocket;
 }
 
@@ -448,10 +453,11 @@ function genFixedEvents(
   const pocketPaydays = getPocketPaydays(settings, coverDates);
   for (const payday of pocketPaydays) {
     if (!pausedPocketMonths.has(payday.slice(0, 7))) {
+      const pocketAmt = getPocketPerPeriodForDate(settings, payday);
       ev.push({
         date: payday,
         label: 'pocket',
-        delta: -settings.pocketPerPeriod,
+        delta: -pocketAmt,
         type: 'pocket',
       });
     }
@@ -606,6 +612,23 @@ function migratePaydayIncomeOverrides(
   }));
 }
 
+function migratePocketPerPeriodChanges(raw: unknown): PocketPerPeriodChange[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (x): x is Record<string, unknown> => x !== null && typeof x === 'object',
+    )
+    .map((x) => ({
+      id: typeof x.id === 'string' ? x.id : crypto.randomUUID(),
+      effectiveDate:
+        typeof x.effectiveDate === 'string'
+          ? x.effectiveDate.slice(0, 10)
+          : getLocalDateString(),
+      amount:
+        typeof x.amount === 'number' && !Number.isNaN(x.amount) ? x.amount : 0,
+    }));
+}
+
 function migrateIncomeSources(raw: Record<string, unknown>): IncomeSource[] {
   const globalFreq =
     (raw.payFrequency as PayFrequency) ??
@@ -681,6 +704,9 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
       startingBalance: settings.startingBalance,
       startDate: settings.startDate ?? getLocalDateString(),
       pocketPerPeriod: settings.pocketPerPeriod,
+      pocketPerPeriodChanges: migratePocketPerPeriodChanges(
+        settings.pocketPerPeriodChanges,
+      ),
       pocketFrequency:
         settings.pocketFrequency ?? settings.pocketFrequency ?? 'weekly',
       pocketFirstPayday:
@@ -717,6 +743,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
     startingBalance: old.startingBalance ?? 0,
     startDate: payday,
     pocketPerPeriod: weeklyPocket,
+    pocketPerPeriodChanges: [],
     pocketFrequency: 'weekly',
     pocketFirstPayday: payday,
     pocketIncomeSourceId: undefined,
@@ -889,7 +916,12 @@ export function useBudget() {
 
   const monthlySavings = useMemo(() => getMonthlySavings(settings), [settings]);
 
-  const savedPerPeriod = currentIncome - settings.pocketPerPeriod;
+  const effectivePocketPerPeriod = useMemo(() => {
+    const today = getLocalDateString();
+    return getPocketPerPeriodForDate(settings, today);
+  }, [settings]);
+
+  const savedPerPeriod = currentIncome - effectivePocketPerPeriod;
 
   const pocketSchedule = useMemo(() => {
     const source =
@@ -1000,7 +1032,8 @@ export function useBudget() {
     let pocketBal = 0;
 
     for (let i = 0; i < pocketPeriodBounds.length; i++) {
-      pocketBal += settings.pocketPerPeriod;
+      const periodPayday = paydays[i] ?? pocketPeriodBounds[i].start;
+      pocketBal += getPocketPerPeriodForDate(settings, periodPayday);
       const range = pocketPeriodBounds[i];
 
       const periodExpenses = expenses
@@ -1181,15 +1214,15 @@ export function useBudget() {
     expenses,
     pocketDeductingRecurringPerPeriod,
     pocketPeriodBounds,
-    settings.startDate,
-    settings.startingBalance,
-    settings.pocketPerPeriod,
+    paydays,
+    settings,
     spentPerPeriod,
   ]);
 
   const pocketTimeline = useMemo((): PocketPoint[] => {
     let balance = 0;
     return paydays.map((payday, i) => {
+      const periodPocket = getPocketPerPeriodForDate(settings, payday);
       const range = getPocketPeriodRange(
         payday,
         paydays[i + 1],
@@ -1208,14 +1241,14 @@ export function useBudget() {
       const baseSpent =
         expenseCount > 0 ? expenseTotal : spentPerPeriod[i] || 0;
       const spent = baseSpent + recurringTotal;
-      const avail = balance + settings.pocketPerPeriod;
+      const avail = balance + periodPocket;
       const finalSpent = Math.min(spent, avail);
       balance = avail - finalSpent;
 
       const type =
-        finalSpent < settings.pocketPerPeriod
+        finalSpent < periodPocket
           ? 'surplus'
-          : finalSpent > settings.pocketPerPeriod
+          : finalSpent > periodPocket
             ? 'over'
             : 'flat';
 
@@ -1251,7 +1284,7 @@ export function useBudget() {
     paydays,
     expenses,
     spentPerPeriod,
-    settings.pocketPerPeriod,
+    settings,
     pocketSchedule.frequency,
     pocketSchedule.interval,
     expensesPerPeriod,
@@ -1265,7 +1298,9 @@ export function useBudget() {
     const prevBalance =
       periodIdx === 0 ? 0 : (pocketTimeline[periodIdx - 1]?.balance ?? 0);
     const range = pocketPeriodBounds[periodIdx];
-    let pocketBal = prevBalance + settings.pocketPerPeriod;
+    const periodPayday = paydays[periodIdx] ?? range.start;
+    let pocketBal =
+      prevBalance + getPocketPerPeriodForDate(settings, periodPayday);
     const recurringItems =
       pocketDeductingRecurringPerPeriod.items[periodIdx] ?? [];
     for (const it of recurringItems) {
@@ -1294,7 +1329,8 @@ export function useBudget() {
     expenses,
     spentPerPeriod,
     pocketDeductingRecurringPerPeriod,
-    settings.pocketPerPeriod,
+    paydays,
+    settings,
   ]);
 
   const goalStats = useMemo((): GoalStat[] => {
@@ -1355,8 +1391,10 @@ export function useBudget() {
       pocketSchedule.frequency,
       pocketSchedule.interval,
     );
+    const today = getLocalDateString();
+    const pocketNow = getPocketPerPeriodForDate(settings, today);
     const monthlyPocket =
-      pocketPeriods > 0 ? (settings.pocketPerPeriod * pocketPeriods) / 12 : 0;
+      pocketPeriods > 0 ? (pocketNow * pocketPeriods) / 12 : 0;
     if (monthlyPocket > 0 && monthlyPocket > monthlyIncome) {
       errors.push({
         field: 'pocket',
@@ -1376,7 +1414,7 @@ export function useBudget() {
     settings.goals,
     goalStats,
     savingsTimeline,
-    settings.pocketPerPeriod,
+    settings,
     pocketSchedule.frequency,
     pocketSchedule.interval,
     monthlyIncome,
@@ -1597,6 +1635,7 @@ export function useBudget() {
     settings,
     currentIncome,
     savedPerPeriod,
+    effectivePocketPerPeriod,
     monthlyIncome,
     monthlySavings,
     paydays,
