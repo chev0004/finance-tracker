@@ -149,7 +149,7 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
     if (active && payload && payload.length) {
       const point = payload[0].payload;
       return (
-        <div className="glass-panel rounded-xl p-3">
+        <div className="glass-card p-3">
           <div className="mb-2 text-muted-foreground text-xs">{point.date}</div>
           {point.expenseItems.length > 0 ? (
             <div className="mb-1 space-y-0.5">
@@ -330,7 +330,7 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
       </div>
 
       {selectedPoint && (
-        <Card className="bg-muted/45 p-4 transition-colors dark:bg-muted/35">
+        <Card className="glass-card p-4 transition-colors">
           <div className="mb-2 text-muted-foreground text-xs">
             Week: {selectedPoint.date}
           </div>

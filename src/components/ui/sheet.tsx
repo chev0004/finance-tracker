@@ -60,11 +60,11 @@ function SheetContent({
       <DialogPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 glass-panel fixed z-50 flex flex-col gap-4 duration-300 ease-in-out data-[state=closed]:animate-out data-[state=open]:animate-in',
+          'glass-card data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 fixed z-50 flex flex-col gap-4 duration-300 ease-in-out data-[state=closed]:animate-out data-[state=open]:animate-in',
           side === 'right' &&
-            'data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-[min(100%,20rem)] max-w-[min(100vw-1rem,20rem)] rounded-l-2xl border-t-0 border-r-0 border-b-0 border-l p-6',
+            'data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-[min(100%,20rem)] max-w-[min(100vw-1rem,20rem)] rounded-l-2xl border-l p-6',
           side === 'left' &&
-            'data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-[min(100%,20rem)] max-w-[min(100vw-1rem,20rem)] rounded-r-2xl border-t-0 border-r border-b-0 border-l-0 p-6',
+            'data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-[min(100%,20rem)] max-w-[min(100vw-1rem,20rem)] rounded-r-2xl border-r p-6',
           side === 'bottom' &&
             'data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 max-h-[min(88dvh,calc(100dvh-0.5rem))] w-full max-w-none rounded-t-2xl border-t border-r-0 border-b-0 border-l-0 p-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]',
           className,

@@ -259,7 +259,7 @@ export function SavingsChart({
       const net = evs.reduce((s, e) => s + e.delta, 0);
 
       return (
-        <div className="glass-panel rounded-xl p-3">
+        <div className="glass-card p-3">
           <div className="mb-2 text-muted-foreground text-xs">{point.date}</div>
           {evs.length > 0 ? (
             <div className="space-y-1">
@@ -457,7 +457,7 @@ export function SavingsChart({
             role="menu"
             aria-label="Chart actions"
           >
-            <div className="glass-panel overflow-hidden rounded-2xl">
+            <div className="glass-card">
               <div className="border-border/40 border-b px-3 py-2">
                 <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-[0.14em]">
                   {chartActionMenu.point.date}
