@@ -43,6 +43,12 @@ export interface IncomeRateChange {
   amount: number;
 }
 
+export interface PocketPerPeriodChange {
+  id: string;
+  effectiveDate: string;
+  amount: number;
+}
+
 export interface IncomeSource {
   id: string;
   name: string;
@@ -78,6 +84,7 @@ export interface BudgetSettings {
   startingBalance: number;
   startDate: string;
   pocketPerPeriod: number;
+  pocketPerPeriodChanges: PocketPerPeriodChange[];
   pocketFrequency: PayFrequency;
   pocketFirstPayday: string;
   pocketInterval?: number;
