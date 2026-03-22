@@ -64,6 +64,7 @@ interface ChartDataPoint {
 
 export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [inputValue, setInputValue] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -239,29 +240,91 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
               }
               domain={[0, 'auto']}
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip />} isAnimationActive={false} />
             <Line
               type="stepAfter"
               dataKey="balance"
               stroke={BLUE}
               strokeWidth={2}
               dot={false}
+              activeDot={(dotProps: {
+                cx?: number;
+                cy?: number;
+                payload?: ChartDataPoint;
+              }) => {
+                const { cx, cy, payload } = dotProps;
+                if (cx == null || cy == null) return <g />;
+                return (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={6}
+                    fill={payload?.color ?? GRAY}
+                    stroke="none"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                );
+              }}
               fill={`${BLUE}10`}
               fillOpacity={0.1}
               isAnimationActive={false}
             />
-            {chartData.map((point, index) => (
-              <ReferenceDot
-                key={index}
-                x={point.date}
-                y={point.balance}
-                r={point.isSelected ? 8 : point.expenseCount > 0 ? 6 : 5}
-                fill={point.color}
-                stroke="none"
-                onClick={() => handleDotClick(point.idx)}
-                className="cursor-pointer"
-              />
-            ))}
+            {chartData.map((point, index) => {
+              const baseR = point.isSelected
+                ? 8
+                : point.expenseCount > 0
+                  ? 6
+                  : 5;
+              const innerR =
+                hoveredIdx === point.idx && !point.isSelected
+                  ? baseR + 2
+                  : baseR;
+              const hitR = Math.max(innerR + 10, 14);
+              return (
+                <ReferenceDot
+                  key={`${point.idx}-${index}`}
+                  x={point.date}
+                  y={point.balance}
+                  r={0}
+                  fill="transparent"
+                  stroke="none"
+                  shape={(props: { cx?: number; cy?: number }) => {
+                    const { cx, cy } = props;
+                    if (cx == null || cy == null) return <g />;
+                    return (
+                      // biome-ignore lint/a11y/noStaticElementInteractions: chart svg hit target
+                      <g
+                        className="cursor-pointer"
+                        onMouseEnter={() => setHoveredIdx(point.idx)}
+                        onMouseLeave={() =>
+                          setHoveredIdx((h) => (h === point.idx ? null : h))
+                        }
+                      >
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={innerR}
+                          fill={point.color}
+                          style={{ pointerEvents: 'none' }}
+                        />
+                        {/* biome-ignore lint/a11y/noStaticElementInteractions: chart svg hit target */}
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={hitR}
+                          fill="transparent"
+                          style={{ pointerEvents: 'all' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDotClick(point.idx);
+                          }}
+                        />
+                      </g>
+                    );
+                  }}
+                />
+              );
+            })}
           </LineChart>
         </ResponsiveContainer>
       </div>
