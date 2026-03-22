@@ -57,10 +57,22 @@ export function buildExportText(payload: ExportPayload): string {
 
   const recurringLines =
     settings.recurringExpenses.length > 0
-      ? settings.recurringExpenses.map(
-          (e) =>
-            `${e.label}: $${e.amount.toLocaleString()} on ${e.dayOfMonth === 0 ? 'last day' : `day ${e.dayOfMonth}`} (${e.startMonth} to ${e.endMonth})${e.deductFromPocket ? ' [pocket]' : ''}`,
-        )
+      ? settings.recurringExpenses.map((e) => {
+          const matchedName =
+            e.deductIncomeSourceId &&
+            settings.incomeSources.find((s) => s.id === e.deductIncomeSourceId)
+              ?.name;
+          const parts: string[] = [];
+          if (matchedName) parts.push(matchedName);
+          if (e.deductFromPocket) parts.push('pocket');
+          const tag = parts.length > 0 ? ` [${parts.join(', ')}]` : '';
+          const when = e.deductIncomeSourceId
+            ? 'each payday of matched source'
+            : e.dayOfMonth === 0
+              ? 'last day'
+              : `day ${e.dayOfMonth}`;
+          return `${e.label}: $${e.amount.toLocaleString()} on ${when} (${e.startMonth} to ${e.endMonth})${tag}`;
+        })
       : ['None'];
 
   const paydayOverrideLines =
