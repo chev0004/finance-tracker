@@ -600,6 +600,7 @@ export default function Home() {
             </DialogHeader>
             <RecurringExpenseManager
               expenses={[]}
+              incomeSources={settings.incomeSources}
               projectionStartDate={settings.startDate}
               onAdd={(e) => {
                 addRecurringExpense(e);
@@ -732,6 +733,7 @@ export default function Home() {
             <CardContent>
               <RecurringExpenseManager
                 expenses={settings.recurringExpenses}
+                incomeSources={settings.incomeSources}
                 projectionStartDate={settings.startDate}
                 onAdd={addRecurringExpense}
                 onUpdate={updateRecurringExpense}
