@@ -32,6 +32,7 @@ export interface RecurringExpense {
   startMonth: string;
   endMonth: string | null;
   deductFromPocket: boolean;
+  deductIncomeSourceId?: string;
 }
 
 export type PayFrequency = 'weekly' | 'biweekly' | 'monthly' | 'custom';
@@ -123,6 +124,7 @@ export interface SavingsPoint {
 export interface PocketExpenseItem {
   label: string;
   amount: number;
+  date?: string;
 }
 
 export interface PocketPoint {
