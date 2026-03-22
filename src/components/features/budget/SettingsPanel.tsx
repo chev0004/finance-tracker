@@ -407,7 +407,7 @@ export function SettingsPanel({
   }
 
   return (
-    <Card>
+    <Card className="border-border/50 bg-card/50">
       <CardHeader className="pb-2">
         <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
           Budget Settings

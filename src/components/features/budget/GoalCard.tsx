@@ -59,7 +59,7 @@ export function GoalCard({
   if (pausedNames.length > 0) details.push(`pauses ${pausedNames.join(', ')}`);
 
   return (
-    <Card className={cn('p-4 transition-colors', statusBorder)}>
+    <Card className={cn('bg-card/50 p-4 transition-colors', statusBorder)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium text-sm">{goal.name}</h3>

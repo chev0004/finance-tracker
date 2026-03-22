@@ -31,7 +31,7 @@ export function StatsCard({
   }[variant];
 
   return (
-    <Card className="hover:border-border/90">
+    <Card className="border-border/50 bg-card/50 hover:border-border hover:shadow-md">
       <CardContent className="p-4">
         <div className="mb-1 text-muted-foreground text-xs uppercase tracking-wider">
           {label}
