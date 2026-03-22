@@ -46,11 +46,23 @@ export function buildExportText(payload: ExportPayload): string {
     `Projected end of year: $${eoyBalance.toLocaleString()}`,
   ];
 
+  const pocketChangeLines =
+    settings.pocketPerPeriodChanges.length > 0
+      ? settings.pocketPerPeriodChanges
+          .slice()
+          .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+          .map(
+            (c) =>
+              `  From ${c.effectiveDate}: $${c.amount.toLocaleString()} per period`,
+          )
+      : [];
+
   const settingsLines = [
     `Pocket period: ${pocketFreq}`,
     `Pocket start: ${settings.pocketFirstPayday}`,
     `Monthly income: $${Math.round(monthlyIncome).toLocaleString()}`,
-    `Pocket per period: $${settings.pocketPerPeriod.toLocaleString()}`,
+    `Base pocket / period: $${settings.pocketPerPeriod.toLocaleString()}`,
+    ...pocketChangeLines,
     `Starting balance: $${settings.startingBalance.toLocaleString()}`,
     `Start date: ${settings.startDate}`,
   ];
