@@ -31,6 +31,7 @@ export interface RecurringExpense {
   dayOfMonth: number;
   startMonth: string;
   endMonth: string | null;
+  deductFromPocket: boolean;
 }
 
 export type PayFrequency = 'weekly' | 'biweekly' | 'monthly' | 'custom';
@@ -58,6 +59,20 @@ export interface OneTimeIncome {
   amount: number;
 }
 
+export interface PaydayIncomeOverride {
+  id: string;
+  date: string;
+  sourceId: string;
+  amount: number;
+}
+
+export interface PaydayEditRow {
+  sourceId: string;
+  name: string;
+  scheduledAmount: number;
+  currentAmount: number;
+}
+
 export interface BudgetSettings {
   startingBalance: number;
   startDate: string;
@@ -70,6 +85,7 @@ export interface BudgetSettings {
   recurringExpenses: RecurringExpense[];
   incomeSources: IncomeSource[];
   oneTimeIncome: OneTimeIncome[];
+  paydayIncomeOverrides: PaydayIncomeOverride[];
 }
 
 export interface FixedEvent {
@@ -85,12 +101,14 @@ export interface FixedEvent {
     | 'user-expense'
     | 'payday-recurring'
     | 'one-time';
+  sourceId?: string;
 }
 
 export interface SavingsPointEvent {
   label: string;
   delta: number;
   type: FixedEvent['type'];
+  sourceId?: string;
 }
 
 export interface SavingsPoint {

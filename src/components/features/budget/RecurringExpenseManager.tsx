@@ -105,6 +105,7 @@ export function RecurringExpenseManager({
   const [startMonth, setStartMonth] = useState(projectionStartMonth);
   const [endMonth, setEndMonth] = useState(projectionEndMonth);
   const [endOngoing, setEndOngoing] = useState(true);
+  const [deductFromPocket, setDeductFromPocket] = useState(false);
 
   const endMonthOptions = useMemo(
     () => monthOptions.filter((m) => m.value >= startMonth),
@@ -132,6 +133,7 @@ export function RecurringExpenseManager({
     setStartMonth(projectionStartMonth);
     setEndMonth(projectionEndMonth);
     setEndOngoing(true);
+    setDeductFromPocket(false);
     setFormMode(null);
     setEditingId(null);
   };
@@ -152,6 +154,7 @@ export function RecurringExpenseManager({
     setStartMonth(exp.startMonth);
     setEndOngoing(exp.endMonth == null);
     setEndMonth(exp.endMonth ?? projectionEndMonth);
+    setDeductFromPocket(exp.deductFromPocket ?? false);
   };
 
   const handleSave = () => {
@@ -168,6 +171,7 @@ export function RecurringExpenseManager({
         dayOfMonth: day,
         startMonth,
         endMonth: resolvedEndMonth,
+        deductFromPocket,
       });
     } else {
       onAdd({
@@ -176,6 +180,7 @@ export function RecurringExpenseManager({
         dayOfMonth: day,
         startMonth,
         endMonth: resolvedEndMonth,
+        deductFromPocket,
       });
     }
     resetForm();
@@ -290,6 +295,19 @@ export function RecurringExpenseManager({
             </div>
           </div>
         </div>
+        <div className="flex min-w-0 cursor-pointer items-center gap-2 sm:col-span-4">
+          <Checkbox
+            id="recurring-use-pocket"
+            checked={deductFromPocket}
+            onCheckedChange={(v) => setDeductFromPocket(v === true)}
+          />
+          <Label
+            htmlFor="recurring-use-pocket"
+            className="cursor-pointer text-muted-foreground text-xs leading-snug"
+          >
+            Use pocket balance
+          </Label>
+        </div>
       </div>
       <div className="flex gap-2">
         <Button size="sm" onClick={handleSave} variant="muted">
@@ -329,6 +347,12 @@ export function RecurringExpenseManager({
                     {exp.endMonth == null
                       ? 'ongoing'
                       : monthLabel(exp.endMonth)}
+                    {exp.deductFromPocket && (
+                      <>
+                        {' '}
+                        &middot; <span className="text-foreground">pocket</span>
+                      </>
+                    )}
                   </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">

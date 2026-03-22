@@ -16,7 +16,9 @@ import type {
   GoalStat,
   IncomeSource,
   OneTimeIncome,
+  PaydayEditRow,
   PayFrequency,
+  PocketExpenseItem,
   PocketPoint,
   RecurringExpense,
   SavingsGoal,
@@ -34,6 +36,7 @@ const DEFAULT_SETTINGS: BudgetSettings = {
   recurringExpenses: [],
   incomeSources: [],
   oneTimeIncome: [],
+  paydayIncomeOverrides: [],
 };
 
 function pad(n: number): string {
@@ -185,6 +188,68 @@ function getSourceAmountForDate(source: IncomeSource, date: string): number {
   return amount;
 }
 
+function getPaydayAmountWithOverride(
+  settings: BudgetSettings,
+  source: IncomeSource,
+  date: string,
+): number {
+  const o = settings.paydayIncomeOverrides?.find(
+    (x) => x.date === date && x.sourceId === source.id,
+  );
+  if (o) return o.amount;
+  return getSourceAmountForDate(source, date);
+}
+
+function getPaydayEditRowsForDate(
+  settings: BudgetSettings,
+  date: string,
+): PaydayEditRow[] {
+  const goalsPausingIncome = settings.goals.filter((g) => g.pauseIncome);
+  const pausedMonths = new Set(
+    goalsPausingIncome.flatMap((g) => getMonthsInRange(g.startDate, g.endDate)),
+  );
+
+  const isPaydayPaused = (payday: string): boolean => {
+    if (pausedMonths.has(payday.slice(0, 7))) return true;
+    for (const g of goalsPausingIncome) {
+      if (
+        g.incomeResumeDate &&
+        payday > g.endDate &&
+        payday < g.incomeResumeDate
+      )
+        return true;
+    }
+    return false;
+  };
+
+  const rows: PaydayEditRow[] = [];
+  for (const source of settings.incomeSources) {
+    const incomeListStart = alignPaydayContainingDate(
+      settings.startDate,
+      source.firstPayday,
+      source.payFrequency,
+      source.payInterval,
+    );
+    const sourcePaydays = getPaydaysForFrequency(
+      incomeListStart,
+      source.payFrequency,
+      source.payInterval,
+      settings.startDate,
+    );
+    if (!sourcePaydays.includes(date)) continue;
+    if (isPaydayPaused(date)) continue;
+    const scheduledAmount = getSourceAmountForDate(source, date);
+    const currentAmount = getPaydayAmountWithOverride(settings, source, date);
+    rows.push({
+      sourceId: source.id,
+      name: source.name,
+      scheduledAmount,
+      currentAmount,
+    });
+  }
+  return rows;
+}
+
 function getIncomeForDate(settings: BudgetSettings, date: string): number {
   return settings.incomeSources.reduce(
     (total, source) => total + getSourceAmountForDate(source, date),
@@ -221,6 +286,74 @@ function getMonthlySavings(settings: BudgetSettings): number {
     ) || 26;
   const monthlyPocket = (settings.pocketPerPeriod * pocketPeriods) / 12;
   return monthlyIncome - monthlyPocket;
+}
+
+function buildPausedExpensesByMonth(
+  settings: BudgetSettings,
+): Map<string, Set<string>> {
+  const pausedExpensesByMonth = new Map<string, Set<string>>();
+  for (const goal of settings.goals) {
+    if (goal.pausedExpenseIds.length === 0) continue;
+    for (const month of getMonthsInRange(goal.startDate, goal.endDate)) {
+      const existing = pausedExpensesByMonth.get(month) ?? new Set<string>();
+      for (const id of goal.pausedExpenseIds) {
+        existing.add(id);
+      }
+      pausedExpensesByMonth.set(month, existing);
+    }
+  }
+  return pausedExpensesByMonth;
+}
+
+function getPocketDeductingRecurringPerPeriod(
+  settings: BudgetSettings,
+  paydays: string[],
+  frequency: PayFrequency,
+  interval?: number,
+): { totals: number[]; items: PocketExpenseItem[][] } {
+  const totals = paydays.map(() => 0);
+  const items: PocketExpenseItem[][] = paydays.map(() => []);
+  const pausedExpensesByMonth = buildPausedExpensesByMonth(settings);
+  const projectionEndYear =
+    new Date(`${settings.startDate}T00:00:00`).getFullYear() + 4;
+
+  for (const rec of settings.recurringExpenses) {
+    if (!rec.deductFromPocket) continue;
+    const endBound = rec.endMonth ?? `${projectionEndYear}-12`;
+    const [endY, endM] = endBound.split('-').map(Number);
+    let [y, m] = rec.startMonth.split('-').map(Number);
+
+    while (y < endY || (y === endY && m <= endM)) {
+      const monthStr = `${y}-${pad(m)}`;
+      const isPaused =
+        pausedExpensesByMonth.get(monthStr)?.has(rec.id) ?? false;
+
+      if (!isPaused) {
+        const day =
+          rec.dayOfMonth <= 0
+            ? lastDayOf(y, m)
+            : Math.min(rec.dayOfMonth, lastDayOf(y, m));
+        const dateStr = fmtDate(y, m, day);
+        const idx = getPeriodIndexForDate(
+          dateStr,
+          paydays,
+          frequency,
+          interval,
+        );
+        if (idx !== null) {
+          totals[idx] += rec.amount;
+          items[idx].push({ label: rec.label, amount: rec.amount });
+        }
+      }
+      m++;
+      if (m > 12) {
+        m = 1;
+        y++;
+      }
+    }
+  }
+
+  return { totals, items };
 }
 
 function genFixedEvents(
@@ -262,12 +395,13 @@ function genFixedEvents(
     );
     for (const payday of sourcePaydays) {
       if (!isPaydayPaused(payday)) {
-        const amount = getSourceAmountForDate(source, payday);
+        const amount = getPaydayAmountWithOverride(settings, source, payday);
         ev.push({
           date: payday,
           label: `${source.name} $${amount}`,
           delta: amount,
           type: 'payday',
+          sourceId: source.id,
         });
       }
     }
@@ -291,17 +425,7 @@ function genFixedEvents(
     }
   }
 
-  const pausedExpensesByMonth = new Map<string, Set<string>>();
-  for (const goal of settings.goals) {
-    if (goal.pausedExpenseIds.length === 0) continue;
-    for (const month of getMonthsInRange(goal.startDate, goal.endDate)) {
-      const existing = pausedExpensesByMonth.get(month) ?? new Set<string>();
-      for (const id of goal.pausedExpenseIds) {
-        existing.add(id);
-      }
-      pausedExpensesByMonth.set(month, existing);
-    }
-  }
+  const pausedExpensesByMonth = buildPausedExpensesByMonth(settings);
 
   const projectionEndYear =
     new Date(`${settings.startDate}T00:00:00`).getFullYear() + 4;
@@ -316,7 +440,7 @@ function genFixedEvents(
       const isPaused =
         pausedExpensesByMonth.get(monthStr)?.has(rec.id) ?? false;
 
-      if (!isPaused) {
+      if (!isPaused && !rec.deductFromPocket) {
         const day =
           rec.dayOfMonth <= 0
             ? lastDayOf(y, m)
@@ -385,9 +509,29 @@ function migrateGoal(g: Record<string, unknown>): SavingsGoal {
 function migrateRecurringExpenses(
   expenses: RecurringExpense[],
 ): RecurringExpense[] {
-  return expenses.map((e) =>
-    e.dayOfMonth === 31 ? { ...e, dayOfMonth: 0 } : e,
-  );
+  return expenses.map((e) => {
+    const base = e.dayOfMonth === 31 ? { ...e, dayOfMonth: 0 } : e;
+    return {
+      ...base,
+      deductFromPocket: base.deductFromPocket ?? false,
+    };
+  });
+}
+
+function migratePaydayIncomeOverrides(
+  list: {
+    id?: string;
+    date: string;
+    sourceId: string;
+    amount: number;
+  }[],
+) {
+  return list.map((o) => ({
+    id: o.id ?? crypto.randomUUID(),
+    date: o.date,
+    sourceId: o.sourceId,
+    amount: o.amount,
+  }));
 }
 
 function migrateIncomeSources(raw: Record<string, unknown>): IncomeSource[] {
@@ -443,7 +587,24 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
       incomeChanges?: unknown[];
       payFrequency?: PayFrequency;
       firstPayday?: string;
+      recurringPocketExpenses?: {
+        id: string;
+        label: string;
+        amount: number;
+        everyNPeriods?: number;
+      }[];
     };
+    const startMonth = (settings.startDate ?? getLocalDateString()).slice(0, 7);
+    const legacyPocket = settings.recurringPocketExpenses ?? [];
+    const fromLegacyPocket: RecurringExpense[] = legacyPocket.map((p) => ({
+      id: p.id,
+      label: p.label,
+      amount: p.amount,
+      dayOfMonth: 1,
+      startMonth,
+      endMonth: null,
+      deductFromPocket: true,
+    }));
     return {
       startingBalance: settings.startingBalance,
       startDate: settings.startDate ?? getLocalDateString(),
@@ -456,14 +617,18 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
         getLocalDateString(),
       pocketInterval: settings.pocketInterval,
       pocketIncomeSourceId: settings.pocketIncomeSourceId,
-      recurringExpenses: migrateRecurringExpenses(
-        settings.recurringExpenses ?? [],
-      ),
+      recurringExpenses: [
+        ...migrateRecurringExpenses(settings.recurringExpenses ?? []),
+        ...fromLegacyPocket,
+      ],
       goals: (settings.goals as unknown as Record<string, unknown>[]).map(
         migrateGoal,
       ),
       incomeSources: migrateIncomeSources(raw),
       oneTimeIncome: settings.oneTimeIncome ?? [],
+      paydayIncomeOverrides: migratePaydayIncomeOverrides(
+        settings.paydayIncomeOverrides ?? [],
+      ),
     };
   }
 
@@ -496,6 +661,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
     goals: [],
     oneTimeIncome: [],
     recurringExpenses: [],
+    paydayIncomeOverrides: [],
   };
 }
 
@@ -720,6 +886,17 @@ export function useBudget() {
     return { totals, counts };
   }, [expenses, paydays, pocketSchedule.frequency, pocketSchedule.interval]);
 
+  const pocketDeductingRecurringPerPeriod = useMemo(
+    () =>
+      getPocketDeductingRecurringPerPeriod(
+        settings,
+        paydays,
+        pocketSchedule.frequency,
+        pocketSchedule.interval,
+      ),
+    [settings, paydays, pocketSchedule.frequency, pocketSchedule.interval],
+  );
+
   const savingsTimeline = useMemo((): SavingsPoint[] => {
     const overflowEvents: FixedEvent[] = [];
     let pocketBal = 0;
@@ -736,6 +913,9 @@ export function useBudget() {
       const periodExpenses = expenses
         .filter((e) => dateInPeriod(e.date, range.start, range.end))
         .sort((a, b) => a.date.localeCompare(b.date));
+
+      const recurringAmount = pocketDeductingRecurringPerPeriod.totals[i] || 0;
+      pocketBal -= recurringAmount;
 
       if (periodExpenses.length > 0) {
         for (const exp of periodExpenses) {
@@ -893,6 +1073,7 @@ export function useBudget() {
           label: e.label,
           delta: e.delta,
           type: e.type,
+          sourceId: e.sourceId,
         })),
       });
     }
@@ -900,6 +1081,7 @@ export function useBudget() {
   }, [
     fixedEvents,
     expenses,
+    pocketDeductingRecurringPerPeriod,
     settings.startDate,
     settings.startingBalance,
     settings.pocketPerPeriod,
@@ -920,12 +1102,16 @@ export function useBudget() {
       );
       const expenseTotal = expensesPerPeriod.totals[i] || 0;
       const expenseCount = expensesPerPeriod.counts[i] || 0;
+      const recurringTotal = pocketDeductingRecurringPerPeriod.totals[i] || 0;
+      const recurringItems = pocketDeductingRecurringPerPeriod.items[i] || [];
 
       const periodExpenses = expenses.filter((e) =>
         dateInPeriod(e.date, range.start, range.end),
       );
 
-      const spent = expenseCount > 0 ? expenseTotal : spentPerPeriod[i] || 0;
+      const baseSpent =
+        expenseCount > 0 ? expenseTotal : spentPerPeriod[i] || 0;
+      const spent = baseSpent + recurringTotal;
       const avail = balance + settings.pocketPerPeriod;
       const finalSpent = Math.min(spent, avail);
       balance = avail - finalSpent;
@@ -938,8 +1124,14 @@ export function useBudget() {
             : 'flat';
 
       const expenseItems =
-        periodExpenses.length > 0
-          ? periodExpenses.map((e) => ({ label: e.label, amount: e.amount }))
+        periodExpenses.length > 0 || recurringItems.length > 0
+          ? [
+              ...periodExpenses.map((e) => ({
+                label: e.label,
+                amount: e.amount,
+              })),
+              ...recurringItems,
+            ]
           : spent > 0
             ? [{ label: 'Spent', amount: spent }]
             : [];
@@ -967,6 +1159,7 @@ export function useBudget() {
     pocketSchedule.frequency,
     pocketSchedule.interval,
     expensesPerPeriod,
+    pocketDeductingRecurringPerPeriod,
   ]);
 
   const currentPocketBalance = useMemo(() => {
@@ -989,10 +1182,12 @@ export function useBudget() {
     const periodExpenses = expenses.filter(
       (e) => dateInPeriod(e.date, range.start, range.end) && e.date <= today,
     );
+    const recurringAmount =
+      pocketDeductingRecurringPerPeriod.totals[periodIdx] ?? 0;
     const spentSoFar =
-      periodExpenses.length > 0
+      (periodExpenses.length > 0
         ? periodExpenses.reduce((s, e) => s + e.amount, 0)
-        : (spentPerPeriod[periodIdx] ?? 0);
+        : (spentPerPeriod[periodIdx] ?? 0)) + recurringAmount;
     const available = prevBalance + settings.pocketPerPeriod;
     return Math.max(0, Math.round(available - spentSoFar));
   }, [
@@ -1000,6 +1195,7 @@ export function useBudget() {
     pocketTimeline,
     expenses,
     spentPerPeriod,
+    pocketDeductingRecurringPerPeriod,
     settings.pocketPerPeriod,
     pocketSchedule.frequency,
     pocketSchedule.interval,
@@ -1203,6 +1399,45 @@ export function useBudget() {
     }));
   }, []);
 
+  const getPaydayEditRowsForDateCallback = useCallback(
+    (date: string) => getPaydayEditRowsForDate(settings, date),
+    [settings],
+  );
+
+  const applyPaydayIncomeAmounts = useCallback(
+    (date: string, amounts: { sourceId: string; amount: number }[]) => {
+      setSettings((prev) => {
+        const paydayIncomeOverrides = [...prev.paydayIncomeOverrides];
+        for (const { sourceId, amount } of amounts) {
+          const source = prev.incomeSources.find((s) => s.id === sourceId);
+          if (!source) continue;
+          const base = getSourceAmountForDate(source, date);
+          const idx = paydayIncomeOverrides.findIndex(
+            (o) => o.date === date && o.sourceId === sourceId,
+          );
+          const nextAmount = Math.round(amount * 100) / 100;
+          if (Math.abs(nextAmount - base) < 0.005) {
+            if (idx >= 0) paydayIncomeOverrides.splice(idx, 1);
+          } else if (idx >= 0) {
+            paydayIncomeOverrides[idx] = {
+              ...paydayIncomeOverrides[idx],
+              amount: nextAmount,
+            };
+          } else {
+            paydayIncomeOverrides.push({
+              id: crypto.randomUUID(),
+              date,
+              sourceId,
+              amount: nextAmount,
+            });
+          }
+        }
+        return { ...prev, paydayIncomeOverrides };
+      });
+    },
+    [],
+  );
+
   const addIncomeSource = useCallback((source: Omit<IncomeSource, 'id'>) => {
     setSettings((prev) => ({
       ...prev,
@@ -1291,6 +1526,8 @@ export function useBudget() {
     addRecurringExpense,
     updateRecurringExpense,
     removeRecurringExpense,
+    getPaydayEditRowsForDate: getPaydayEditRowsForDateCallback,
+    applyPaydayIncomeAmounts,
     addIncomeSource,
     updateIncomeSource,
     removeIncomeSource,

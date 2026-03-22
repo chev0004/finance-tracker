@@ -59,8 +59,19 @@ export function buildExportText(payload: ExportPayload): string {
     settings.recurringExpenses.length > 0
       ? settings.recurringExpenses.map(
           (e) =>
-            `${e.label}: $${e.amount.toLocaleString()} on ${e.dayOfMonth === 0 ? 'last day' : `day ${e.dayOfMonth}`} (${e.startMonth} to ${e.endMonth})`,
+            `${e.label}: $${e.amount.toLocaleString()} on ${e.dayOfMonth === 0 ? 'last day' : `day ${e.dayOfMonth}`} (${e.startMonth} to ${e.endMonth})${e.deductFromPocket ? ' [pocket]' : ''}`,
         )
+      : ['None'];
+
+  const paydayOverrideLines =
+    settings.paydayIncomeOverrides?.length > 0
+      ? settings.paydayIncomeOverrides
+          .slice()
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .map(
+            (o) =>
+              `${o.date} | source ${o.sourceId} | $${o.amount.toLocaleString()}`,
+          )
       : ['None'];
 
   const incomeSourceLines =
@@ -140,6 +151,7 @@ export function buildExportText(payload: ExportPayload): string {
     section('Summary', summary),
     section('Settings', settingsLines),
     section('Recurring expenses', recurringLines),
+    section('One-off payday income overrides', paydayOverrideLines),
     section('Income sources', incomeSourceLines),
     section('One-time income', oneTimeIncomeLines),
     section('Savings goals', goalLines.length ? goalLines : ['None']),

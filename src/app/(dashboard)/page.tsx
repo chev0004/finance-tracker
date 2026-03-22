@@ -70,6 +70,8 @@ export default function Home() {
     addRecurringExpense,
     updateRecurringExpense,
     removeRecurringExpense,
+    getPaydayEditRowsForDate,
+    applyPaydayIncomeAmounts,
     monthlyIncome,
     monthlySavings,
     addIncomeSource,
@@ -554,7 +556,11 @@ export default function Home() {
                 {chartYearClamped}
               </span>
             </NavStepper>
-            <SavingsChart data={savingsChartData} />
+            <SavingsChart
+              data={savingsChartData}
+              getPaydayEditRowsForDate={getPaydayEditRowsForDate}
+              onApplyPaydayIncomeAmounts={applyPaydayIncomeAmounts}
+            />
           </CardContent>
         </Card>
 
