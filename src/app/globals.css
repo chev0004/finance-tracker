@@ -1,12 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@layer utilities {
-  .glass-panel {
-    @apply border border-border/50 bg-card/85 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.04)_inset] backdrop-blur-xl backdrop-saturate-150 dark:bg-card/70 dark:shadow-[0_24px_64px_-12px_rgba(0,0,0,0.65)];
-  }
-}
-
 :root {
   --radius: 0.625rem;
   --background: hsl(240 6% 4%);
@@ -117,6 +111,23 @@ body {
 
 .recharts-reference-dot.cursor-pointer:hover circle {
   filter: brightness(1.2);
+}
+
+.glass-card {
+  overflow: hidden;
+  border-radius: 1rem;
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--border) 50%, transparent);
+  background: color-mix(in srgb, var(--card) 85%, transparent);
+  box-shadow:
+    0 24px 64px -12px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  backdrop-filter: blur(24px) saturate(150%);
+}
+
+.dark .glass-card {
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.65);
 }
 
 *:focus-visible {
