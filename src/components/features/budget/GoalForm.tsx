@@ -168,7 +168,7 @@ export function GoalForm({
   );
 
   return (
-    <Card className="border-border/50 bg-card/50 p-4">
+    <Card className="p-4">
       <div className="space-y-4">
         {error && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-red-500 text-sm">

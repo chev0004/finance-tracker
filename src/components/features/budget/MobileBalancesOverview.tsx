@@ -81,7 +81,7 @@ export function MobileBalancesOverview({
         Balances
       </h2>
 
-      <div className="overflow-hidden rounded-2xl border border-border/50 bg-card/70">
+      <div className="glass-panel overflow-hidden rounded-2xl">
         {accountRows.map((row, i) => (
           <div
             key={row.label}
@@ -104,7 +104,9 @@ export function MobileBalancesOverview({
         ))}
       </div>
 
-      <div className="rounded-2xl border border-emerald-500/25 bg-card/90 p-5 shadow-sm">
+      <div
+        className={cn('glass-panel rounded-2xl p-5', 'border-emerald-500/25')}
+      >
         <p className="text-muted-foreground text-sm">Combined</p>
         <p className="mt-1 font-bold font-mono text-3xl text-foreground tracking-tight">
           {formatMoney(combinedBalance)}
@@ -117,10 +119,7 @@ export function MobileBalancesOverview({
       </h2>
       <div className="grid grid-cols-2 gap-3">
         {statTiles.map((tile) => (
-          <div
-            key={tile.title}
-            className="min-w-0 rounded-2xl border border-border/50 bg-card/70 p-4"
-          >
+          <div key={tile.title} className="glass-panel min-w-0 rounded-2xl p-4">
             <p className="text-muted-foreground text-xs">{tile.title}</p>
             <p
               className={cn(

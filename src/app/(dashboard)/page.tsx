@@ -316,7 +316,7 @@ export default function Home() {
                 open={startDatePickerOpen}
                 onOpenChange={setStartDatePickerOpen}
                 sheetTitle="Balance start date"
-                popoverContentClassName="w-auto border-border/50 bg-popover p-0"
+                popoverContentClassName="w-auto p-0"
                 trigger={
                   <Button
                     type="button"
@@ -424,7 +424,7 @@ export default function Home() {
         />
 
         <div className="hidden grid-cols-3 gap-3 sm:grid">
-          <Card className="border-border/50 bg-card/50 hover:border-border hover:shadow-md">
+          <Card className="hover:border-border/90">
             <CardContent className="p-4">
               <div className="mb-2 text-muted-foreground text-xs uppercase tracking-wider">
                 Balances
@@ -459,7 +459,7 @@ export default function Home() {
             variant={monthlySavings >= 0 ? 'success' : 'danger'}
             prefix={monthlySavings >= 0 ? '+' : ''}
           />
-          <Card className="border-border/50 bg-card/50 hover:border-border hover:shadow-md">
+          <Card className="hover:border-border/90">
             <CardContent className="p-4">
               <div className="mb-2 text-muted-foreground text-xs uppercase tracking-wider">
                 End of {chartYearClamped}
@@ -503,7 +503,7 @@ export default function Home() {
         </div>
 
         {/* --- Savings --- */}
-        <Card className="border-border/50 bg-card/50 hover:border-border/80">
+        <Card className="hover:border-border/90">
           <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
             <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
               Savings
@@ -680,7 +680,7 @@ export default function Home() {
 
         {/* --- Goals --- */}
         {settings.goals.length > 0 && (
-          <Card className="border-border/50 bg-card/50 hover:border-border/80">
+          <Card className="hover:border-border/90">
             <CardHeader className="pb-2">
               <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
                 Savings Goals
@@ -723,7 +723,7 @@ export default function Home() {
 
         {/* --- Recurring Expenses --- */}
         {settings.recurringExpenses.length > 0 && (
-          <Card className="border-border/50 bg-card/50 hover:border-border/80">
+          <Card className="hover:border-border/90">
             <CardHeader className="pb-2">
               <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
                 Recurring Expenses
@@ -743,7 +743,7 @@ export default function Home() {
 
         {/* --- One-time income --- */}
         {settings.oneTimeIncome.length > 0 && (
-          <Card className="border-border/50 bg-card/50 hover:border-border/80">
+          <Card className="hover:border-border/90">
             <CardHeader className="pb-2">
               <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
                 One-time income
@@ -761,7 +761,7 @@ export default function Home() {
         )}
 
         {/* --- Pocket Money --- */}
-        <Card className="border-border/50 bg-card/50 hover:border-border/80">
+        <Card className="hover:border-border/90">
           <CardHeader className="pb-2">
             <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
               Pocket Money
@@ -792,7 +792,7 @@ export default function Home() {
         </Card>
 
         {/* --- Expense Log --- */}
-        <Card className="border-border/50 bg-card/50 hover:border-border/80">
+        <Card className="hover:border-border/90">
           <CardHeader className="pb-2">
             <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
               Log an Expense

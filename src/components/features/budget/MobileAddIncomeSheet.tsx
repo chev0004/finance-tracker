@@ -99,7 +99,7 @@ export function MobileAddIncomeSheet({
               <button
                 type="button"
                 onClick={() => setView('recurring')}
-                className="flex w-full items-center gap-4 rounded-xl border border-border/60 bg-card/80 p-4 text-left transition-colors active:bg-muted/50"
+                className="glass-panel flex w-full items-center gap-4 rounded-xl p-4 text-left transition-colors active:bg-muted/50"
               >
                 <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-emerald-500/15">
                   <Briefcase className="size-6 text-emerald-600" />
@@ -117,7 +117,7 @@ export function MobileAddIncomeSheet({
               <button
                 type="button"
                 onClick={() => setView('one-time')}
-                className="flex w-full items-center gap-4 rounded-xl border border-border/60 bg-card/80 p-4 text-left transition-colors active:bg-muted/50"
+                className="glass-panel flex w-full items-center gap-4 rounded-xl p-4 text-left transition-colors active:bg-muted/50"
               >
                 <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-amber-500/15">
                   <Gift className="size-6 text-amber-600" />
