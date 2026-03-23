@@ -19,8 +19,14 @@ export function StatsCard({
   const num = Number(value);
   const displayValue = isCurrency
     ? num < 0
-      ? `-$${Math.abs(num).toLocaleString()}`
-      : `$${num.toLocaleString()}`
+      ? `-$${Math.abs(num).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+      : `$${num.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
     : value;
 
   const colorClass = {

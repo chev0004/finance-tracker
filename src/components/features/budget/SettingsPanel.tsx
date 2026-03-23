@@ -599,9 +599,17 @@ export function SettingsPanel({
       </div>
 
       <p className="text-muted-foreground/70 text-xs">
-        Saving ~${Math.round(monthlySavings).toLocaleString()}/mo ($
-        {Math.round(monthlyIncome).toLocaleString()} income minus $
-        {pocketPerPeriodToday} pocket {pocketFreqLabel})
+        Saving ~$
+        {monthlySavings.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
+        /mo ($
+        {monthlyIncome.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}{' '}
+        income minus ${pocketPerPeriodToday} pocket {pocketFreqLabel})
       </p>
 
       <div className="space-y-2 border-border/50 border-t pt-4">

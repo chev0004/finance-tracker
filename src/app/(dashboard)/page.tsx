@@ -228,7 +228,15 @@ export default function Home() {
   const eoyCombined = eoySavings + eoyPocket;
 
   const formatMoney = (n: number): string =>
-    n < 0 ? `-$${Math.abs(n).toLocaleString()}` : `$${n.toLocaleString()}`;
+    n < 0
+      ? `-$${Math.abs(n).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+      : `$${n.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`;
 
   const selectedPocketSource = settings.pocketIncomeSourceId
     ? settings.incomeSources.find((s) => s.id === settings.pocketIncomeSourceId)
@@ -456,7 +464,7 @@ export default function Home() {
           </Card>
           <StatsCard
             label="Savings /mo"
-            value={Math.round(monthlySavings)}
+            value={monthlySavings}
             variant={monthlySavings >= 0 ? 'success' : 'danger'}
             prefix={monthlySavings >= 0 ? '+' : ''}
           />

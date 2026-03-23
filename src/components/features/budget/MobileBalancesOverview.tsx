@@ -36,9 +36,7 @@ export function MobileBalancesOverview({
     success: 'text-emerald-500',
   }[eoyVariant];
 
-  const savingsRounded = Math.round(monthlySavings);
-  const incomeRounded = Math.round(monthlyIncome);
-  const savingsPrefix = savingsRounded >= 0 ? '+' : '';
+  const savingsPrefix = monthlySavings >= 0 ? '+' : '';
 
   const accountRows = [
     { label: 'Savings', value: formatMoney(currentSavings) },
@@ -53,13 +51,13 @@ export function MobileBalancesOverview({
   }[] = [
     {
       title: 'Savings / mo',
-      value: `${savingsPrefix}${formatMoney(savingsRounded)}`,
+      value: `${savingsPrefix}${formatMoney(monthlySavings)}`,
       subtitle: 'Avg per month',
-      valueClassName: savingsRounded >= 0 ? 'text-emerald-400' : 'text-red-400',
+      valueClassName: monthlySavings >= 0 ? 'text-emerald-400' : 'text-red-400',
     },
     {
       title: 'Income / mo',
-      value: formatMoney(incomeRounded),
+      value: formatMoney(monthlyIncome),
       subtitle: 'Planned recurring',
     },
     {

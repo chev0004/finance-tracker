@@ -23,6 +23,13 @@ function section(title: string, lines: string[]): string {
   return `## ${title}\n${lines.join('\n')}\n`;
 }
 
+function formatCurrency(value: number): string {
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function buildExportText(payload: ExportPayload): string {
   const {
     settings,
@@ -41,9 +48,9 @@ export function buildExportText(payload: ExportPayload): string {
       : settings.pocketFrequency;
 
   const summary = [
-    `Current balance: $${settings.startingBalance.toLocaleString()}`,
-    `Savings per month: $${Math.round(monthlySavings).toLocaleString()}`,
-    `Projected end of year: $${eoyBalance.toLocaleString()}`,
+    `Current balance: $${formatCurrency(settings.startingBalance)}`,
+    `Savings per month: $${formatCurrency(monthlySavings)}`,
+    `Projected end of year: $${formatCurrency(eoyBalance)}`,
   ];
 
   const pocketChangeLines =
@@ -60,10 +67,10 @@ export function buildExportText(payload: ExportPayload): string {
   const settingsLines = [
     `Pocket period: ${pocketFreq}`,
     `Pocket start: ${settings.pocketFirstPayday}`,
-    `Monthly income: $${Math.round(monthlyIncome).toLocaleString()}`,
-    `Base pocket / period: $${settings.pocketPerPeriod.toLocaleString()}`,
+    `Monthly income: $${formatCurrency(monthlyIncome)}`,
+    `Base pocket / period: $${formatCurrency(settings.pocketPerPeriod)}`,
     ...pocketChangeLines,
-    `Starting balance: $${settings.startingBalance.toLocaleString()}`,
+    `Starting balance: $${formatCurrency(settings.startingBalance)}`,
     `Start date: ${settings.startDate}`,
   ];
 

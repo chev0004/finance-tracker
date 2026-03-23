@@ -1163,7 +1163,7 @@ export function useBudget() {
           displayPaydays.push({
             ...p,
             delta: net,
-            label: p.label.replace(/\$\d+/, `$${net}`),
+            label: p.label.replace(/\$\d+(\.\d+)?/, `$${net.toFixed(2)}`),
           });
         }
       } else {
@@ -1204,7 +1204,7 @@ export function useBudget() {
       points.push({
         date: fmt,
         rawDate: date,
-        balance: Math.round(running),
+        balance: running,
         label: visible.map((e) => e.label).join(' + '),
         type,
         events: visible.map((e) => ({
@@ -1277,10 +1277,10 @@ export function useBudget() {
         rawDate: payday,
         weekStart: range.start,
         weekEnd: range.end,
-        balance: Math.round(balance),
-        available: Math.round(avail),
-        spent: Math.round(finalSpent),
-        overage: Math.round(Math.max(0, spent - avail)),
+        balance,
+        available: avail,
+        spent: finalSpent,
+        overage: Math.max(0, spent - avail),
         type,
         idx: i,
         expenseCount,
@@ -1329,7 +1329,7 @@ export function useBudget() {
       const manualSpent = spentPerPeriod[periodIdx] ?? 0;
       pocketBal = Math.max(0, pocketBal - manualSpent);
     }
-    return Math.max(0, Math.round(pocketBal));
+    return Math.max(0, pocketBal);
   }, [
     pocketTimeline,
     pocketPeriodBounds,
@@ -1576,7 +1576,7 @@ export function useBudget() {
           const idx = paydayIncomeOverrides.findIndex(
             (o) => o.date === date && o.sourceId === sourceId,
           );
-          const nextAmount = Math.round(amount * 100) / 100;
+          const nextAmount = amount;
           if (Math.abs(nextAmount - base) < 0.005) {
             if (idx >= 0) paydayIncomeOverrides.splice(idx, 1);
           } else if (idx >= 0) {
