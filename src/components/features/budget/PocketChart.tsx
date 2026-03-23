@@ -33,6 +33,13 @@ const ORANGE = '#f59e0b';
 const GRAY = '#6b7280';
 const BLUE = '#3b82f6';
 
+function fmtAmount(n: number): string {
+  return n.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function getPocketColor(
   type: PocketPoint['type'],
   isSelected: boolean,
@@ -157,7 +164,7 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
                 <div key={i} className="flex justify-between gap-4 text-sm">
                   <span className="text-muted-foreground">{item.label}</span>
                   <span className="font-mono text-foreground text-sm">
-                    -${item.amount}
+                    -${fmtAmount(item.amount)}
                   </span>
                 </div>
               ))}
@@ -167,19 +174,19 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
               <div className="mb-1 flex justify-between gap-4 text-sm">
                 <span className="text-muted-foreground">Spent</span>
                 <span className="font-mono text-foreground">
-                  -${point.spent}
+                  -${fmtAmount(point.spent)}
                 </span>
               </div>
             )
           )}
           {point.balance > 0 && (
             <div className="mt-1 font-mono text-green-400 text-sm">
-              ${point.balance} unspent
+              ${fmtAmount(point.balance)} unspent
             </div>
           )}
           {point.overage > 0 && (
             <div className="mt-1 font-mono text-red-400 text-sm">
-              ${point.overage} over budget
+              ${fmtAmount(point.overage)} over budget
             </div>
           )}
         </div>
@@ -337,15 +344,19 @@ export function PocketChart({ data, onUpdateSpent }: PocketChartProps) {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="flex-1 text-sm">
               <span className="text-muted-foreground">Available:</span>{' '}
-              <span className="font-medium">${selectedPoint.available}</span>
+              <span className="font-medium">
+                ${fmtAmount(selectedPoint.available)}
+              </span>
               <span className="mx-2 text-muted-foreground">|</span>
               <span className="text-muted-foreground">Unspent:</span>{' '}
               <span className="font-medium">
                 $
-                {Math.max(
-                  0,
-                  selectedPoint.available -
-                    (Number.parseInt(inputValue, 10) || 0),
+                {fmtAmount(
+                  Math.max(
+                    0,
+                    selectedPoint.available -
+                      (Number.parseFloat(inputValue) || 0),
+                  ),
                 )}
               </span>
             </div>
