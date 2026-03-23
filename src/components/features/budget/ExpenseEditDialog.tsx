@@ -114,7 +114,7 @@ export function ExpenseEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
+      <DialogContent className="max-h-[90dvh] max-w-3xl">
         <DialogHeader>
           <DialogTitle>Edit expense</DialogTitle>
         </DialogHeader>
@@ -176,6 +176,7 @@ export function ExpenseEditDialog({
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               onKeyDown={handleKeyDown}
+              className="min-h-10 w-full min-w-0 text-base sm:min-h-9 sm:text-sm"
             />
           </div>
 

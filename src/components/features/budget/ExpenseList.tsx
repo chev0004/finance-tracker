@@ -123,11 +123,11 @@ export function ExpenseList({
 
       {active && active.expenses.length > 0 ? (
         <ScrollArea className="h-[180px] w-full">
-          <div className="space-y-1">
+          <div className="space-y-1 pr-4">
             {active.expenses.map((expense) => (
               <div
                 key={expense.id}
-                className="group flex cursor-default items-center justify-between rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
+                className="group flex max-w-full cursor-default items-center justify-between gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
               >
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <span className="shrink-0 font-mono text-muted-foreground text-xs">
