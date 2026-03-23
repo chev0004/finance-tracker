@@ -1097,17 +1097,24 @@ export function useBudget() {
       day: 'numeric',
     });
 
+    const firstPeriodPayday = paydays[0];
+    const preStartPocket =
+      firstPeriodPayday && firstPeriodPayday <= settings.startDate
+        ? getPocketPerPeriodForDate(settings, firstPeriodPayday)
+        : 0;
+    const effectiveStartBalance = settings.startingBalance - preStartPocket;
+
     const points: SavingsPoint[] = [
       {
         date: startLabel,
         rawDate: settings.startDate,
-        balance: settings.startingBalance,
+        balance: effectiveStartBalance,
         label: 'start',
         type: 'start',
         events: [],
       },
     ];
-    let running = settings.startingBalance;
+    let running = effectiveStartBalance;
     const grouped: Record<string, FixedEvent[]> = {};
 
     for (const e of events) {
