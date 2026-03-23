@@ -1445,12 +1445,37 @@ export function useBudget() {
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   }, []);
 
-  const updateExpenseAmount = useCallback((id: string, amount: number) => {
-    if (Number.isNaN(amount) || amount <= 0) return;
-    setExpenses((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, amount } : e)),
-    );
-  }, []);
+  const updateExpense = useCallback(
+    (expense: Expense) => {
+      if (
+        !expense.date ||
+        !expense.label?.trim() ||
+        Number.isNaN(expense.amount) ||
+        expense.amount <= 0
+      ) {
+        return;
+      }
+      const periodIdx = getPeriodIndexWithBounds(
+        expense.date,
+        pocketPeriodBounds,
+      );
+      const trimmed = expense.label.trim();
+      setExpenses((prev) =>
+        prev.map((e) =>
+          e.id === expense.id
+            ? {
+                ...e,
+                date: expense.date,
+                label: trimmed,
+                amount: expense.amount,
+                weekIdx: periodIdx ?? undefined,
+              }
+            : e,
+        ),
+      );
+    },
+    [pocketPeriodBounds],
+  );
 
   const updateSpentForPeriod = useCallback(
     (idx: number, amount: number): { success: boolean; error?: string } => {
@@ -1647,7 +1672,7 @@ export function useBudget() {
     validation,
     addExpense,
     removeExpense,
-    updateExpenseAmount,
+    updateExpense,
     updateSpentForPeriod,
     updateSettings,
     addGoal,

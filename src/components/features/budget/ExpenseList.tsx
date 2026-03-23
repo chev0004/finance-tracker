@@ -1,27 +1,24 @@
 'use client';
 
 import { format, parseISO } from 'date-fns';
-import { X } from 'lucide-react';
+import { Pencil, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { NavStepper } from '@/components/ui/nav-stepper';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getPocketPeriodRange } from '@/lib/pocketPeriods';
-import {
-  getLocalDateString,
-  normalizeNumInputBlur,
-  normalizeNumInputLeading,
-} from '@/lib/utils';
+import { getLocalDateString } from '@/lib/utils';
 import type { Expense, PayFrequency } from '@/types';
+import { ExpenseEditDialog } from './ExpenseEditDialog';
 
 interface ExpenseListProps {
   expenses: Expense[];
   paydays: string[];
   payFrequency: PayFrequency;
   payInterval?: number;
+  balanceStartDate: string;
   onRemove: (id: string) => void;
-  onUpdateAmount: (id: string, amount: number) => void;
+  onUpdateExpense: (expense: Expense) => void;
 }
 
 interface PeriodGroup {
@@ -36,11 +33,11 @@ export function ExpenseList({
   paydays,
   payFrequency,
   payInterval,
+  balanceStartDate,
   onRemove,
-  onUpdateAmount,
+  onUpdateExpense,
 }: ExpenseListProps) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   const periods = useMemo<PeriodGroup[]>(() => {
     const sorted = [...expenses].sort((a, b) => a.date.localeCompare(b.date));
@@ -83,28 +80,6 @@ export function ExpenseList({
   const clampIdx = (i: number) => Math.max(0, Math.min(periods.length - 1, i));
   const active = periods[activeIdx];
 
-  const startEdit = (expense: Expense) => {
-    setEditingId(expense.id);
-    setEditValue(String(expense.amount));
-  };
-
-  const commitEdit = () => {
-    if (editingId) {
-      const normalized = normalizeNumInputBlur(editValue);
-      const num = Number.parseFloat(normalized);
-      if (!Number.isNaN(num) && num > 0) {
-        onUpdateAmount(editingId, num);
-      }
-    }
-    setEditingId(null);
-    setEditValue('');
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditValue('');
-  };
-
   if (periods.length === 0) {
     return (
       <div className="py-4 text-muted-foreground/60 text-sm">
@@ -122,6 +97,16 @@ export function ExpenseList({
 
   return (
     <div className="space-y-3">
+      <ExpenseEditDialog
+        expense={editingExpense}
+        open={editingExpense !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingExpense(null);
+        }}
+        balanceStartDate={balanceStartDate}
+        onSave={onUpdateExpense}
+      />
+
       <NavStepper
         disablePrev={activeIdx <= 0}
         disableNext={activeIdx >= periods.length - 1}
@@ -150,43 +135,25 @@ export function ExpenseList({
                   </span>
                   <span className="truncate text-sm">{expense.label}</span>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {editingId === expense.id ? (
-                    <div className="relative w-20">
-                      <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-muted-foreground text-xs">
-                        $
-                      </span>
-                      <Input
-                        autoFocus
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={editValue === '' ? '0' : editValue}
-                        onChange={(e) =>
-                          setEditValue(normalizeNumInputLeading(e.target.value))
-                        }
-                        onBlur={commitEdit}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') commitEdit();
-                          if (e.key === 'Escape') cancelEdit();
-                        }}
-                        className="h-7 pl-5 text-right font-mono text-xs"
-                      />
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className="cursor-pointer font-mono text-red-500 text-sm transition-colors hover:text-red-400"
-                      onClick={() => startEdit(expense)}
-                    >
-                      -${expense.amount.toFixed(2)}
-                    </button>
-                  )}
+                <div className="flex shrink-0 items-center gap-1">
+                  <span className="font-mono text-red-500 text-sm">
+                    -${expense.amount.toFixed(2)}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground opacity-100 transition-[opacity,color] hover:text-foreground sm:h-6 sm:w-6 sm:opacity-0 sm:group-hover:opacity-100"
+                    onClick={() => setEditingExpense(expense)}
+                    aria-label="Edit expense"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground opacity-100 transition-[opacity,color] hover:text-red-500 sm:h-6 sm:w-6 sm:opacity-0 sm:group-hover:opacity-100"
                     onClick={() => onRemove(expense.id)}
+                    aria-label="Remove expense"
                   >
                     <X className="h-4 w-4" />
                   </Button>

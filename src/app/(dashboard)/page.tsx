@@ -61,7 +61,7 @@ export default function Home() {
     paydays,
     addExpense,
     removeExpense,
-    updateExpenseAmount,
+    updateExpense,
     updateSpentForPeriod,
     updateSettings,
     addGoal,
@@ -829,8 +829,9 @@ export default function Home() {
                 paydays={paydays}
                 payFrequency={effectivePocketFrequency}
                 payInterval={effectivePocketInterval}
+                balanceStartDate={settings.startDate}
                 onRemove={removeExpense}
-                onUpdateAmount={updateExpenseAmount}
+                onUpdateExpense={updateExpense}
               />
             </div>
           </CardContent>
