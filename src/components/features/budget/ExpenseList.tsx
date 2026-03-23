@@ -122,7 +122,7 @@ export function ExpenseList({
       </NavStepper>
 
       {active && active.expenses.length > 0 ? (
-        <ScrollArea className="h-[180px] w-full">
+        <ScrollArea className="h-[min(40rem,calc(100dvh-14rem))] min-h-[11.25rem] w-full">
           <div className="space-y-1 pr-4">
             {active.expenses.map((expense) => (
               <div
