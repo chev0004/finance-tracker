@@ -128,47 +128,6 @@ export function ExpenseEditDialog({
         <div className="grid grid-cols-1 gap-4">
           <div className="space-y-2">
             <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-              Date
-            </Label>
-            <ResponsivePicker
-              open={dateOpen}
-              onOpenChange={setDateOpen}
-              sheetTitle="Expense date"
-              popoverContentClassName="w-auto p-0"
-              trigger={
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={cn(
-                    'h-11 min-h-11 w-full justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:text-sm',
-                    !date && 'text-muted-foreground',
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                  {date && isValid(date)
-                    ? format(date, 'MMM d, yyyy')
-                    : 'Select date'}
-                </Button>
-              }
-            >
-              {(close) => (
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={(d) => {
-                    setDate(d);
-                    if (d) close();
-                  }}
-                  disabled={(d) => d < minDate || d > maxDate}
-                  defaultMonth={date}
-                  className="mx-auto w-full max-w-[100vw] rounded-lg"
-                />
-              )}
-            </ResponsivePicker>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-muted-foreground text-xs uppercase tracking-wider">
               What for
             </Label>
             <Input
@@ -180,39 +139,82 @@ export function ExpenseEditDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-              Amount ($)
-            </Label>
-            <div className="relative">
-              <Input
-                ref={amountRef}
-                type="number"
-                placeholder="0.00"
-                min={0}
-                step={0.01}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="pr-9 font-mono sm:pr-7"
-              />
-              <div className="absolute inset-y-0 right-0 flex w-9 flex-col border-input border-l sm:w-7">
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => stepAmount(1)}
-                  className="flex min-h-[1.375rem] flex-1 cursor-pointer items-center justify-center rounded-tr-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:min-h-0"
-                >
-                  <ChevronUp className="size-4 sm:size-3" />
-                </button>
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => stepAmount(-1)}
-                  className="flex min-h-[1.375rem] flex-1 cursor-pointer items-center justify-center rounded-br-md border-input border-t text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:min-h-0"
-                >
-                  <ChevronDown className="size-4 sm:size-3" />
-                </button>
+          <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+                Date
+              </Label>
+              <ResponsivePicker
+                open={dateOpen}
+                onOpenChange={setDateOpen}
+                sheetTitle="Expense date"
+                popoverContentClassName="w-auto p-0"
+                trigger={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      'h-11 min-h-11 w-full justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:text-sm',
+                      !date && 'text-muted-foreground',
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                    {date && isValid(date)
+                      ? format(date, 'MMM d, yyyy')
+                      : 'Select date'}
+                  </Button>
+                }
+              >
+                {(close) => (
+                  <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={(d) => {
+                      setDate(d);
+                      if (d) close();
+                    }}
+                    disabled={(d) => d < minDate || d > maxDate}
+                    defaultMonth={date}
+                    className="mx-auto w-full max-w-[100vw] rounded-lg"
+                  />
+                )}
+              </ResponsivePicker>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+                Amount ($)
+              </Label>
+              <div className="relative">
+                <Input
+                  ref={amountRef}
+                  type="number"
+                  placeholder="0.00"
+                  min={0}
+                  step={0.01}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="pr-9 font-mono sm:pr-7"
+                />
+                <div className="absolute inset-y-0 right-0 flex w-9 flex-col border-input border-l sm:w-7">
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => stepAmount(1)}
+                    className="flex min-h-[1.375rem] flex-1 cursor-pointer items-center justify-center rounded-tr-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:min-h-0"
+                  >
+                    <ChevronUp className="size-4 sm:size-3" />
+                  </button>
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => stepAmount(-1)}
+                    className="flex min-h-[1.375rem] flex-1 cursor-pointer items-center justify-center rounded-br-md border-input border-t text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:min-h-0"
+                  >
+                    <ChevronDown className="size-4 sm:size-3" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
