@@ -125,8 +125,8 @@ export function ExpenseEditDialog({
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-4">
-          <div className="space-y-2">
+        <div className="flex flex-col gap-4">
+          <div className="min-w-0 space-y-2">
             <Label className="text-muted-foreground text-xs uppercase tracking-wider">
               What for
             </Label>
@@ -139,8 +139,8 @@ export function ExpenseEditDialog({
             />
           </div>
 
-          <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <div className="min-w-0 space-y-2">
               <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                 Date
               </Label>
@@ -181,7 +181,7 @@ export function ExpenseEditDialog({
               </ResponsivePicker>
             </div>
 
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                 Amount ($)
               </Label>
@@ -195,7 +195,7 @@ export function ExpenseEditDialog({
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  className="pr-9 font-mono sm:pr-7"
+                  className="w-full min-w-0 pr-9 font-mono sm:pr-7"
                 />
                 <div className="absolute inset-y-0 right-0 flex w-9 flex-col border-input border-l sm:w-7">
                   <button
