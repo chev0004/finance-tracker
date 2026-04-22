@@ -213,17 +213,34 @@ export function GoalForm({
               }
             >
               {(close) => (
-                <Calendar
-                  mode="range"
-                  selected={dateRange}
-                  onSelect={(r) => {
-                    setDateRange(r);
-                    if (r?.from && r?.to) close();
-                  }}
-                  numberOfMonths={rangeCalendarMonths}
-                  defaultMonth={dateRange?.from}
-                  className="mx-auto w-full max-w-[100vw] rounded-lg"
-                />
+                <div className="flex flex-col items-center">
+                  <Calendar
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={rangeCalendarMonths}
+                    defaultMonth={dateRange?.from}
+                    className="mx-auto w-full max-w-[100vw] rounded-lg"
+                  />
+                  <div className="flex w-full justify-end gap-2 px-3 pb-3 sm:px-4">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDateRange(undefined)}
+                    >
+                      Clear
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="muted"
+                      size="sm"
+                      onClick={close}
+                    >
+                      Done
+                    </Button>
+                  </div>
+                </div>
               )}
             </ResponsivePicker>
           </div>
