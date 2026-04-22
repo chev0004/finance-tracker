@@ -160,35 +160,39 @@ function getPeriodIndexWithBounds(
   return null;
 }
 
-function getMonthsInRange(startDate: string, endDate: string): string[] {
-  const result: string[] = [];
-  const [sy, sm] = startDate.slice(0, 7).split('-').map(Number);
-  const [ey, em] = endDate.slice(0, 7).split('-').map(Number);
-  let y = sy;
-  let m = sm;
-  while (y < ey || (y === ey && m <= em)) {
-    result.push(`${y}-${pad(m)}`);
-    m++;
-    if (m > 12) {
-      m = 1;
-      y++;
-    }
-  }
-  return result;
+function isDateInRange(date: string, start: string, end: string): boolean {
+  return date >= start && date <= end;
 }
 
 function isIncomePaydaySkipped(
   settings: BudgetSettings,
   payday: string,
 ): boolean {
-  const goalsPausingIncome = settings.goals.filter((g) => g.pauseIncome);
-  const pausedMonths = new Set(
-    goalsPausingIncome.flatMap((g) => getMonthsInRange(g.startDate, g.endDate)),
-  );
-  if (pausedMonths.has(payday.slice(0, 7))) return true;
-  for (const g of goalsPausingIncome) {
+  for (const g of settings.goals) {
+    if (!g.pauseIncome) continue;
+    if (isDateInRange(payday, g.startDate, g.endDate)) return true;
     if (g.incomeResumeDate && payday > g.endDate && payday < g.incomeResumeDate)
       return true;
+  }
+  return false;
+}
+
+function isExpensePausedOnDate(
+  settings: BudgetSettings,
+  expenseId: string,
+  date: string,
+): boolean {
+  for (const goal of settings.goals) {
+    if (!goal.pausedExpenseIds.includes(expenseId)) continue;
+    if (isDateInRange(date, goal.startDate, goal.endDate)) return true;
+  }
+  return false;
+}
+
+function isPocketPausedOnDate(settings: BudgetSettings, date: string): boolean {
+  for (const goal of settings.goals) {
+    if (!goal.pausePocket) continue;
+    if (isDateInRange(date, goal.startDate, goal.endDate)) return true;
   }
   return false;
 }
@@ -221,24 +225,6 @@ function getPaydayEditRowsForDate(
   settings: BudgetSettings,
   date: string,
 ): PaydayEditRow[] {
-  const goalsPausingIncome = settings.goals.filter((g) => g.pauseIncome);
-  const pausedMonths = new Set(
-    goalsPausingIncome.flatMap((g) => getMonthsInRange(g.startDate, g.endDate)),
-  );
-
-  const isPaydayPaused = (payday: string): boolean => {
-    if (pausedMonths.has(payday.slice(0, 7))) return true;
-    for (const g of goalsPausingIncome) {
-      if (
-        g.incomeResumeDate &&
-        payday > g.endDate &&
-        payday < g.incomeResumeDate
-      )
-        return true;
-    }
-    return false;
-  };
-
   const rows: PaydayEditRow[] = [];
   for (const source of settings.incomeSources) {
     const incomeListStart = alignPaydayContainingDate(
@@ -254,7 +240,7 @@ function getPaydayEditRowsForDate(
       settings.startDate,
     );
     if (!sourcePaydays.includes(date)) continue;
-    if (isPaydayPaused(date)) continue;
+    if (isIncomePaydaySkipped(settings, date)) continue;
     const scheduledAmount = getSourceAmountForDate(source, date);
     const currentAmount = getPaydayAmountWithOverride(settings, source, date);
     rows.push({
@@ -307,23 +293,6 @@ function getMonthlySavings(settings: BudgetSettings): number {
   return monthlyIncome - monthlyPocket;
 }
 
-function buildPausedExpensesByMonth(
-  settings: BudgetSettings,
-): Map<string, Set<string>> {
-  const pausedExpensesByMonth = new Map<string, Set<string>>();
-  for (const goal of settings.goals) {
-    if (goal.pausedExpenseIds.length === 0) continue;
-    for (const month of getMonthsInRange(goal.startDate, goal.endDate)) {
-      const existing = pausedExpensesByMonth.get(month) ?? new Set<string>();
-      for (const id of goal.pausedExpenseIds) {
-        existing.add(id);
-      }
-      pausedExpensesByMonth.set(month, existing);
-    }
-  }
-  return pausedExpensesByMonth;
-}
-
 function getPocketDeductingRecurringPerPeriod(
   settings: BudgetSettings,
   paydays: string[],
@@ -331,7 +300,6 @@ function getPocketDeductingRecurringPerPeriod(
 ): { totals: number[]; items: PocketExpenseItem[][] } {
   const totals = paydays.map(() => 0);
   const items: PocketExpenseItem[][] = paydays.map(() => []);
-  const pausedExpensesByMonth = buildPausedExpensesByMonth(settings);
   const projectionEndYear =
     new Date(`${settings.startDate}T00:00:00`).getFullYear() + 4;
 
@@ -360,9 +328,7 @@ function getPocketDeductingRecurringPerPeriod(
         if (isIncomePaydaySkipped(settings, payday)) continue;
         const monthStr = payday.slice(0, 7);
         if (monthStr < rec.startMonth || monthStr > endBound) continue;
-        const isPaused =
-          pausedExpensesByMonth.get(monthStr)?.has(rec.id) ?? false;
-        if (isPaused) continue;
+        if (isExpensePausedOnDate(settings, rec.id, payday)) continue;
         const idx = getPeriodIndexWithBounds(payday, periodBounds);
         if (idx !== null) {
           totals[idx] += rec.amount;
@@ -380,16 +346,13 @@ function getPocketDeductingRecurringPerPeriod(
     let [y, m] = rec.startMonth.split('-').map(Number);
 
     while (y < endY || (y === endY && m <= endM)) {
-      const monthStr = `${y}-${pad(m)}`;
-      const isPaused =
-        pausedExpensesByMonth.get(monthStr)?.has(rec.id) ?? false;
+      const day =
+        rec.dayOfMonth <= 0
+          ? lastDayOf(y, m)
+          : Math.min(rec.dayOfMonth, lastDayOf(y, m));
+      const dateStr = fmtDate(y, m, day);
 
-      if (!isPaused) {
-        const day =
-          rec.dayOfMonth <= 0
-            ? lastDayOf(y, m)
-            : Math.min(rec.dayOfMonth, lastDayOf(y, m));
-        const dateStr = fmtDate(y, m, day);
+      if (!isExpensePausedOnDate(settings, rec.id, dateStr)) {
         const idx = getPeriodIndexWithBounds(dateStr, periodBounds);
         if (idx !== null) {
           totals[idx] += rec.amount;
@@ -444,15 +407,9 @@ function genFixedEvents(
     }
   }
 
-  const pausedPocketMonths = new Set(
-    settings.goals
-      .filter((g) => g.pausePocket)
-      .flatMap((g) => getMonthsInRange(g.startDate, g.endDate)),
-  );
-
   const pocketPaydays = getPocketPaydays(settings, coverDates);
   for (const payday of pocketPaydays) {
-    if (!pausedPocketMonths.has(payday.slice(0, 7))) {
+    if (!isPocketPausedOnDate(settings, payday)) {
       const pocketAmt = getPocketPerPeriodForDate(settings, payday);
       ev.push({
         date: payday,
@@ -462,8 +419,6 @@ function genFixedEvents(
       });
     }
   }
-
-  const pausedExpensesByMonth = buildPausedExpensesByMonth(settings);
 
   const projectionEndYear =
     new Date(`${settings.startDate}T00:00:00`).getFullYear() + 4;
@@ -492,9 +447,7 @@ function genFixedEvents(
           if (isIncomePaydaySkipped(settings, payday)) continue;
           const monthStr = payday.slice(0, 7);
           if (monthStr < rec.startMonth || monthStr > endBound) continue;
-          const isPaused =
-            pausedExpensesByMonth.get(monthStr)?.has(rec.id) ?? false;
-          if (isPaused) continue;
+          if (isExpensePausedOnDate(settings, rec.id, payday)) continue;
           ev.push({
             date: payday,
             label: `${rec.label} $${rec.amount}`,
@@ -513,21 +466,20 @@ function genFixedEvents(
     let [y, m] = rec.startMonth.split('-').map(Number);
 
     while (y < endY || (y === endY && m <= endM)) {
-      const monthStr = `${y}-${pad(m)}`;
-      const isPaused =
-        pausedExpensesByMonth.get(monthStr)?.has(rec.id) ?? false;
-
-      if (!isPaused && !rec.deductFromPocket) {
+      if (!rec.deductFromPocket) {
         const day =
           rec.dayOfMonth <= 0
             ? lastDayOf(y, m)
             : Math.min(rec.dayOfMonth, lastDayOf(y, m));
-        ev.push({
-          date: fmtDate(y, m, day),
-          label: `${rec.label} $${rec.amount}`,
-          delta: -rec.amount,
-          type: 'recurring',
-        });
+        const dateStr = fmtDate(y, m, day);
+        if (!isExpensePausedOnDate(settings, rec.id, dateStr)) {
+          ev.push({
+            date: dateStr,
+            label: `${rec.label} $${rec.amount}`,
+            delta: -rec.amount,
+            type: 'recurring',
+          });
+        }
       }
       m++;
       if (m > 12) {
@@ -1123,30 +1075,24 @@ export function useBudget() {
       grouped[e.date].push(e);
     }
 
-    let carriedPocket = 0;
-
     for (const date of Object.keys(grouped).sort()) {
       const evs = grouped[date];
       for (const e of evs.filter((x) => x.delta > 0)) running += e.delta;
       for (const e of evs.filter((x) => x.delta < 0)) running += e.delta;
 
-      const pocketTotal = evs
-        .filter((e) => e.type === 'pocket')
-        .reduce((s, e) => s + e.delta, 0);
-      if (pocketTotal < 0) {
-        carriedPocket += Math.abs(pocketTotal);
-      }
-
       const paydays = evs.filter((e) => e.type === 'payday');
       const others = evs.filter(
         (e) => e.type !== 'pocket' && e.type !== 'payday',
       );
+      const pocketOnThisDate = evs
+        .filter((e) => e.type === 'pocket')
+        .reduce((s, e) => s + Math.abs(e.delta), 0);
 
       const displayPaydays: FixedEvent[] = [];
-      if (paydays.length > 0 && carriedPocket > 0) {
+      if (paydays.length > 0 && pocketOnThisDate > 0) {
         const sorted = [...paydays].sort((a, b) => b.delta - a.delta);
         const allocation = new Map<FixedEvent, number>();
-        let remaining = carriedPocket;
+        let remaining = pocketOnThisDate;
 
         for (const p of sorted) {
           if (remaining <= 0) break;
@@ -1154,8 +1100,6 @@ export function useBudget() {
           allocation.set(p, take);
           remaining -= take;
         }
-
-        carriedPocket = remaining;
 
         for (const p of paydays) {
           const taken = allocation.get(p) || 0;
