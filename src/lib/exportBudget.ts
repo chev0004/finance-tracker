@@ -10,12 +10,18 @@ import type {
 export interface ExportPayload {
   settings: BudgetSettings;
   expenses: Expense[];
+  spentPerPeriod: number[];
+  today: string;
+  currentSavings: number;
+  currentPocketBalance: number;
+  combinedBalance: number;
   monthlyIncome: number;
   monthlySavings: number;
   savingsTimeline: SavingsPoint[];
   pocketTimeline: PocketPoint[];
   goalStats: GoalStat[];
   eoyBalance: number;
+  eoyCombined: number;
   validationErrors: ValidationError[];
 }
 
@@ -34,6 +40,10 @@ export function buildExportText(payload: ExportPayload): string {
   const {
     settings,
     expenses,
+    spentPerPeriod,
+    currentSavings,
+    currentPocketBalance,
+    combinedBalance,
     monthlyIncome,
     monthlySavings,
     savingsTimeline,
@@ -49,6 +59,9 @@ export function buildExportText(payload: ExportPayload): string {
 
   const summary = [
     `Current balance: $${formatCurrency(settings.startingBalance)}`,
+    `Current savings (as of today): $${formatCurrency(currentSavings)}`,
+    `Current pocket (as of today): $${formatCurrency(currentPocketBalance)}`,
+    `Current combined (as of today): $${formatCurrency(combinedBalance)}`,
     `Savings per month: $${formatCurrency(monthlySavings)}`,
     `Projected end of year: $${formatCurrency(eoyBalance)}`,
   ];
@@ -156,6 +169,11 @@ export function buildExportText(payload: ExportPayload): string {
           .map((e) => `${e.date} | ${e.label} | $${e.amount.toLocaleString()}`)
       : ['None'];
 
+  const manualSpentLines =
+    spentPerPeriod.length > 0
+      ? spentPerPeriod.map((amount, idx) => `Period ${idx + 1}: $${amount}`)
+      : ['None'];
+
   const timelineLines = savingsTimeline.map(
     (p) =>
       `${p.date} (${p.rawDate}): $${p.balance.toLocaleString()} - ${p.label}`,
@@ -188,10 +206,93 @@ export function buildExportText(payload: ExportPayload): string {
     section('Savings goals', goalLines.length ? goalLines : ['None']),
     section('Goal feasibility', goalStatLines),
     section('Logged expenses', expenseLines),
+    section('Manual spent per period overrides', manualSpentLines),
     section('Savings timeline', timelineLines),
     section('Pocket money by period', pocketLines),
     section('Validation', validationLines),
   ];
 
   return parts.join('\n');
+}
+
+export function buildLlmSnapshotMarkdown(payload: ExportPayload): string {
+  const {
+    settings,
+    expenses,
+    spentPerPeriod,
+    today,
+    currentSavings,
+    currentPocketBalance,
+    combinedBalance,
+    monthlyIncome,
+    monthlySavings,
+    savingsTimeline,
+    pocketTimeline,
+    goalStats,
+    eoyBalance,
+    eoyCombined,
+    validationErrors,
+  } = payload;
+
+  const recurringCount = settings.recurringExpenses.length;
+  const goalCount = settings.goals.length;
+  const incomeSourceCount = settings.incomeSources.length;
+  const oneTimeIncomeCount = settings.oneTimeIncome.length;
+  const paydayOverrideCount = settings.paydayIncomeOverrides.length;
+
+  const firstSavingsPoint = savingsTimeline[0];
+  const lastSavingsPoint = savingsTimeline[savingsTimeline.length - 1];
+  const firstPocketPoint = pocketTimeline[0];
+  const lastPocketPoint = pocketTimeline[pocketTimeline.length - 1];
+
+  const feasibleGoals = goalStats.filter((g) => g.isFeasible).length;
+  const warningGoals = goalStats.filter((g) => g.isWarning).length;
+
+  const assumptions = [
+    '- Pocket spending is driven by expense logs first. If a period has no logged expenses, `spentPerPeriod` is used for that period.',
+    '- Pocket carryover is automatic each period, including negative carryover (overage).',
+    '- Recurring expenses matched to an income source are applied on each payday for that source.',
+    '- Savings goals and recurring expenses are projected across the configured 5-year window from `startDate`.',
+  ];
+
+  const gaps = [
+    '- No special real-world event modeling beyond the configured inputs (for example: inflation, taxes, interest, market returns, or irregular emergencies) unless manually encoded by the user.',
+    '- Pocket balance remains unchanged within a period unless there is logged spending or a manual `spentPerPeriod` override.',
+    '- Any future events not entered (new income sources, expenses, overrides, or goals) are not projected.',
+  ];
+
+  return [
+    '# Budget context for LLM analysis',
+    '',
+    '## Objective',
+    'Use this snapshot to analyze current budget health, timeline risks, and likely future outcomes. Treat this as the full known state plus computed projections at export time.',
+    '',
+    '## Quick state summary',
+    `- Snapshot date: ${today}`,
+    `- Start date: ${settings.startDate}`,
+    `- Current savings (as of today): $${formatCurrency(currentSavings)}`,
+    `- Current pocket (as of today): $${formatCurrency(currentPocketBalance)}`,
+    `- Current combined (as of today): $${formatCurrency(combinedBalance)}`,
+    `- Monthly income (auto-calculated): $${formatCurrency(monthlyIncome)}`,
+    `- Monthly savings (auto-calculated): $${formatCurrency(monthlySavings)}`,
+    `- Projected end-of-year savings (auto-calculated): $${formatCurrency(eoyBalance)}`,
+    `- Projected end-of-year combined (auto-calculated): $${formatCurrency(eoyCombined)}`,
+    `- Inputs: ${expenses.length} logged expenses, ${recurringCount} recurring expenses, ${incomeSourceCount} income sources, ${oneTimeIncomeCount} one-time incomes, ${paydayOverrideCount} payday overrides, ${goalCount} goals`,
+    '',
+    '## Auto-calculated outputs',
+    `- Savings timeline points: ${savingsTimeline.length}${firstSavingsPoint ? ` (${firstSavingsPoint.rawDate} to ${lastSavingsPoint?.rawDate ?? firstSavingsPoint.rawDate})` : ''}`,
+    `- Pocket timeline points: ${pocketTimeline.length}${firstPocketPoint ? ` (${firstPocketPoint.rawDate} to ${lastPocketPoint?.rawDate ?? firstPocketPoint.rawDate})` : ''}`,
+    `- Goal feasibility: ${feasibleGoals}/${goalStats.length} feasible, warnings: ${warningGoals}`,
+    `- Validation issues: ${validationErrors.length}`,
+    '',
+    '## Modeling assumptions in this app',
+    ...assumptions,
+    '',
+    '## Not auto-calculated or not modeled yet',
+    ...gaps,
+    '',
+    '## Manual inputs that affect projection',
+    '- `spentPerPeriod` values are manual overrides used when no expenses are logged in a pocket period.',
+    `- \`spentPerPeriod\` entries: ${spentPerPeriod.length}`,
+  ].join('\n');
 }

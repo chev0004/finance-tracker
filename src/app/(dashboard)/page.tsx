@@ -400,6 +400,23 @@ export default function Home() {
           <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
             <DashboardNavSheet
               exportState={{ settings, expenses, spentPerPeriod }}
+              exportAnalysisPayload={{
+                settings,
+                expenses,
+                spentPerPeriod,
+                today,
+                currentSavings,
+                currentPocketBalance,
+                combinedBalance,
+                monthlyIncome,
+                monthlySavings,
+                savingsTimeline,
+                pocketTimeline,
+                goalStats,
+                eoyBalance: eoySavings,
+                eoyCombined,
+                validationErrors: validation.errors,
+              }}
               onImport={importState}
               settings={settings}
               monthlyIncome={monthlyIncome}
@@ -413,6 +430,23 @@ export default function Home() {
               <AuthNavButton />
               <ExportMenu
                 state={{ settings, expenses, spentPerPeriod }}
+                analysisPayload={{
+                  settings,
+                  expenses,
+                  spentPerPeriod,
+                  today,
+                  currentSavings,
+                  currentPocketBalance,
+                  combinedBalance,
+                  monthlyIncome,
+                  monthlySavings,
+                  savingsTimeline,
+                  pocketTimeline,
+                  goalStats,
+                  eoyBalance: eoySavings,
+                  eoyCombined,
+                  validationErrors: validation.errors,
+                }}
                 onImport={importState}
               />
             </div>

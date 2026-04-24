@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ClipboardPaste, Copy } from 'lucide-react';
+import { Check, ClipboardPaste, Copy, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,11 +10,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  buildLlmSnapshotMarkdown,
+  type ExportPayload,
+} from '@/lib/exportBudget';
 import { cn } from '@/lib/utils';
 import type { BudgetState } from '@/types';
 
 type BudgetDataActionsProps = {
   state: BudgetState;
+  analysisPayload?: ExportPayload;
   onImport: (state: BudgetState) => void;
   orientation?: 'row' | 'column';
   onImportDialogOpen?: () => void;
@@ -23,12 +28,14 @@ type BudgetDataActionsProps = {
 
 export function BudgetDataActions({
   state,
+  analysisPayload,
   onImport,
   orientation = 'row',
   onImportDialogOpen,
   buttonClassName,
 }: BudgetDataActionsProps) {
   const [copied, setCopied] = useState(false);
+  const [copiedMd, setCopiedMd] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pasteValue, setPasteValue] = useState('');
   const [importError, setImportError] = useState('');
@@ -59,6 +66,20 @@ export function BudgetDataActions({
     }
   }
 
+  function handleCopyMarkdown() {
+    const markdown = analysisPayload
+      ? buildLlmSnapshotMarkdown(analysisPayload)
+      : `# Budget data\n\n\`\`\`json\n${JSON.stringify(state, null, 2)}\n\`\`\``;
+
+    navigator.clipboard.writeText(markdown).then(
+      () => {
+        setCopiedMd(true);
+        setTimeout(() => setCopiedMd(false), 2000);
+      },
+      () => {},
+    );
+  }
+
   const openImport = () => {
     onImportDialogOpen?.();
     setImportOpen(true);
@@ -75,6 +96,23 @@ export function BudgetDataActions({
           orientation === 'column' && 'flex w-full flex-col gap-2',
         )}
       >
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(
+            'gap-1.5 text-muted-foreground text-xs',
+            orientation === 'column' && 'h-11 w-full justify-start',
+            buttonClassName,
+          )}
+          onClick={handleCopyMarkdown}
+        >
+          {copiedMd ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : (
+            <FileText className="h-3.5 w-3.5" />
+          )}
+          {copiedMd ? 'Copied' : 'Copy MD'}
+        </Button>
         <Button
           variant="outline"
           size="sm"

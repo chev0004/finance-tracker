@@ -13,10 +13,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
+import type { ExportPayload } from '@/lib/exportBudget';
 import type { BudgetSettings, BudgetState, IncomeSource } from '@/types';
 
 type DashboardNavSheetProps = {
   exportState: BudgetState;
+  exportAnalysisPayload: ExportPayload;
   onImport: (state: BudgetState) => void;
   settings: BudgetSettings;
   monthlyIncome: number;
@@ -29,6 +31,7 @@ type DashboardNavSheetProps = {
 
 export function DashboardNavSheet({
   exportState,
+  exportAnalysisPayload,
   onImport,
   settings,
   monthlyIncome,
@@ -84,6 +87,7 @@ export function DashboardNavSheet({
                   </p>
                   <BudgetDataActions
                     state={exportState}
+                    analysisPayload={exportAnalysisPayload}
                     onImport={onImport}
                     orientation="column"
                     onImportDialogOpen={() => setOpen(false)}
