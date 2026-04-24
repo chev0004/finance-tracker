@@ -91,6 +91,8 @@ export function ResponsivePicker({
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent
         className={cn('w-auto p-0', popoverContentClassName)}
+        side="bottom"
+        avoidCollisions={false}
         align={align}
       >
         {children(close)}

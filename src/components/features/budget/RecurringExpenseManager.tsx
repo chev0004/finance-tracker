@@ -1,12 +1,14 @@
 'use client';
 
-import { Pencil, Plus, X } from 'lucide-react';
+import { CalendarIcon, Pencil, Plus, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ResponsivePicker } from '@/components/ui/responsive-picker';
 import {
   ResponsiveSelect,
   type ResponsiveSelectOption,
@@ -42,22 +44,6 @@ const MONTH_NAMES = [
   'Dec',
 ];
 
-function buildMonthOptions(
-  projectionStartDate: string,
-): { value: string; label: string }[] {
-  const startYear = new Date(
-    `${projectionStartDate.slice(0, 7)}-01T00:00:00`,
-  ).getFullYear();
-  const out: { value: string; label: string }[] = [];
-  for (let y = startYear; y <= startYear + 4; y++) {
-    for (let m = 1; m <= 12; m++) {
-      const value = `${y}-${m < 10 ? '0' : ''}${m}`;
-      out.push({ value, label: `${MONTH_NAMES[m - 1]} ${y}` });
-    }
-  }
-  return out;
-}
-
 function monthLabel(value: string): string {
   const [y, m] = value.split('-').map(Number);
   return `${MONTH_NAMES[(m ?? 1) - 1]} ${y}`;
@@ -90,10 +76,6 @@ export function RecurringExpenseManager({
   startOpen = false,
   onCancel,
 }: RecurringExpenseManagerProps) {
-  const monthOptions = useMemo(
-    () => buildMonthOptions(projectionStartDate),
-    [projectionStartDate],
-  );
   const projectionEndMonth = useMemo(() => {
     const y = new Date(
       `${projectionStartDate.slice(0, 7)}-01T00:00:00`,
@@ -113,6 +95,8 @@ export function RecurringExpenseManager({
   const [startMonth, setStartMonth] = useState(projectionStartMonth);
   const [endMonth, setEndMonth] = useState(projectionEndMonth);
   const [endOngoing, setEndOngoing] = useState(true);
+  const [startMonthOpen, setStartMonthOpen] = useState(false);
+  const [endMonthOpen, setEndMonthOpen] = useState(false);
   const [deductFromPocket, setDeductFromPocket] = useState(false);
   const [deductIncomeSourceId, setDeductIncomeSourceId] = useState('');
 
@@ -125,11 +109,6 @@ export function RecurringExpenseManager({
     }
     return rows;
   }, [incomeSources]);
-
-  const endMonthOptions = useMemo(
-    () => monthOptions.filter((m) => m.value >= startMonth),
-    [monthOptions, startMonth],
-  );
 
   const resolvedDay =
     dayPreset === 'end'
@@ -319,26 +298,104 @@ export function RecurringExpenseManager({
             Months
           </Label>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <ResponsiveSelect
-              value={startMonth}
-              onValueChange={setStartMonth}
-              options={monthOptions}
-              placeholder="Start"
+            <ResponsivePicker
+              open={startMonthOpen}
+              onOpenChange={setStartMonthOpen}
               sheetTitle="Start month"
-              triggerClassName="min-h-11 min-w-0 flex-1 sm:max-w-[140px]"
-            />
+              popoverContentClassName="w-auto p-0"
+              trigger={
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11 min-w-0 flex-1 justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:max-w-[140px] sm:text-sm"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                  {monthLabel(startMonth)}
+                </Button>
+              }
+            >
+              {(close) => (
+                <Calendar
+                  mode="single"
+                  captionLayout="dropdown"
+                  fromYear={Number.parseInt(
+                    projectionStartMonth.slice(0, 4),
+                    10,
+                  )}
+                  toYear={Number.parseInt(projectionEndMonth.slice(0, 4), 10)}
+                  selected={new Date(`${startMonth}-01T00:00:00`)}
+                  onSelect={(d) => {
+                    if (!d) return;
+                    const selectedMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    if (
+                      selectedMonth >= projectionStartMonth &&
+                      selectedMonth <= projectionEndMonth
+                    ) {
+                      setStartMonth(selectedMonth);
+                      if (endMonth < selectedMonth) {
+                        setEndMonth(selectedMonth);
+                      }
+                      close();
+                    }
+                  }}
+                  defaultMonth={new Date(`${startMonth}-01T00:00:00`)}
+                  disabled={(date) => {
+                    const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    return (
+                      month < projectionStartMonth || month > projectionEndMonth
+                    );
+                  }}
+                  className="mx-auto w-full max-w-[100vw] rounded-lg"
+                />
+              )}
+            </ResponsivePicker>
             <span className="shrink-0 text-muted-foreground text-xs">-</span>
             {endOngoing ? (
               <span className="text-muted-foreground text-xs">ongoing</span>
             ) : (
-              <ResponsiveSelect
-                value={endMonth}
-                onValueChange={setEndMonth}
-                options={endMonthOptions}
-                placeholder="End"
+              <ResponsivePicker
+                open={endMonthOpen}
+                onOpenChange={setEndMonthOpen}
                 sheetTitle="End month"
-                triggerClassName="min-h-11 min-w-0 flex-1 sm:max-w-[140px]"
-              />
+                popoverContentClassName="w-auto p-0"
+                trigger={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11 min-w-0 flex-1 justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:max-w-[140px] sm:text-sm"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                    {monthLabel(endMonth)}
+                  </Button>
+                }
+              >
+                {(close) => (
+                  <Calendar
+                    mode="single"
+                    captionLayout="dropdown"
+                    fromYear={Number.parseInt(startMonth.slice(0, 4), 10)}
+                    toYear={Number.parseInt(projectionEndMonth.slice(0, 4), 10)}
+                    selected={new Date(`${endMonth}-01T00:00:00`)}
+                    onSelect={(d) => {
+                      if (!d) return;
+                      const selectedMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                      if (
+                        selectedMonth >= startMonth &&
+                        selectedMonth <= projectionEndMonth
+                      ) {
+                        setEndMonth(selectedMonth);
+                        close();
+                      }
+                    }}
+                    defaultMonth={new Date(`${endMonth}-01T00:00:00`)}
+                    disabled={(date) => {
+                      const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                      return month < startMonth || month > projectionEndMonth;
+                    }}
+                    className="mx-auto w-full max-w-[100vw] rounded-lg"
+                  />
+                )}
+              </ResponsivePicker>
             )}
             <div className="flex cursor-pointer items-center gap-2 text-muted-foreground text-xs">
               <Checkbox

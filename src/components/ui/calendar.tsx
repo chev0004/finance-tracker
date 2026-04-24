@@ -9,6 +9,7 @@ import * as React from 'react';
 import {
   type DayButton,
   DayPicker,
+  type DropdownProps,
   getDefaultClassNames,
 } from 'react-day-picker';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -161,6 +162,7 @@ function Calendar({
             <ChevronDownIcon className={cn('size-4', className)} {...props} />
           );
         },
+        Dropdown: CalendarDropdown,
         DayButton: CalendarDayButton,
         WeekNumber: ({ children, ...props }) => {
           return (
@@ -175,6 +177,87 @@ function Calendar({
       }}
       {...props}
     />
+  );
+}
+
+function CalendarDropdown({
+  value,
+  onChange,
+  options,
+  disabled,
+}: DropdownProps) {
+  const [open, setOpen] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const selected = options?.find((option) => option.value === value);
+
+  React.useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
+
+  const handleSelect = (nextValue: string | number | undefined) => {
+    if (nextValue == null) return;
+    const event = {
+      target: { value: String(nextValue) },
+    } as React.ChangeEvent<HTMLSelectElement>;
+    onChange?.(event);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          'flex h-8 min-w-17 cursor-pointer items-center justify-between gap-1 rounded-md border border-input bg-background py-1 pr-6 pl-2 text-foreground text-sm outline-none transition-[color,box-shadow,background-color]',
+          'hover:border-ring/50 hover:bg-accent/30 active:scale-[0.99] active:bg-accent/50',
+          'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          open && 'border-ring bg-accent/40',
+          'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
+        )}
+      >
+        <span>{selected?.label ?? ''}</span>
+      </button>
+      <ChevronDownIcon
+        className={cn(
+          'pointer-events-none absolute top-1/2 right-1.5 size-3 -translate-y-1/2 text-muted-foreground transition-transform',
+          open && 'rotate-180',
+        )}
+      />
+      {open && (
+        <div className="glass-card absolute top-full left-0 z-50 mt-1 max-h-56 min-w-full overflow-y-auto rounded-md border border-border p-1">
+          {options?.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              disabled={option.disabled}
+              onClick={() => handleSelect(option.value)}
+              className={cn(
+                'w-full cursor-pointer rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-[background-color,color,box-shadow,transform]',
+                'hover:bg-accent/60 active:scale-[0.99] active:bg-accent/80',
+                'focus-visible:ring-2 focus-visible:ring-ring/50',
+                'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
+                option.value === value
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-foreground',
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
