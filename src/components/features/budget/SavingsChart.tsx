@@ -20,6 +20,7 @@ import {
   YAxis,
 } from 'recharts';
 import { Button } from '@/components/ui/button';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,16 @@ interface SavingsChartProps {
     rawDate: string,
     amounts: { sourceId: string; amount: number }[],
   ) => void;
+  onSkipRecurringInstance?: (
+    recurringExpenseId: string,
+    occurrenceDate: string,
+    note: string,
+    amount?: number,
+  ) => { success: boolean; error?: string };
+  onRestoreRecurringInstance?: (
+    recurringExpenseId: string,
+    occurrenceDate: string,
+  ) => void;
 }
 
 const GREEN = '#10b981';
@@ -48,6 +59,8 @@ const GRAY = '#6b7280';
 const BLUE = '#3b82f6';
 
 const PAYDAY_DOT_HIT = 'data-payday-hit';
+
+const DOT_HIT_Z = 2500;
 
 function getSavingsColor(
   type: SavingsPoint['type'],
@@ -78,6 +91,7 @@ interface ChartDataPoint {
   radius: number;
   events: SavingsPointEvent[];
   canEditPayday: boolean;
+  canSkipRecurring: boolean;
 }
 
 function eventName(label: string): string {
@@ -97,6 +111,8 @@ export function SavingsChart({
   data,
   getPaydayEditRowsForDate,
   onApplyPaydayIncomeAmounts,
+  onSkipRecurringInstance,
+  onRestoreRecurringInstance,
 }: SavingsChartProps) {
   const maxVisibleTicks = useChartMaxTicks();
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -106,6 +122,13 @@ export function SavingsChart({
   const [draftBySource, setDraftBySource] = useState<Record<string, string>>(
     {},
   );
+  const [skipTarget, setSkipTarget] = useState<{
+    date: string;
+    event: SavingsPointEvent & { recurringExpenseId: string };
+  } | null>(null);
+  const [skipNote, setSkipNote] = useState('');
+  const [skipAmount, setSkipAmount] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [chartActionMenu, setChartActionMenu] = useState<{
     x: number;
     y: number;
@@ -124,6 +147,11 @@ export function SavingsChart({
         point.label !== '…' &&
         point.type !== 'start' &&
         point.events.some((e) => e.type === 'payday');
+      const canSkipRecurring =
+        point.label !== '…' &&
+        point.events.some(
+          (e) => e.type === 'recurring' && e.recurringExpenseId,
+        );
       return {
         date: point.date,
         rawDate: point.rawDate,
@@ -134,6 +162,7 @@ export function SavingsChart({
         radius: getSavingsRadius(point.type),
         events: point.events,
         canEditPayday,
+        canSkipRecurring,
       };
     });
   }, [data]);
@@ -245,6 +274,48 @@ export function SavingsChart({
     setDialogOpen(false);
   };
 
+  const openEditRecurringDialog = (
+    point: ChartDataPoint,
+    event: SavingsPointEvent & { recurringExpenseId: string },
+  ) => {
+    setSkipTarget({ date: point.rawDate, event });
+    setSkipNote('');
+    setSkipAmount(String(Math.abs(event.delta)));
+    setErrorMsg(null);
+  };
+
+  const handleSkipRecurring = (forcedAmount?: number) => {
+    if (!skipTarget || !onSkipRecurringInstance) return;
+    const amount =
+      forcedAmount ?? Math.max(0, Number.parseFloat(skipAmount) || 0);
+    const result = onSkipRecurringInstance(
+      skipTarget.event.recurringExpenseId,
+      skipTarget.date,
+      skipNote,
+      amount,
+    );
+    if (result.success) {
+      setSkipTarget(null);
+      setSkipNote('');
+      setSkipAmount('');
+      setErrorMsg(null);
+    } else {
+      setErrorMsg(result.error || 'Could not skip recurring expense.');
+    }
+  };
+
+  const handleRestoreRecurring = () => {
+    if (!skipTarget || !onRestoreRecurringInstance) return;
+    onRestoreRecurringInstance(
+      skipTarget.event.recurringExpenseId,
+      skipTarget.date,
+    );
+    setSkipTarget(null);
+    setSkipNote('');
+    setSkipAmount('');
+    setErrorMsg(null);
+  };
+
   const CustomTooltip = ({
     active,
     payload,
@@ -307,140 +378,152 @@ export function SavingsChart({
   };
 
   return (
-    <div className="h-[280px] w-full sm:h-[320px]">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart
-          data={chartData}
-          margin={{ top: 10, right: 8, left: 4, bottom: 5 }}
-        >
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="rgba(255,255,255,0.05)"
-          />
-          <XAxis
-            dataKey="date"
-            tick={{
-              fill: '#6b7280',
-              fontSize: 10,
-              fontFamily: 'var(--font-dm-sans)',
-            }}
-            axisLine={{ stroke: 'transparent' }}
-            tickLine={false}
-            interval={tickInterval}
-            angle={-35}
-            textAnchor="end"
-            height={50}
-          />
-          <YAxis
-            width={48}
-            tick={{
-              fill: '#6b7280',
-              fontSize: 9,
-              fontFamily: 'var(--font-space-mono)',
-            }}
-            axisLine={{ stroke: 'transparent' }}
-            tickLine={false}
-            tickCount={10}
-            tickMargin={4}
-            minTickGap={0}
-            tickFormatter={(value) =>
-              value < 0
-                ? `-$${Math.abs(value).toLocaleString()}`
-                : `$${value.toLocaleString()}`
-            }
-            domain={[0, 'auto']}
-          />
-          <Tooltip
-            content={<CustomTooltip />}
-            isAnimationActive={false}
-            active={freezeChartTooltip ? false : undefined}
-          />
-          <Line
-            type="stepAfter"
-            dataKey="balance"
-            stroke={BLUE}
-            strokeWidth={2}
-            dot={false}
-            activeDot={(dotProps: {
-              cx?: number;
-              cy?: number;
-              payload?: ChartDataPoint;
-            }) => {
-              const { cx, cy, payload } = dotProps;
-              if (cx == null || cy == null) return <g />;
+    <div className="space-y-3">
+      {errorMsg && (
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-red-500 text-sm">
+          {errorMsg}
+        </div>
+      )}
+
+      <div className="h-[280px] w-full sm:h-[320px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={chartData}
+            margin={{ top: 10, right: 8, left: 4, bottom: 5 }}
+          >
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="rgba(255,255,255,0.05)"
+            />
+            <XAxis
+              dataKey="date"
+              tick={{
+                fill: '#6b7280',
+                fontSize: 10,
+                fontFamily: 'var(--font-dm-sans)',
+              }}
+              axisLine={{ stroke: 'transparent' }}
+              tickLine={false}
+              interval={tickInterval}
+              angle={-35}
+              textAnchor="end"
+              height={50}
+            />
+            <YAxis
+              width={48}
+              tick={{
+                fill: '#6b7280',
+                fontSize: 9,
+                fontFamily: 'var(--font-space-mono)',
+              }}
+              axisLine={{ stroke: 'transparent' }}
+              tickLine={false}
+              tickCount={10}
+              tickMargin={4}
+              minTickGap={0}
+              tickFormatter={(value) =>
+                value < 0
+                  ? `-$${Math.abs(value).toLocaleString()}`
+                  : `$${value.toLocaleString()}`
+              }
+              domain={[0, 'auto']}
+            />
+            <Tooltip
+              content={<CustomTooltip />}
+              isAnimationActive={false}
+              active={freezeChartTooltip ? false : undefined}
+            />
+            <Line
+              type="stepAfter"
+              dataKey="balance"
+              stroke={BLUE}
+              strokeWidth={2}
+              dot={false}
+              activeDot={(dotProps: {
+                cx?: number;
+                cy?: number;
+                payload?: ChartDataPoint;
+              }) => {
+                const { cx, cy, payload } = dotProps;
+                if (cx == null || cy == null) return <g />;
+                return (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={6}
+                    fill={payload?.color ?? GRAY}
+                    stroke="none"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                );
+              }}
+              fill={`${BLUE}10`}
+              fillOpacity={0.1}
+              isAnimationActive={false}
+            />
+            {chartData.map((point, index) => {
+              const isHover = hoveredIndex === index;
+              const innerR = isHover ? point.radius + 2 : point.radius;
+              const hitR = Math.max(innerR + 10, 14);
               return (
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={6}
-                  fill={payload?.color ?? GRAY}
+                <ReferenceDot
+                  key={index}
+                  x={point.date}
+                  y={point.balance}
+                  r={0}
+                  zIndex={DOT_HIT_Z}
+                  fill="transparent"
                   stroke="none"
-                  style={{ pointerEvents: 'none' }}
+                  shape={(props: { cx?: number; cy?: number }) => {
+                    const { cx, cy } = props;
+                    if (cx == null || cy == null) return <g />;
+                    return (
+                      // biome-ignore lint/a11y/noStaticElementInteractions: chart svg hit target
+                      <g
+                        style={{
+                          cursor:
+                            point.canEditPayday || point.canSkipRecurring
+                              ? 'pointer'
+                              : 'default',
+                        }}
+                        onMouseEnter={() => setHoveredIndex(index)}
+                        onMouseLeave={() =>
+                          setHoveredIndex((h) => (h === index ? null : h))
+                        }
+                      >
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={innerR}
+                          fill={point.color}
+                          style={{ pointerEvents: 'none' }}
+                        />
+                        {/* biome-ignore lint/a11y/noStaticElementInteractions: chart svg hit target */}
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={hitR}
+                          fill="transparent"
+                          style={{ pointerEvents: 'all' }}
+                          {...(point.canEditPayday || point.canSkipRecurring
+                            ? { [PAYDAY_DOT_HIT]: 'true' }
+                            : {})}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (point.canEditPayday || point.canSkipRecurring) {
+                              openChartActionMenu(e.clientX, e.clientY, point);
+                            }
+                          }}
+                        />
+                      </g>
+                    );
+                  }}
                 />
               );
-            }}
-            fill={`${BLUE}10`}
-            fillOpacity={0.1}
-            isAnimationActive={false}
-          />
-          {chartData.map((point, index) => {
-            const isHover = hoveredIndex === index;
-            const innerR = isHover ? point.radius + 2 : point.radius;
-            const hitR = Math.max(innerR + 10, 14);
-            return (
-              <ReferenceDot
-                key={index}
-                x={point.date}
-                y={point.balance}
-                r={0}
-                fill="transparent"
-                stroke="none"
-                shape={(props: { cx?: number; cy?: number }) => {
-                  const { cx, cy } = props;
-                  if (cx == null || cy == null) return <g />;
-                  return (
-                    // biome-ignore lint/a11y/noStaticElementInteractions: chart svg hit target
-                    <g
-                      style={{
-                        cursor: point.canEditPayday ? 'pointer' : 'default',
-                      }}
-                      onMouseEnter={() => setHoveredIndex(index)}
-                      onMouseLeave={() =>
-                        setHoveredIndex((h) => (h === index ? null : h))
-                      }
-                    >
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={innerR}
-                        fill={point.color}
-                        style={{ pointerEvents: 'none' }}
-                      />
-                      {/* biome-ignore lint/a11y/noStaticElementInteractions: chart svg hit target */}
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={hitR}
-                        fill="transparent"
-                        style={{ pointerEvents: 'all' }}
-                        {...(point.canEditPayday
-                          ? { [PAYDAY_DOT_HIT]: 'true' }
-                          : {})}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (point.canEditPayday) {
-                            openChartActionMenu(e.clientX, e.clientY, point);
-                          }
-                        }}
-                      />
-                    </g>
-                  );
-                }}
-              />
-            );
-          })}
-        </LineChart>
-      </ResponsiveContainer>
+            })}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
 
       {chartActionMenu &&
         chartActionMenuStyle &&
@@ -458,31 +541,61 @@ export function SavingsChart({
             aria-label="Chart actions"
           >
             <div className="glass-card">
-              <div className="border-border/40 border-b px-3 py-2">
-                <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-[0.14em]">
+              <div className="border-border/40 border-b px-3.5 py-2.5">
+                <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
                   {chartActionMenu.point.date}
                 </p>
-                <p className="mt-0.5 font-mono text-foreground/90 text-xs tabular-nums">
+                <p className="mt-1 font-mono text-foreground text-xs tabular-nums">
                   {chartActionMenu.point.rawDate}
                 </p>
               </div>
               <div className="p-1.5">
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={cn(
-                    'flex w-full cursor-pointer items-center rounded-xl px-3 py-2.5 text-left text-sm transition-colors',
-                    'text-foreground/95 hover:bg-muted/80 active:bg-muted',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  )}
-                  onClick={() => {
-                    const p = chartActionMenu.point;
-                    closeChartActionMenu();
-                    openPaydayDialog(p);
-                  }}
-                >
-                  Edit Income
-                </button>
+                {chartActionMenu.point.canEditPayday && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={cn(
+                      'flex w-full cursor-pointer items-center rounded-md px-3 py-2 text-left text-sm transition-colors',
+                      'text-foreground/95 hover:bg-muted/60 active:bg-muted',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    )}
+                    onClick={() => {
+                      const p = chartActionMenu.point;
+                      closeChartActionMenu();
+                      openPaydayDialog(p);
+                    }}
+                  >
+                    Edit Income
+                  </button>
+                )}
+                {chartActionMenu.point.events
+                  .filter(
+                    (
+                      ev,
+                    ): ev is SavingsPointEvent & {
+                      recurringExpenseId: string;
+                    } =>
+                      ev.type === 'recurring' && Boolean(ev.recurringExpenseId),
+                  )
+                  .map((ev) => (
+                    <button
+                      key={`${ev.recurringExpenseId}-${ev.label}`}
+                      type="button"
+                      role="menuitem"
+                      className={cn(
+                        'flex w-full cursor-pointer items-center rounded-md px-3 py-2 text-left text-sm transition-colors',
+                        'text-foreground/95 hover:bg-muted/60 active:bg-muted',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      )}
+                      onClick={() => {
+                        const p = chartActionMenu.point;
+                        closeChartActionMenu();
+                        openEditRecurringDialog(p, ev);
+                      }}
+                    >
+                      Edit {eventName(ev.label)}
+                    </button>
+                  ))}
               </div>
             </div>
           </div>,
@@ -499,51 +612,151 @@ export function SavingsChart({
               . This does not change your income source rate or future paydays.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="flex flex-col gap-4">
             {dialogRows.map((row) => (
-              <div key={row.sourceId} className="space-y-2">
-                <Label className="text-muted-foreground text-xs">
-                  {row.name}{' '}
-                  <span className="font-normal">
-                    (scheduled ${row.scheduledAmount})
+              <div key={row.sourceId} className="min-w-0 space-y-2">
+                <div className="flex items-baseline justify-between gap-3">
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+                    {row.name}
+                  </Label>
+                  <span className="font-mono text-[10px] text-muted-foreground/70 uppercase tabular-nums tracking-wider">
+                    scheduled ${row.scheduledAmount}
                   </span>
-                </Label>
-                <div
-                  className={cn(
-                    'flex h-11 w-full min-w-0 items-center gap-2 rounded-md border border-input bg-transparent px-3.5 shadow-xs',
-                    'transition-[color,box-shadow,border-color] selection:bg-primary selection:text-primary-foreground',
-                    'focus-within:border-ring hover:border-ring/50 md:h-9 md:px-3',
-                    'dark:bg-input/30',
-                  )}
-                >
-                  <span
-                    className="shrink-0 text-muted-foreground text-sm tabular-nums"
-                    aria-hidden
-                  >
-                    $
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    className="min-h-0 min-w-0 flex-1 border-0 bg-transparent py-2.5 font-mono text-base outline-none md:py-1 md:text-sm"
-                    value={draftBySource[row.sourceId] ?? ''}
-                    onChange={(e) =>
-                      setDraftBySource((prev) => ({
-                        ...prev,
-                        [row.sourceId]: e.target.value,
-                      }))
-                    }
-                  />
                 </div>
+                <CurrencyInput
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="0"
+                  value={draftBySource[row.sourceId] ?? ''}
+                  onChange={(e) =>
+                    setDraftBySource((prev) => ({
+                      ...prev,
+                      [row.sourceId]: e.target.value,
+                    }))
+                  }
+                />
               </div>
             ))}
           </div>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button variant="ghost" onClick={() => setDialogOpen(false)}>
+          <div className="mt-6 flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setDialogOpen(false)}
+            >
               Cancel
             </Button>
-            <Button variant="muted" onClick={handleSaveDialog}>
+            <Button type="button" variant="muted" onClick={handleSaveDialog}>
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={skipTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSkipTarget(null);
+            setSkipNote('');
+            setSkipAmount('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {skipTarget
+                ? `Edit ${eventName(skipTarget.event.label)}`
+                : 'Edit'}
+            </DialogTitle>
+            <DialogDescription>
+              {skipTarget ? (
+                <>
+                  One-time adjustment on{' '}
+                  <span className="font-mono text-foreground">
+                    {skipTarget.date}
+                  </span>
+                  . Other occurrences are unaffected.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4">
+            <div className="min-w-0 space-y-2">
+              <Label
+                htmlFor="recurring-adjustment-amount"
+                className="text-muted-foreground text-xs uppercase tracking-wider"
+              >
+                Amount
+              </Label>
+              <CurrencyInput
+                id="recurring-adjustment-amount"
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="0"
+                value={skipAmount}
+                onChange={(e) => setSkipAmount(e.target.value)}
+              />
+            </div>
+
+            <div className="min-w-0 space-y-2">
+              <Label
+                htmlFor="recurring-skip-note"
+                className="text-muted-foreground text-xs uppercase tracking-wider"
+              >
+                Note (optional)
+              </Label>
+              <textarea
+                id="recurring-skip-note"
+                rows={3}
+                value={skipNote}
+                onChange={(e) => setSkipNote(e.target.value)}
+                placeholder="e.g. waived, paid elsewhere"
+                className={cn(
+                  'min-h-20 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow,border-color] placeholder:text-muted-foreground hover:border-ring/50 focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30',
+                )}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1 text-xs">
+              <button
+                type="button"
+                onClick={() => handleSkipRecurring(0)}
+                className="cursor-pointer text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Skip occurrence
+              </button>
+              <button
+                type="button"
+                onClick={handleRestoreRecurring}
+                className="cursor-pointer text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Restore scheduled
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setSkipTarget(null);
+                setSkipNote('');
+                setSkipAmount('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="muted"
+              onClick={() => handleSkipRecurring()}
+            >
               Save
             </Button>
           </div>
