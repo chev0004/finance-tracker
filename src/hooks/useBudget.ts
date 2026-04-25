@@ -45,6 +45,8 @@ const DEFAULT_SETTINGS: BudgetSettings = {
   paydayIncomeOverrides: [],
 };
 
+const POCKET_DAY_EXPENSE_LABEL = 'Pocket money';
+
 function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
@@ -1257,6 +1259,10 @@ export function useBudget() {
       const periodExpenses = expenses.filter((e) =>
         dateInPeriod(e.date, range.start, range.end),
       );
+      const pocketDaySpent =
+        periodExpenses.find(
+          (e) => e.date === payday && e.label === POCKET_DAY_EXPENSE_LABEL,
+        )?.amount ?? 0;
 
       const baseSpent =
         expenseCount > 0 ? expenseTotal : spentPerPeriod[i] || 0;
@@ -1297,6 +1303,7 @@ export function useBudget() {
         type,
         idx: i,
         expenseCount,
+        pocketDaySpent,
         expenseItems,
       };
     });
@@ -1517,6 +1524,43 @@ export function useBudget() {
       return { success: true };
     },
     [pocketTimeline],
+  );
+
+  const updatePocketSpendForDate = useCallback(
+    (date: string, amount: number): { success: boolean; error?: string } => {
+      const periodIdx = getPeriodIndexWithBounds(date, pocketPeriodBounds);
+      if (periodIdx === null) {
+        return { success: false, error: 'Invalid pocket date' };
+      }
+      const valid = Math.max(0, amount);
+      setExpenses((prev) => {
+        const existing = prev.find(
+          (e) => e.date === date && e.label === POCKET_DAY_EXPENSE_LABEL,
+        );
+        if (valid <= 0) {
+          return existing ? prev.filter((e) => e.id !== existing.id) : prev;
+        }
+        if (existing) {
+          return prev.map((e) =>
+            e.id === existing.id
+              ? { ...e, amount: valid, weekIdx: periodIdx }
+              : e,
+          );
+        }
+        return [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            date,
+            label: POCKET_DAY_EXPENSE_LABEL,
+            amount: valid,
+            weekIdx: periodIdx,
+          },
+        ];
+      });
+      return { success: true };
+    },
+    [pocketPeriodBounds],
   );
 
   const updateSettings = useCallback((patch: Partial<BudgetSettings>) => {
@@ -1747,6 +1791,7 @@ export function useBudget() {
     removeExpense,
     updateExpense,
     updateSpentForPeriod,
+    updatePocketSpendForDate,
     updateSettings,
     addGoal,
     updateGoal,

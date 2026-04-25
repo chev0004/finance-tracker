@@ -158,6 +158,7 @@ export interface PocketPoint {
   type: 'surplus' | 'over' | 'flat';
   idx: number;
   expenseCount: number;
+  pocketDaySpent: number;
   expenseItems: PocketExpenseItem[];
 }
 
