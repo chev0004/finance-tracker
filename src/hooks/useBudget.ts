@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { BUDGET_STORAGE_KEY } from '@/lib/budget-constants';
-import { getPocketPerPeriodForDate } from '@/lib/pocket-per-period';
+import {
+  getPocketAmountForPayday,
+  getPocketPerPeriodForDate,
+} from '@/lib/pocket-per-period';
 import {
   alignPaydayContainingDate,
   getCalendarPocketPeriodStarts,
@@ -43,9 +46,8 @@ const DEFAULT_SETTINGS: BudgetSettings = {
   incomeSources: [],
   oneTimeIncome: [],
   paydayIncomeOverrides: [],
+  pocketAmountOverrides: [],
 };
-
-const POCKET_DAY_EXPENSE_LABEL = 'Pocket money';
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
@@ -441,7 +443,7 @@ function genFixedEvents(
   const pocketPaydays = getPocketPaydays(settings, coverDates);
   for (const payday of pocketPaydays) {
     if (!isPocketPausedOnDate(settings, payday)) {
-      const pocketAmt = getPocketPerPeriodForDate(settings, payday);
+      const pocketAmt = getPocketAmountForPayday(settings, payday);
       ev.push({
         date: payday,
         label: 'pocket',
@@ -609,6 +611,21 @@ function migratePaydayIncomeOverrides(
   }));
 }
 
+function migratePocketAmountOverrides(raw: unknown) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (x): x is Record<string, unknown> => x !== null && typeof x === 'object',
+    )
+    .map((x) => ({
+      id: typeof x.id === 'string' ? x.id : crypto.randomUUID(),
+      date: typeof x.date === 'string' ? x.date.slice(0, 10) : '',
+      amount:
+        typeof x.amount === 'number' && !Number.isNaN(x.amount) ? x.amount : 0,
+    }))
+    .filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.date));
+}
+
 function migrateRecurringExpenseSkips(raw: unknown): RecurringExpenseSkip[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -747,6 +764,9 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
       paydayIncomeOverrides: migratePaydayIncomeOverrides(
         settings.paydayIncomeOverrides ?? [],
       ),
+      pocketAmountOverrides: migratePocketAmountOverrides(
+        settings.pocketAmountOverrides,
+      ),
     };
   }
 
@@ -782,6 +802,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
     recurringExpenses: [],
     recurringExpenseSkips: [],
     paydayIncomeOverrides: [],
+    pocketAmountOverrides: [],
   };
 }
 
@@ -1054,7 +1075,7 @@ export function useBudget() {
 
     for (let i = 0; i < pocketPeriodBounds.length; i++) {
       const periodPayday = paydays[i] ?? pocketPeriodBounds[i].start;
-      pocketBal += getPocketPerPeriodForDate(settings, periodPayday);
+      pocketBal += getPocketAmountForPayday(settings, periodPayday);
       const range = pocketPeriodBounds[i];
 
       const periodExpenses = expenses
@@ -1122,7 +1143,7 @@ export function useBudget() {
     const firstPeriodPayday = paydays[0];
     const preStartPocket =
       firstPeriodPayday && firstPeriodPayday <= settings.startDate
-        ? getPocketPerPeriodForDate(settings, firstPeriodPayday)
+        ? getPocketAmountForPayday(settings, firstPeriodPayday)
         : 0;
     const effectiveStartBalance = settings.startingBalance - preStartPocket;
 
@@ -1244,7 +1265,8 @@ export function useBudget() {
   const pocketTimeline = useMemo((): PocketPoint[] => {
     let balance = 0;
     return paydays.map((payday, i) => {
-      const periodPocket = getPocketPerPeriodForDate(settings, payday);
+      const scheduledPocket = getPocketPerPeriodForDate(settings, payday);
+      const periodPocket = getPocketAmountForPayday(settings, payday);
       const range = getPocketPeriodRange(
         payday,
         paydays[i + 1],
@@ -1259,10 +1281,6 @@ export function useBudget() {
       const periodExpenses = expenses.filter((e) =>
         dateInPeriod(e.date, range.start, range.end),
       );
-      const pocketDaySpent =
-        periodExpenses.find(
-          (e) => e.date === payday && e.label === POCKET_DAY_EXPENSE_LABEL,
-        )?.amount ?? 0;
 
       const baseSpent =
         expenseCount > 0 ? expenseTotal : spentPerPeriod[i] || 0;
@@ -1303,7 +1321,8 @@ export function useBudget() {
         type,
         idx: i,
         expenseCount,
-        pocketDaySpent,
+        pocketAllocated: periodPocket,
+        scheduledPocket,
         expenseItems,
       };
     });
@@ -1327,7 +1346,7 @@ export function useBudget() {
     const range = pocketPeriodBounds[periodIdx];
     const periodPayday = paydays[periodIdx] ?? range.start;
     let pocketBal =
-      prevBalance + getPocketPerPeriodForDate(settings, periodPayday);
+      prevBalance + getPocketAmountForPayday(settings, periodPayday);
     const recurringItems =
       pocketDeductingRecurringPerPeriod.items[periodIdx] ?? [];
     for (const it of recurringItems) {
@@ -1504,65 +1523,6 @@ export function useBudget() {
     [pocketPeriodBounds],
   );
 
-  const updateSpentForPeriod = useCallback(
-    (idx: number, amount: number): { success: boolean; error?: string } => {
-      const pt = pocketTimeline[idx];
-      if (!pt) return { success: false, error: 'Invalid period' };
-      if (pt.expenseCount > 0) {
-        return {
-          success: false,
-          error:
-            'Expenses are logged for this period. Edit through the expense log.',
-        };
-      }
-      const valid = Math.max(0, Math.min(amount, pt.available));
-      setSpentPerPeriod((prev) => {
-        const next = [...prev];
-        next[idx] = valid;
-        return next;
-      });
-      return { success: true };
-    },
-    [pocketTimeline],
-  );
-
-  const updatePocketSpendForDate = useCallback(
-    (date: string, amount: number): { success: boolean; error?: string } => {
-      const periodIdx = getPeriodIndexWithBounds(date, pocketPeriodBounds);
-      if (periodIdx === null) {
-        return { success: false, error: 'Invalid pocket date' };
-      }
-      const valid = Math.max(0, amount);
-      setExpenses((prev) => {
-        const existing = prev.find(
-          (e) => e.date === date && e.label === POCKET_DAY_EXPENSE_LABEL,
-        );
-        if (valid <= 0) {
-          return existing ? prev.filter((e) => e.id !== existing.id) : prev;
-        }
-        if (existing) {
-          return prev.map((e) =>
-            e.id === existing.id
-              ? { ...e, amount: valid, weekIdx: periodIdx }
-              : e,
-          );
-        }
-        return [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            date,
-            label: POCKET_DAY_EXPENSE_LABEL,
-            amount: valid,
-            weekIdx: periodIdx,
-          },
-        ];
-      });
-      return { success: true };
-    },
-    [pocketPeriodBounds],
-  );
-
   const updateSettings = useCallback((patch: Partial<BudgetSettings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
@@ -1709,6 +1669,43 @@ export function useBudget() {
     [],
   );
 
+  const applyPocketAmountForPayday = useCallback(
+    (date: string, amount: number): { success: boolean; error?: string } => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return { success: false, error: 'Invalid pocket period' };
+      }
+      const nextAmount = Math.max(0, amount);
+      setSettings((prev) => {
+        const overrides = [...prev.pocketAmountOverrides];
+        const base = getPocketPerPeriodForDate(prev, date);
+        const idx = overrides.findIndex((o) => o.date === date);
+        if (Math.abs(nextAmount - base) < 0.005) {
+          if (idx >= 0) overrides.splice(idx, 1);
+        } else if (idx >= 0) {
+          overrides[idx] = { ...overrides[idx], amount: nextAmount };
+        } else {
+          overrides.push({
+            id: crypto.randomUUID(),
+            date,
+            amount: nextAmount,
+          });
+        }
+        return { ...prev, pocketAmountOverrides: overrides };
+      });
+      return { success: true };
+    },
+    [],
+  );
+
+  const resetPocketAmountForPayday = useCallback((date: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      pocketAmountOverrides: prev.pocketAmountOverrides.filter(
+        (o) => o.date !== date,
+      ),
+    }));
+  }, []);
+
   const addIncomeSource = useCallback((source: Omit<IncomeSource, 'id'>) => {
     setSettings((prev) => ({
       ...prev,
@@ -1790,8 +1787,6 @@ export function useBudget() {
     addExpense,
     removeExpense,
     updateExpense,
-    updateSpentForPeriod,
-    updatePocketSpendForDate,
     updateSettings,
     addGoal,
     updateGoal,
@@ -1803,6 +1798,8 @@ export function useBudget() {
     removeRecurringExpenseSkip,
     getPaydayEditRowsForDate: getPaydayEditRowsForDateCallback,
     applyPaydayIncomeAmounts,
+    applyPocketAmountForPayday,
+    resetPocketAmountForPayday,
     addIncomeSource,
     updateIncomeSource,
     removeIncomeSource,

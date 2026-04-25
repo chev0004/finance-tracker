@@ -1,7 +1,7 @@
 'use client';
 
 import { format, isValid, parseISO } from 'date-fns';
-import { AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   CartesianGrid,
@@ -22,25 +22,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  cn,
-  normalizeNumInputBlur,
-  normalizeNumInputLeading,
-} from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import type { PocketExpenseItem, PocketPoint } from '@/types';
 
 interface PocketChartProps {
   data: PocketPoint[];
-  onUpdateSpent: (
-    weekIdx: number,
-    amount: number,
-  ) => { success: boolean; error?: string };
-  onUpdatePocketDaySpent?: (
-    date: string,
-    amount: number,
-  ) => { success: boolean; error?: string };
   onSelectExpensePeriod?: (period: {
     start: string;
     end: string;
@@ -93,7 +80,6 @@ interface ChartDataPoint {
   type: PocketPoint['type'];
   idx: number;
   expenseCount: number;
-  pocketDaySpent: number;
   expenseItems: PocketExpenseItem[];
   color: string;
   isSelected: boolean;
@@ -108,15 +94,11 @@ type SkipDialogTarget = {
 
 export function PocketChart({
   data,
-  onUpdateSpent,
-  onUpdatePocketDaySpent,
   onSelectExpensePeriod,
   onSkipRecurringInstance,
 }: PocketChartProps) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-  const [inputValue, setInputValue] = useState<string>('');
-  const [dayInputValue, setDayInputValue] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [skipTarget, setSkipTarget] = useState<SkipDialogTarget | null>(null);
   const [skipNote, setSkipNote] = useState('');
@@ -132,7 +114,6 @@ export function PocketChart({
       type: point.type,
       idx: point.idx,
       expenseCount: point.expenseCount,
-      pocketDaySpent: point.pocketDaySpent,
       expenseItems: point.expenseItems,
       color: getPocketColor(
         point.type,
@@ -171,54 +152,14 @@ export function PocketChart({
 
     if (selectedIdx === idx) {
       setSelectedIdx(null);
-      setInputValue('');
-      setDayInputValue('');
     } else {
-      if (point.expenseCount > 0) {
-        onSelectExpensePeriod?.({
-          start: point.weekStart,
-          end: point.weekEnd,
-          label: point.date,
-          index: point.idx,
-        });
-      }
+      onSelectExpensePeriod?.({
+        start: point.weekStart,
+        end: point.weekEnd,
+        label: point.date,
+        index: point.idx,
+      });
       setSelectedIdx(idx);
-      setInputValue(point.spent?.toString() || '0');
-      setDayInputValue(
-        point.pocketDaySpent > 0 ? String(point.pocketDaySpent) : '',
-      );
-    }
-  };
-
-  const handleSave = () => {
-    if (selectedIdx === null) return;
-    const amount = Number.parseInt(inputValue, 10) || 0;
-    const result = onUpdateSpent(selectedIdx, amount);
-    if (result.success) {
-      setSelectedIdx(null);
-      setInputValue('');
-      setDayInputValue('');
-      setErrorMsg(null);
-    } else {
-      setErrorMsg(result.error || 'Failed to update');
-    }
-  };
-
-  const handleCancel = () => {
-    setSelectedIdx(null);
-    setInputValue('');
-    setDayInputValue('');
-    setErrorMsg(null);
-  };
-
-  const handleSaveDay = () => {
-    if (!selectedPoint || !onUpdatePocketDaySpent) return;
-    const amount = Math.max(0, Number.parseFloat(dayInputValue) || 0);
-    const result = onUpdatePocketDaySpent(selectedPoint.rawDate, amount);
-    if (result.success) {
-      setErrorMsg(null);
-    } else {
-      setErrorMsg(result.error || 'Could not update day pocket spend');
     }
   };
 
@@ -508,182 +449,41 @@ export function PocketChart({
         </ResponsiveContainer>
       </div>
 
-      {selectedPoint &&
-        (selectedPoint.expenseCount === 0 ||
-          skippableRecurring.length > 0 ||
-          onUpdatePocketDaySpent) && (
-          <Card className="glass-card p-4 transition-colors">
-            <div className="mb-2 text-muted-foreground text-xs">
-              Week: {selectedPoint.date}
+      {selectedPoint && skippableRecurring.length > 0 && (
+        <Card className="glass-card p-4 transition-colors">
+          <div className="mb-2 text-muted-foreground text-xs">
+            Week: {selectedPoint.date}
+          </div>
+          <div className="space-y-2">
+            <div className="text-muted-foreground text-xs">
+              Recurring pocket charges (click to skip once)
             </div>
-
-            {skippableRecurring.length > 0 && (
-              <div className="mb-4 space-y-2 border-border/50 border-b pb-4">
-                <div className="text-muted-foreground text-xs">
-                  Recurring pocket charges (click to skip once)
-                </div>
-                <ul className="space-y-1.5">
-                  {skippableRecurring.map((item) => (
-                    <li key={`${item.recurringExpenseId}-${item.date}`}>
-                      <button
-                        type="button"
-                        onClick={() => openSkipDialog(item)}
-                        className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/50"
-                      >
-                        <span className="min-w-0 text-muted-foreground">
-                          <span className="text-foreground">{item.label}</span>
-                          {item.date ? (
-                            <span className="mt-0.5 block font-normal text-xs">
-                              {fmtOccurrence(item.date)}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="shrink-0 font-mono text-xs">
-                          −${fmtAmount(item.amount)}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {selectedPoint.expenseCount === 0 && (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="flex-1 text-sm">
-                  <span className="text-muted-foreground">Available:</span>{' '}
-                  <span className="font-medium">
-                    ${fmtAmount(selectedPoint.available)}
-                  </span>
-                  <span className="mx-2 text-muted-foreground">|</span>
-                  <span className="text-muted-foreground">Unspent:</span>{' '}
-                  <span className="font-medium">
-                    $
-                    {fmtAmount(
-                      Math.max(
-                        0,
-                        selectedPoint.available -
-                          (Number.parseFloat(inputValue) || 0),
-                      ),
-                    )}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label
-                    htmlFor="pocket-spent"
-                    className="whitespace-nowrap text-muted-foreground text-xs"
+            <ul className="space-y-1.5">
+              {skippableRecurring.map((item) => (
+                <li key={`${item.recurringExpenseId}-${item.date}`}>
+                  <button
+                    type="button"
+                    onClick={() => openSkipDialog(item)}
+                    className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/50"
                   >
-                    Spent:
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="pocket-spent"
-                      type="number"
-                      min={0}
-                      max={selectedPoint.available}
-                      value={inputValue === '' ? '0' : inputValue}
-                      onChange={(e) =>
-                        setInputValue(normalizeNumInputLeading(e.target.value))
-                      }
-                      onBlur={() =>
-                        setInputValue(normalizeNumInputBlur(inputValue))
-                      }
-                      className="w-24 pr-7 text-center font-mono"
-                    />
-                    <div className="absolute inset-y-0 right-0 flex w-7 flex-col border-input border-l">
-                      <button
-                        type="button"
-                        tabIndex={-1}
-                        onClick={() =>
-                          setInputValue(
-                            String(
-                              Math.min(
-                                (Number.parseInt(inputValue, 10) || 0) + 1,
-                                selectedPoint.available,
-                              ),
-                            ),
-                          )
-                        }
-                        className="flex flex-1 cursor-pointer items-center justify-center rounded-tr-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      >
-                        <ChevronUp className="size-3" />
-                      </button>
-                      <button
-                        type="button"
-                        tabIndex={-1}
-                        onClick={() =>
-                          setInputValue(
-                            String(
-                              Math.max(
-                                (Number.parseInt(inputValue, 10) || 0) - 1,
-                                0,
-                              ),
-                            ),
-                          )
-                        }
-                        className="flex flex-1 cursor-pointer items-center justify-center rounded-br-md border-input border-t text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      >
-                        <ChevronDown className="size-3" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={handleSave} variant="muted">
-                    Save
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={handleCancel}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {onUpdatePocketDaySpent && (
-              <div
-                className={cn(
-                  'flex flex-col gap-3 sm:flex-row sm:items-center',
-                  (selectedPoint.expenseCount === 0 ||
-                    skippableRecurring.length > 0) &&
-                    'mt-4 border-border/50 border-t pt-4',
-                )}
-              >
-                <div className="flex-1 text-sm">
-                  <span className="text-muted-foreground">
-                    Pocket spend on{' '}
-                  </span>
-                  <span className="font-medium">
-                    {fmtOccurrence(selectedPoint.rawDate)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label
-                    htmlFor="pocket-day-spent"
-                    className="whitespace-nowrap text-muted-foreground text-xs"
-                  >
-                    Amount:
-                  </Label>
-                  <Input
-                    id="pocket-day-spent"
-                    type="number"
-                    min={0}
-                    value={dayInputValue === '' ? '0' : dayInputValue}
-                    onChange={(e) =>
-                      setDayInputValue(normalizeNumInputLeading(e.target.value))
-                    }
-                    onBlur={() =>
-                      setDayInputValue(normalizeNumInputBlur(dayInputValue))
-                    }
-                    className="w-24 text-center font-mono"
-                  />
-                </div>
-                <Button size="sm" onClick={handleSaveDay} variant="muted">
-                  Save day
-                </Button>
-              </div>
-            )}
-          </Card>
-        )}
+                    <span className="min-w-0 text-muted-foreground">
+                      <span className="text-foreground">{item.label}</span>
+                      {item.date ? (
+                        <span className="mt-0.5 block font-normal text-xs">
+                          {fmtOccurrence(item.date)}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="shrink-0 font-mono text-xs">
+                      −${fmtAmount(item.amount)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

@@ -81,6 +81,12 @@ export interface PaydayIncomeOverride {
   amount: number;
 }
 
+export interface PocketAmountOverride {
+  id: string;
+  date: string;
+  amount: number;
+}
+
 export interface PaydayEditRow {
   sourceId: string;
   name: string;
@@ -103,6 +109,7 @@ export interface BudgetSettings {
   incomeSources: IncomeSource[];
   oneTimeIncome: OneTimeIncome[];
   paydayIncomeOverrides: PaydayIncomeOverride[];
+  pocketAmountOverrides: PocketAmountOverride[];
 }
 
 export interface FixedEvent {
@@ -158,7 +165,8 @@ export interface PocketPoint {
   type: 'surplus' | 'over' | 'flat';
   idx: number;
   expenseCount: number;
-  pocketDaySpent: number;
+  pocketAllocated: number;
+  scheduledPocket: number;
   expenseItems: PocketExpenseItem[];
 }
 

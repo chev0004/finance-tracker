@@ -14,3 +14,17 @@ export function getPocketPerPeriodForDate(
   }
   return amount;
 }
+
+export function getPocketAmountForPayday(
+  settings: Pick<
+    BudgetSettings,
+    'pocketPerPeriod' | 'pocketPerPeriodChanges' | 'pocketAmountOverrides'
+  >,
+  payday: string,
+): number {
+  const override = settings.pocketAmountOverrides?.find(
+    (o) => o.date === payday,
+  );
+  if (override) return override.amount;
+  return getPocketPerPeriodForDate(settings, payday);
+}

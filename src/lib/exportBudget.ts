@@ -118,6 +118,14 @@ export function buildExportText(payload: ExportPayload): string {
           )
       : ['None'];
 
+  const pocketOverrideLines =
+    settings.pocketAmountOverrides?.length > 0
+      ? settings.pocketAmountOverrides
+          .slice()
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .map((o) => `${o.date} | $${o.amount.toLocaleString()}`)
+      : ['None'];
+
   const incomeSourceLines =
     settings.incomeSources.length > 0
       ? settings.incomeSources.flatMap((source) => {
@@ -201,6 +209,7 @@ export function buildExportText(payload: ExportPayload): string {
     section('Settings', settingsLines),
     section('Recurring expenses', recurringLines),
     section('One-off payday income overrides', paydayOverrideLines),
+    section('One-off pocket amount overrides', pocketOverrideLines),
     section('Income sources', incomeSourceLines),
     section('One-time income', oneTimeIncomeLines),
     section('Savings goals', goalLines.length ? goalLines : ['None']),
@@ -239,6 +248,7 @@ export function buildLlmSnapshotMarkdown(payload: ExportPayload): string {
   const incomeSourceCount = settings.incomeSources.length;
   const oneTimeIncomeCount = settings.oneTimeIncome.length;
   const paydayOverrideCount = settings.paydayIncomeOverrides.length;
+  const pocketOverrideCount = settings.pocketAmountOverrides.length;
 
   const firstSavingsPoint = savingsTimeline[0];
   const lastSavingsPoint = savingsTimeline[savingsTimeline.length - 1];
@@ -277,7 +287,7 @@ export function buildLlmSnapshotMarkdown(payload: ExportPayload): string {
     `- Monthly savings (auto-calculated): $${formatCurrency(monthlySavings)}`,
     `- Projected end-of-year savings (auto-calculated): $${formatCurrency(eoyBalance)}`,
     `- Projected end-of-year combined (auto-calculated): $${formatCurrency(eoyCombined)}`,
-    `- Inputs: ${expenses.length} logged expenses, ${recurringCount} recurring expenses, ${incomeSourceCount} income sources, ${oneTimeIncomeCount} one-time incomes, ${paydayOverrideCount} payday overrides, ${goalCount} goals`,
+    `- Inputs: ${expenses.length} logged expenses, ${recurringCount} recurring expenses, ${incomeSourceCount} income sources, ${oneTimeIncomeCount} one-time incomes, ${paydayOverrideCount} payday overrides, ${pocketOverrideCount} pocket overrides, ${goalCount} goals`,
     '',
     '## Auto-calculated outputs',
     `- Savings timeline points: ${savingsTimeline.length}${firstSavingsPoint ? ` (${firstSavingsPoint.rawDate} to ${lastSavingsPoint?.rawDate ?? firstSavingsPoint.rawDate})` : ''}`,

@@ -20,6 +20,12 @@ interface ExpenseListProps {
   activePeriodStart?: string | null;
   onRemove: (id: string) => void;
   onUpdateExpense: (expense: Expense) => void;
+  onActivePeriodChange?: (period: {
+    start: string;
+    end: string;
+    label: string;
+    index: number;
+  }) => void;
 }
 
 interface PeriodGroup {
@@ -38,6 +44,7 @@ export function ExpenseList({
   activePeriodStart,
   onRemove,
   onUpdateExpense,
+  onActivePeriodChange,
 }: ExpenseListProps) {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
@@ -90,6 +97,18 @@ export function ExpenseList({
       setActiveIdx(nextIdx);
     }
   }, [activePeriodStart, periods]);
+
+  useEffect(() => {
+    if (!onActivePeriodChange) return;
+    const active = periods[activeIdx];
+    if (!active) return;
+    onActivePeriodChange({
+      start: active.start,
+      end: active.end,
+      label: active.label,
+      index: activeIdx,
+    });
+  }, [activeIdx, periods, onActivePeriodChange]);
 
   const clampIdx = (i: number) => Math.max(0, Math.min(periods.length - 1, i));
   const active = periods[activeIdx];

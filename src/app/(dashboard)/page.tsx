@@ -2,7 +2,7 @@
 
 import { format, isValid, parseISO } from 'date-fns';
 import { Briefcase, CalendarIcon, Gift, Repeat, Target } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AuthNavButton } from '@/components/features/auth/AuthNavButton';
 import { DashboardNavSheet } from '@/components/features/budget/DashboardNavSheet';
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
@@ -15,6 +15,7 @@ import { MobileAddExpenseSheet } from '@/components/features/budget/MobileAddExp
 import { MobileAddIncomeSheet } from '@/components/features/budget/MobileAddIncomeSheet';
 import { MobileBalancesOverview } from '@/components/features/budget/MobileBalancesOverview';
 import { OneTimeIncomeManager } from '@/components/features/budget/OneTimeIncomeManager';
+import { PocketAllocationEditor } from '@/components/features/budget/PocketAllocationEditor';
 import { PocketChart } from '@/components/features/budget/PocketChart';
 import { RecurringExpenseManager } from '@/components/features/budget/RecurringExpenseManager';
 import { SavingsChart } from '@/components/features/budget/SavingsChart';
@@ -62,8 +63,6 @@ export default function Home() {
     addExpense,
     removeExpense,
     updateExpense,
-    updateSpentForPeriod,
-    updatePocketSpendForDate,
     updateSettings,
     addGoal,
     updateGoal,
@@ -75,6 +74,8 @@ export default function Home() {
     removeRecurringExpenseSkip,
     getPaydayEditRowsForDate,
     applyPaydayIncomeAmounts,
+    applyPocketAmountForPayday,
+    resetPocketAmountForPayday,
     monthlyIncome,
     monthlySavings,
     effectivePocketPerPeriod,
@@ -94,6 +95,9 @@ export default function Home() {
   const [activeExpensePeriodStart, setActiveExpensePeriodStart] = useState<
     string | null
   >(null);
+  const [activeExpensePeriodIdx, setActiveExpensePeriodIdx] = useState<
+    number | null
+  >(null);
   const expenseLogRef = useRef<HTMLDivElement>(null);
 
   const openExpensePeriod = (period: { start: string }) => {
@@ -105,6 +109,18 @@ export default function Home() {
       });
     });
   };
+
+  const handleActiveExpensePeriodChange = useCallback(
+    (period: { index: number }) => {
+      setActiveExpensePeriodIdx(period.index);
+    },
+    [],
+  );
+
+  const activePocketPoint = useMemo(() => {
+    if (activeExpensePeriodIdx === null) return null;
+    return pocketTimeline[activeExpensePeriodIdx] ?? null;
+  }, [activeExpensePeriodIdx, pocketTimeline]);
 
   const chartStartYear = Number(settings.startDate.slice(0, 4));
   const chartEndYear = chartStartYear + 4;
@@ -846,8 +862,9 @@ export default function Home() {
           <CardContent className="space-y-4">
             <p className="text-muted-foreground/70 text-xs leading-relaxed">
               ${effectivePocketPerPeriod} allocated {pocketFreqLabel}. Click any
-              dot to edit period or day spending, or to skip a single recurring
-              pocket charge. Unspent balance carries over.
+              dot to jump to that period in the expense log, where you can
+              override the allocation or skip a recurring pocket charge. Unspent
+              balance carries over.
             </p>
             <NavStepper
               disablePrev={chartYearClamped <= chartStartYear}
@@ -863,8 +880,6 @@ export default function Home() {
             </NavStepper>
             <PocketChart
               data={pocketChartData}
-              onUpdateSpent={updateSpentForPeriod}
-              onUpdatePocketDaySpent={updatePocketSpendForDate}
               onSelectExpensePeriod={openExpensePeriod}
               onSkipRecurringInstance={(
                 recurringExpenseId,
@@ -911,7 +926,7 @@ export default function Home() {
                   }
                 />
               </div>
-              <div className="border-border/50 border-t pt-4">
+              <div className="space-y-4 border-border/50 border-t pt-4">
                 <ExpenseList
                   expenses={expenses}
                   paydays={paydays}
@@ -921,7 +936,17 @@ export default function Home() {
                   activePeriodStart={activeExpensePeriodStart}
                   onRemove={removeExpense}
                   onUpdateExpense={updateExpense}
+                  onActivePeriodChange={handleActiveExpensePeriodChange}
                 />
+                {activePocketPoint && (
+                  <div className="border-border/50 border-t pt-4">
+                    <PocketAllocationEditor
+                      point={activePocketPoint}
+                      onApply={applyPocketAmountForPayday}
+                      onReset={resetPocketAmountForPayday}
+                    />
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
