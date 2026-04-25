@@ -24,6 +24,7 @@ import type {
   PocketPerPeriodChange,
   PocketPoint,
   RecurringExpense,
+  RecurringExpenseSkip,
   SavingsGoal,
   SavingsPoint,
 } from '@/types';
@@ -38,6 +39,7 @@ const DEFAULT_SETTINGS: BudgetSettings = {
   pocketIncomeSourceId: undefined,
   goals: [],
   recurringExpenses: [],
+  recurringExpenseSkips: [],
   incomeSources: [],
   oneTimeIncome: [],
   paydayIncomeOverrides: [],
@@ -189,6 +191,19 @@ function isExpensePausedOnDate(
   return false;
 }
 
+function getRecurringInstanceAmount(
+  settings: BudgetSettings,
+  amount: number,
+  recurringExpenseId: string,
+  date: string,
+): number {
+  const skips = settings.recurringExpenseSkips ?? [];
+  const override = skips.find(
+    (s) => s.recurringExpenseId === recurringExpenseId && s.date === date,
+  );
+  return override ? override.amount : amount;
+}
+
 function isPocketPausedOnDate(settings: BudgetSettings, date: string): boolean {
   for (const goal of settings.goals) {
     if (!goal.pausePocket) continue;
@@ -329,13 +344,20 @@ function getPocketDeductingRecurringPerPeriod(
         const monthStr = payday.slice(0, 7);
         if (monthStr < rec.startMonth || monthStr > endBound) continue;
         if (isExpensePausedOnDate(settings, rec.id, payday)) continue;
+        const amount = getRecurringInstanceAmount(
+          settings,
+          rec.amount,
+          rec.id,
+          payday,
+        );
         const idx = getPeriodIndexWithBounds(payday, periodBounds);
         if (idx !== null) {
-          totals[idx] += rec.amount;
+          totals[idx] += amount;
           items[idx].push({
             label: rec.label,
-            amount: rec.amount,
+            amount,
             date: payday,
+            recurringExpenseId: rec.id,
           });
         }
       }
@@ -353,13 +375,20 @@ function getPocketDeductingRecurringPerPeriod(
       const dateStr = fmtDate(y, m, day);
 
       if (!isExpensePausedOnDate(settings, rec.id, dateStr)) {
+        const amount = getRecurringInstanceAmount(
+          settings,
+          rec.amount,
+          rec.id,
+          dateStr,
+        );
         const idx = getPeriodIndexWithBounds(dateStr, periodBounds);
         if (idx !== null) {
-          totals[idx] += rec.amount;
+          totals[idx] += amount;
           items[idx].push({
             label: rec.label,
-            amount: rec.amount,
+            amount,
             date: dateStr,
+            recurringExpenseId: rec.id,
           });
         }
       }
@@ -448,12 +477,19 @@ function genFixedEvents(
           const monthStr = payday.slice(0, 7);
           if (monthStr < rec.startMonth || monthStr > endBound) continue;
           if (isExpensePausedOnDate(settings, rec.id, payday)) continue;
+          const amount = getRecurringInstanceAmount(
+            settings,
+            rec.amount,
+            rec.id,
+            payday,
+          );
           ev.push({
             date: payday,
-            label: `${rec.label} $${rec.amount}`,
-            delta: -rec.amount,
+            label: `${rec.label} $${amount}`,
+            delta: -amount,
             type: 'recurring',
             sourceId: rec.deductIncomeSourceId,
+            recurringExpenseId: rec.id,
           });
         }
       }
@@ -473,11 +509,18 @@ function genFixedEvents(
             : Math.min(rec.dayOfMonth, lastDayOf(y, m));
         const dateStr = fmtDate(y, m, day);
         if (!isExpensePausedOnDate(settings, rec.id, dateStr)) {
+          const amount = getRecurringInstanceAmount(
+            settings,
+            rec.amount,
+            rec.id,
+            dateStr,
+          );
           ev.push({
             date: dateStr,
-            label: `${rec.label} $${rec.amount}`,
-            delta: -rec.amount,
+            label: `${rec.label} $${amount}`,
+            delta: -amount,
             type: 'recurring',
+            recurringExpenseId: rec.id,
           });
         }
       }
@@ -564,6 +607,24 @@ function migratePaydayIncomeOverrides(
   }));
 }
 
+function migrateRecurringExpenseSkips(raw: unknown): RecurringExpenseSkip[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (x): x is Record<string, unknown> => x !== null && typeof x === 'object',
+    )
+    .map((x) => ({
+      id: typeof x.id === 'string' ? x.id : crypto.randomUUID(),
+      recurringExpenseId:
+        typeof x.recurringExpenseId === 'string' ? x.recurringExpenseId : '',
+      date: typeof x.date === 'string' ? x.date.slice(0, 10) : '',
+      amount:
+        typeof x.amount === 'number' && !Number.isNaN(x.amount) ? x.amount : 0,
+      note: typeof x.note === 'string' ? x.note : '',
+    }))
+    .filter((x) => x.recurringExpenseId && /^\d{4}-\d{2}-\d{2}$/.test(x.date));
+}
+
 function migratePocketPerPeriodChanges(raw: unknown): PocketPerPeriodChange[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -634,6 +695,8 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
       incomeChanges?: unknown[];
       payFrequency?: PayFrequency;
       firstPayday?: string;
+      recurringPocketSkips?: unknown;
+      recurringExpenseSkips?: unknown;
       recurringPocketExpenses?: {
         id: string;
         label: string;
@@ -671,6 +734,9 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
         ...migrateRecurringExpenses(settings.recurringExpenses ?? []),
         ...fromLegacyPocket,
       ],
+      recurringExpenseSkips: migrateRecurringExpenseSkips(
+        settings.recurringExpenseSkips ?? settings.recurringPocketSkips,
+      ),
       goals: (settings.goals as unknown as Record<string, unknown>[]).map(
         migrateGoal,
       ),
@@ -712,6 +778,7 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
     goals: [],
     oneTimeIncome: [],
     recurringExpenses: [],
+    recurringExpenseSkips: [],
     paydayIncomeOverrides: [],
   };
 }
@@ -997,12 +1064,13 @@ export function useBudget() {
         const covered = Math.min(it.amount, pocketBal);
         const overflow = it.amount - covered;
         pocketBal -= covered;
-        if (overflow > 0) {
+        if (overflow > 0 || it.amount <= 0) {
           overflowEvents.push({
             date: it.date ?? range.end,
             label: it.label,
             delta: -overflow,
             type: 'recurring',
+            recurringExpenseId: it.recurringExpenseId,
           });
         }
       }
@@ -1156,6 +1224,7 @@ export function useBudget() {
           delta: e.delta,
           type: e.type,
           sourceId: e.sourceId,
+          recurringExpenseId: e.recurringExpenseId,
         })),
       });
     }
@@ -1501,8 +1570,61 @@ export function useBudget() {
     setSettings((prev) => ({
       ...prev,
       recurringExpenses: prev.recurringExpenses.filter((e) => e.id !== id),
+      recurringExpenseSkips: (prev.recurringExpenseSkips ?? []).filter(
+        (s) => s.recurringExpenseId !== id,
+      ),
     }));
   }, []);
+
+  const addRecurringExpenseSkip = useCallback(
+    (
+      recurringExpenseId: string,
+      date: string,
+      note: string,
+      amount = 0,
+    ): { success: boolean; error?: string } => {
+      let applied = false;
+      setSettings((prev) => {
+        const existing = prev.recurringExpenseSkips ?? [];
+        const idx = existing.findIndex(
+          (s) => s.recurringExpenseId === recurringExpenseId && s.date === date,
+        );
+        applied = true;
+        const next =
+          idx >= 0
+            ? existing.map((s, i) =>
+                i === idx ? { ...s, amount, note: note.trim() } : s,
+              )
+            : [
+                ...existing,
+                {
+                  id: crypto.randomUUID(),
+                  recurringExpenseId,
+                  date,
+                  amount,
+                  note: note.trim(),
+                },
+              ];
+        return { ...prev, recurringExpenseSkips: next };
+      });
+      return applied
+        ? { success: true }
+        : { success: false, error: 'Could not adjust recurring expense.' };
+    },
+    [],
+  );
+
+  const removeRecurringExpenseSkip = useCallback(
+    (recurringExpenseId: string, date: string) => {
+      setSettings((prev) => ({
+        ...prev,
+        recurringExpenseSkips: (prev.recurringExpenseSkips ?? []).filter(
+          (s) => s.recurringExpenseId !== recurringExpenseId || s.date !== date,
+        ),
+      }));
+    },
+    [],
+  );
 
   const getPaydayEditRowsForDateCallback = useCallback(
     (date: string) => getPaydayEditRowsForDate(settings, date),
@@ -1632,6 +1754,8 @@ export function useBudget() {
     addRecurringExpense,
     updateRecurringExpense,
     removeRecurringExpense,
+    addRecurringExpenseSkip,
+    removeRecurringExpenseSkip,
     getPaydayEditRowsForDate: getPaydayEditRowsForDateCallback,
     applyPaydayIncomeAmounts,
     addIncomeSource,
