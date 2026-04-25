@@ -90,10 +90,6 @@ body {
   background: transparent;
 }
 
-[data-slot="dialog-content"] .grid {
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-}
-
 .recharts-tooltip-wrapper:focus,
 .recharts-tooltip-wrapper:focus-visible {
   outline: none;
