@@ -70,6 +70,8 @@ export default function Home() {
     addRecurringExpense,
     updateRecurringExpense,
     removeRecurringExpense,
+    addRecurringExpenseSkip,
+    removeRecurringExpenseSkip,
     getPaydayEditRowsForDate,
     applyPaydayIncomeAmounts,
     monthlyIncome,
@@ -603,6 +605,20 @@ export default function Home() {
               data={savingsChartData}
               getPaydayEditRowsForDate={getPaydayEditRowsForDate}
               onApplyPaydayIncomeAmounts={applyPaydayIncomeAmounts}
+              onSkipRecurringInstance={(
+                recurringExpenseId,
+                occurrenceDate,
+                note,
+                amount,
+              ) =>
+                addRecurringExpenseSkip(
+                  recurringExpenseId,
+                  occurrenceDate,
+                  note,
+                  amount,
+                )
+              }
+              onRestoreRecurringInstance={removeRecurringExpenseSkip}
             />
           </CardContent>
         </Card>
@@ -815,7 +831,8 @@ export default function Home() {
           <CardContent className="space-y-4">
             <p className="text-muted-foreground/70 text-xs leading-relaxed">
               ${effectivePocketPerPeriod} allocated {pocketFreqLabel}. Click any
-              dot to edit what you actually spent. Unspent balance carries over.
+              dot to edit what you spent or to skip a single recurring pocket
+              charge. Unspent balance carries over.
             </p>
             <NavStepper
               disablePrev={chartYearClamped <= chartStartYear}
@@ -832,6 +849,17 @@ export default function Home() {
             <PocketChart
               data={pocketChartData}
               onUpdateSpent={updateSpentForPeriod}
+              onSkipRecurringInstance={(
+                recurringExpenseId,
+                occurrenceDate,
+                note,
+              ) =>
+                addRecurringExpenseSkip(
+                  recurringExpenseId,
+                  occurrenceDate,
+                  note,
+                )
+              }
             />
           </CardContent>
         </Card>
