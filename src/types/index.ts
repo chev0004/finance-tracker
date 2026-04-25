@@ -35,6 +35,14 @@ export interface RecurringExpense {
   deductIncomeSourceId?: string;
 }
 
+export interface RecurringExpenseSkip {
+  id: string;
+  recurringExpenseId: string;
+  date: string;
+  amount: number;
+  note: string;
+}
+
 export type PayFrequency = 'weekly' | 'biweekly' | 'monthly' | 'custom';
 
 export interface IncomeRateChange {
@@ -91,6 +99,7 @@ export interface BudgetSettings {
   pocketIncomeSourceId?: string;
   goals: SavingsGoal[];
   recurringExpenses: RecurringExpense[];
+  recurringExpenseSkips: RecurringExpenseSkip[];
   incomeSources: IncomeSource[];
   oneTimeIncome: OneTimeIncome[];
   paydayIncomeOverrides: PaydayIncomeOverride[];
@@ -110,6 +119,7 @@ export interface FixedEvent {
     | 'payday-recurring'
     | 'one-time';
   sourceId?: string;
+  recurringExpenseId?: string;
 }
 
 export interface SavingsPointEvent {
@@ -117,6 +127,7 @@ export interface SavingsPointEvent {
   delta: number;
   type: FixedEvent['type'];
   sourceId?: string;
+  recurringExpenseId?: string;
 }
 
 export interface SavingsPoint {
@@ -132,6 +143,7 @@ export interface PocketExpenseItem {
   label: string;
   amount: number;
   date?: string;
+  recurringExpenseId?: string;
 }
 
 export interface PocketPoint {
