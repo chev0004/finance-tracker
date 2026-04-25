@@ -2,7 +2,7 @@
 
 import { format, parseISO } from 'date-fns';
 import { Pencil, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { NavStepper } from '@/components/ui/nav-stepper';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -17,6 +17,7 @@ interface ExpenseListProps {
   payFrequency: PayFrequency;
   payInterval?: number;
   balanceStartDate: string;
+  activePeriodStart?: string | null;
   onRemove: (id: string) => void;
   onUpdateExpense: (expense: Expense) => void;
 }
@@ -34,6 +35,7 @@ export function ExpenseList({
   payFrequency,
   payInterval,
   balanceStartDate,
+  activePeriodStart,
   onRemove,
   onUpdateExpense,
 }: ExpenseListProps) {
@@ -72,10 +74,22 @@ export function ExpenseList({
   }, [periods]);
 
   const [activeIdx, setActiveIdx] = useState(defaultIdx);
+  const appliedActivePeriodStartRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (activePeriodStart) return;
     setActiveIdx(defaultIdx);
-  }, [defaultIdx]);
+  }, [activePeriodStart, defaultIdx]);
+
+  useEffect(() => {
+    if (!activePeriodStart) return;
+    if (appliedActivePeriodStartRef.current === activePeriodStart) return;
+    const nextIdx = periods.findIndex((p) => p.start === activePeriodStart);
+    if (nextIdx >= 0) {
+      appliedActivePeriodStartRef.current = activePeriodStart;
+      setActiveIdx(nextIdx);
+    }
+  }, [activePeriodStart, periods]);
 
   const clampIdx = (i: number) => Math.max(0, Math.min(periods.length - 1, i));
   const active = periods[activeIdx];

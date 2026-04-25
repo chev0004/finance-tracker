@@ -2,7 +2,7 @@
 
 import { format, isValid, parseISO } from 'date-fns';
 import { Briefcase, CalendarIcon, Gift, Repeat, Target } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AuthNavButton } from '@/components/features/auth/AuthNavButton';
 import { DashboardNavSheet } from '@/components/features/budget/DashboardNavSheet';
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
@@ -63,6 +63,7 @@ export default function Home() {
     removeExpense,
     updateExpense,
     updateSpentForPeriod,
+    updatePocketSpendForDate,
     updateSettings,
     addGoal,
     updateGoal,
@@ -90,6 +91,20 @@ export default function Home() {
   const [addPanel, setAddPanel] = useState<
     'goal' | 'recurring' | 'one-time' | 'income' | null
   >(null);
+  const [activeExpensePeriodStart, setActiveExpensePeriodStart] = useState<
+    string | null
+  >(null);
+  const expenseLogRef = useRef<HTMLDivElement>(null);
+
+  const openExpensePeriod = (period: { start: string }) => {
+    setActiveExpensePeriodStart(period.start);
+    requestAnimationFrame(() => {
+      expenseLogRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  };
 
   const chartStartYear = Number(settings.startDate.slice(0, 4));
   const chartEndYear = chartStartYear + 4;
@@ -831,8 +846,8 @@ export default function Home() {
           <CardContent className="space-y-4">
             <p className="text-muted-foreground/70 text-xs leading-relaxed">
               ${effectivePocketPerPeriod} allocated {pocketFreqLabel}. Click any
-              dot to edit what you spent or to skip a single recurring pocket
-              charge. Unspent balance carries over.
+              dot to edit period or day spending, or to skip a single recurring
+              pocket charge. Unspent balance carries over.
             </p>
             <NavStepper
               disablePrev={chartYearClamped <= chartStartYear}
@@ -849,6 +864,8 @@ export default function Home() {
             <PocketChart
               data={pocketChartData}
               onUpdateSpent={updateSpentForPeriod}
+              onUpdatePocketDaySpent={updatePocketSpendForDate}
+              onSelectExpensePeriod={openExpensePeriod}
               onSkipRecurringInstance={(
                 recurringExpenseId,
                 occurrenceDate,
@@ -865,47 +882,50 @@ export default function Home() {
         </Card>
 
         {/* --- Expense Log --- */}
-        <Card className="border-border/50 bg-card/50 hover:border-border/80">
-          <CardHeader className="pb-2">
-            <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
-              Log an Expense
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="hidden sm:block">
-              <ExpenseForm
-                balanceStartDate={settings.startDate}
-                onAdd={addExpense}
-              />
-            </div>
-            <div className="sm:hidden">
-              <MobileAddExpenseSheet
-                balanceStartDate={settings.startDate}
-                onAdd={addExpense}
-                trigger={
-                  <Button
-                    variant="muted"
-                    size="lg"
-                    className="h-12 w-full font-semibold text-base"
-                  >
-                    Log expense
-                  </Button>
-                }
-              />
-            </div>
-            <div className="border-border/50 border-t pt-4">
-              <ExpenseList
-                expenses={expenses}
-                paydays={paydays}
-                payFrequency={effectivePocketFrequency}
-                payInterval={effectivePocketInterval}
-                balanceStartDate={settings.startDate}
-                onRemove={removeExpense}
-                onUpdateExpense={updateExpense}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <div ref={expenseLogRef}>
+          <Card className="border-border/50 bg-card/50 hover:border-border/80">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
+                Log an Expense
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="hidden sm:block">
+                <ExpenseForm
+                  balanceStartDate={settings.startDate}
+                  onAdd={addExpense}
+                />
+              </div>
+              <div className="sm:hidden">
+                <MobileAddExpenseSheet
+                  balanceStartDate={settings.startDate}
+                  onAdd={addExpense}
+                  trigger={
+                    <Button
+                      variant="muted"
+                      size="lg"
+                      className="h-12 w-full font-semibold text-base"
+                    >
+                      Log expense
+                    </Button>
+                  }
+                />
+              </div>
+              <div className="border-border/50 border-t pt-4">
+                <ExpenseList
+                  expenses={expenses}
+                  paydays={paydays}
+                  payFrequency={effectivePocketFrequency}
+                  payInterval={effectivePocketInterval}
+                  balanceStartDate={settings.startDate}
+                  activePeriodStart={activeExpensePeriodStart}
+                  onRemove={removeExpense}
+                  onUpdateExpense={updateExpense}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         <footer className="pt-4 text-center text-muted-foreground/50 text-xs">
           Budget Tracker v2.0 - Data stored locally in your browser
