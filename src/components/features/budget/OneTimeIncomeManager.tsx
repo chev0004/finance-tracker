@@ -1,7 +1,7 @@
 'use client';
 
 import { format, isValid, parseISO } from 'date-fns';
-import { CalendarIcon, Pencil, Plus, X } from 'lucide-react';
+import { CalendarIcon, Eye, EyeOff, Pencil, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -21,6 +21,7 @@ interface OneTimeIncomeManagerProps {
   onAdd: (item: Omit<OneTimeIncome, 'id'>) => void;
   onUpdate: (item: OneTimeIncome) => void;
   onRemove: (id: string) => void;
+  onToggleHidden?: (id: string) => void;
   startOpen?: boolean;
   onCancel?: () => void;
 }
@@ -30,6 +31,7 @@ export function OneTimeIncomeManager({
   onAdd,
   onUpdate,
   onRemove,
+  onToggleHidden,
   startOpen = false,
   onCancel,
 }: OneTimeIncomeManagerProps) {
@@ -178,18 +180,42 @@ export function OneTimeIncomeManager({
         ) : (
           <div
             key={item.id}
-            className="group flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50"
+            className={cn(
+              'group flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50',
+              item.hidden && 'opacity-50',
+            )}
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               <span className="text-muted-foreground text-xs">
                 {format(parseISO(item.date), 'MMM d, yyyy')}
               </span>
-              <span className="truncate">{item.label}</span>
+              <span className={cn('truncate', item.hidden && 'line-through')}>
+                {item.label}
+              </span>
               <span className="font-mono text-green-400 text-xs">
                 +${item.amount.toLocaleString()}
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+              {onToggleHidden && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  onClick={() => onToggleHidden(item.id)}
+                  title={
+                    item.hidden
+                      ? 'Show in calculations'
+                      : 'Hide from calculations'
+                  }
+                >
+                  {item.hidden ? (
+                    <EyeOff className="h-3.5 w-3.5" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

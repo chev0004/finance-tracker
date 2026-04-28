@@ -1,7 +1,16 @@
 'use client';
 
 import { format, isValid, parseISO } from 'date-fns';
-import { Briefcase, CalendarIcon, Gift, Repeat, Target } from 'lucide-react';
+import {
+  Briefcase,
+  CalendarIcon,
+  ChevronDown,
+  ChevronRight,
+  Gift,
+  Loader2,
+  Repeat,
+  Target,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AuthNavButton } from '@/components/features/auth/AuthNavButton';
 import { DashboardNavSheet } from '@/components/features/budget/DashboardNavSheet';
@@ -50,6 +59,7 @@ import { cn, getLocalDateString } from '@/lib/utils';
 export default function Home() {
   const {
     isLoaded,
+    isMutating,
     needsStartDatePrompt,
     expenses,
     spentPerPeriod,
@@ -67,9 +77,11 @@ export default function Home() {
     addGoal,
     updateGoal,
     removeGoal,
+    toggleGoalHidden,
     addRecurringExpense,
     updateRecurringExpense,
     removeRecurringExpense,
+    toggleRecurringExpenseHidden,
     addRecurringExpenseSkip,
     removeRecurringExpenseSkip,
     getPaydayEditRowsForDate,
@@ -86,9 +98,17 @@ export default function Home() {
     addOneTimeIncome,
     updateOneTimeIncome,
     removeOneTimeIncome,
+    toggleOneTimeIncomeHidden,
   } = useBudget();
 
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<{
+    goals: boolean;
+    recurring: boolean;
+    oneTime: boolean;
+  }>({ goals: false, recurring: false, oneTime: false });
+  const toggleSection = (key: 'goals' | 'recurring' | 'oneTime') =>
+    setCollapsedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   const [addPanel, setAddPanel] = useState<
     'goal' | 'recurring' | 'one-time' | 'income' | null
   >(null);
@@ -339,6 +359,12 @@ export default function Home() {
 
   return (
     <div className="min-h-dvh bg-background p-4 sm:p-6 lg:p-8">
+      {isMutating && (
+        <div className="pointer-events-none fixed right-4 bottom-4 z-50 flex items-center gap-2 rounded-md border border-border/60 bg-card/95 px-3 py-2 font-mono text-muted-foreground text-xs shadow-lg backdrop-blur">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          updating
+        </div>
+      )}
       <div className="mx-auto max-w-6xl space-y-6">
         <Dialog
           open={showStartDatePrompt}
@@ -780,84 +806,156 @@ export default function Home() {
 
         {/* --- Goals --- */}
         {settings.goals.length > 0 && (
-          <Card className="border-border/50 bg-card/50 hover:border-border/80">
-            <CardHeader className="pb-2">
-              <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
-                Savings Goals
-              </CardTitle>
+          <Card
+            className={cn(
+              'gap-3 border-border/50 bg-card/50 hover:border-border/80',
+              collapsedSections.goals && 'py-3',
+            )}
+          >
+            <CardHeader className="pb-0">
+              <button
+                type="button"
+                className="-mx-2 flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted/40"
+                onClick={() => toggleSection('goals')}
+                aria-expanded={!collapsedSections.goals}
+              >
+                {collapsedSections.goals ? (
+                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                )}
+                <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
+                  Savings Goals
+                </CardTitle>
+                <span className="ml-auto font-mono text-[10px] text-muted-foreground/70">
+                  {settings.goals.filter((g) => !g.hidden).length}/
+                  {settings.goals.length}
+                </span>
+              </button>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {settings.goals.map((goal) => {
-                const stat = goalStats.find((s) => s.goalId === goal.id);
-                if (!stat) return null;
+            {!collapsedSections.goals && (
+              <CardContent className="space-y-3">
+                {settings.goals.map((goal) => {
+                  const stat = goalStats.find((s) => s.goalId === goal.id);
+                  if (!stat) return null;
 
-                if (editingGoalId === goal.id) {
+                  if (editingGoalId === goal.id) {
+                    return (
+                      <GoalForm
+                        key={goal.id}
+                        goal={goal}
+                        recurringExpenses={settings.recurringExpenses}
+                        onSave={(updated) => {
+                          updateGoal(updated);
+                          setEditingGoalId(null);
+                        }}
+                        onCancel={() => setEditingGoalId(null)}
+                      />
+                    );
+                  }
+
                   return (
-                    <GoalForm
+                    <GoalCard
                       key={goal.id}
                       goal={goal}
+                      stat={stat}
                       recurringExpenses={settings.recurringExpenses}
-                      onSave={(updated) => {
-                        updateGoal(updated);
-                        setEditingGoalId(null);
-                      }}
-                      onCancel={() => setEditingGoalId(null)}
+                      onEdit={() => setEditingGoalId(goal.id)}
+                      onDelete={() => removeGoal(goal.id)}
+                      onToggleHidden={() => toggleGoalHidden(goal.id)}
                     />
                   );
-                }
-
-                return (
-                  <GoalCard
-                    key={goal.id}
-                    goal={goal}
-                    stat={stat}
-                    recurringExpenses={settings.recurringExpenses}
-                    onEdit={() => setEditingGoalId(goal.id)}
-                    onDelete={() => removeGoal(goal.id)}
-                  />
-                );
-              })}
-            </CardContent>
+                })}
+              </CardContent>
+            )}
           </Card>
         )}
 
         {/* --- Recurring Expenses --- */}
         {settings.recurringExpenses.length > 0 && (
-          <Card className="border-border/50 bg-card/50 hover:border-border/80">
-            <CardHeader className="pb-2">
-              <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
-                Recurring Expenses
-              </CardTitle>
+          <Card
+            className={cn(
+              'gap-3 border-border/50 bg-card/50 hover:border-border/80',
+              collapsedSections.recurring && 'py-3',
+            )}
+          >
+            <CardHeader className="pb-0">
+              <button
+                type="button"
+                className="-mx-2 flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted/40"
+                onClick={() => toggleSection('recurring')}
+                aria-expanded={!collapsedSections.recurring}
+              >
+                {collapsedSections.recurring ? (
+                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                )}
+                <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
+                  Recurring Expenses
+                </CardTitle>
+                <span className="ml-auto font-mono text-[10px] text-muted-foreground/70">
+                  {settings.recurringExpenses.filter((e) => !e.hidden).length}/
+                  {settings.recurringExpenses.length}
+                </span>
+              </button>
             </CardHeader>
-            <CardContent>
-              <RecurringExpenseManager
-                expenses={settings.recurringExpenses}
-                incomeSources={settings.incomeSources}
-                projectionStartDate={settings.startDate}
-                onAdd={addRecurringExpense}
-                onUpdate={updateRecurringExpense}
-                onRemove={removeRecurringExpense}
-              />
-            </CardContent>
+            {!collapsedSections.recurring && (
+              <CardContent>
+                <RecurringExpenseManager
+                  expenses={settings.recurringExpenses}
+                  incomeSources={settings.incomeSources}
+                  projectionStartDate={settings.startDate}
+                  onAdd={addRecurringExpense}
+                  onUpdate={updateRecurringExpense}
+                  onRemove={removeRecurringExpense}
+                  onToggleHidden={toggleRecurringExpenseHidden}
+                />
+              </CardContent>
+            )}
           </Card>
         )}
 
         {/* --- One-time income --- */}
         {settings.oneTimeIncome.length > 0 && (
-          <Card className="border-border/50 bg-card/50 hover:border-border/80">
-            <CardHeader className="pb-2">
-              <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
-                One-time income
-              </CardTitle>
+          <Card
+            className={cn(
+              'gap-3 border-border/50 bg-card/50 hover:border-border/80',
+              collapsedSections.oneTime && 'py-3',
+            )}
+          >
+            <CardHeader className="pb-0">
+              <button
+                type="button"
+                className="-mx-2 flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted/40"
+                onClick={() => toggleSection('oneTime')}
+                aria-expanded={!collapsedSections.oneTime}
+              >
+                {collapsedSections.oneTime ? (
+                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                )}
+                <CardTitle className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
+                  One-time income
+                </CardTitle>
+                <span className="ml-auto font-mono text-[10px] text-muted-foreground/70">
+                  {settings.oneTimeIncome.filter((o) => !o.hidden).length}/
+                  {settings.oneTimeIncome.length}
+                </span>
+              </button>
             </CardHeader>
-            <CardContent>
-              <OneTimeIncomeManager
-                items={settings.oneTimeIncome}
-                onAdd={addOneTimeIncome}
-                onUpdate={updateOneTimeIncome}
-                onRemove={removeOneTimeIncome}
-              />
-            </CardContent>
+            {!collapsedSections.oneTime && (
+              <CardContent>
+                <OneTimeIncomeManager
+                  items={settings.oneTimeIncome}
+                  onAdd={addOneTimeIncome}
+                  onUpdate={updateOneTimeIncome}
+                  onRemove={removeOneTimeIncome}
+                  onToggleHidden={toggleOneTimeIncomeHidden}
+                />
+              </CardContent>
+            )}
           </Card>
         )}
 

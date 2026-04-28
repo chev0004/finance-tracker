@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import { authClient } from '@/lib/auth-client';
 import { BUDGET_STORAGE_KEY } from '@/lib/budget-constants';
 import {
@@ -175,6 +182,7 @@ function isIncomePaydaySkipped(
   payday: string,
 ): boolean {
   for (const g of settings.goals) {
+    if (g.hidden) continue;
     if (!g.pauseIncome) continue;
     if (isDateInRange(payday, g.startDate, g.endDate)) return true;
     if (g.incomeResumeDate && payday > g.endDate && payday < g.incomeResumeDate)
@@ -189,6 +197,7 @@ function isExpensePausedOnDate(
   date: string,
 ): boolean {
   for (const goal of settings.goals) {
+    if (goal.hidden) continue;
     if (!goal.pausedExpenseIds.includes(expenseId)) continue;
     if (isDateInRange(date, goal.startDate, goal.endDate)) return true;
   }
@@ -210,6 +219,7 @@ function getRecurringInstanceAmount(
 
 function isPocketPausedOnDate(settings: BudgetSettings, date: string): boolean {
   for (const goal of settings.goals) {
+    if (goal.hidden) continue;
     if (!goal.pausePocket) continue;
     if (isDateInRange(date, goal.startDate, goal.endDate)) return true;
   }
@@ -323,6 +333,7 @@ function getPocketDeductingRecurringPerPeriod(
     new Date(`${settings.startDate}T00:00:00`).getFullYear() + 4;
 
   for (const rec of settings.recurringExpenses) {
+    if (rec.hidden) continue;
     if (!rec.deductFromPocket) continue;
     const endBound = rec.endMonth ?? `${projectionEndYear}-12`;
 
@@ -457,6 +468,7 @@ function genFixedEvents(
     new Date(`${settings.startDate}T00:00:00`).getFullYear() + 4;
 
   for (const rec of settings.recurringExpenses) {
+    if (rec.hidden) continue;
     const endBound = rec.endMonth ?? `${projectionEndYear}-12`;
 
     if (rec.deductIncomeSourceId && !rec.deductFromPocket) {
@@ -537,6 +549,7 @@ function genFixedEvents(
   }
 
   for (const o of settings.oneTimeIncome ?? []) {
+    if (o.hidden) continue;
     ev.push({
       date: o.date,
       label: `${o.label} $${o.amount}`,
@@ -546,6 +559,7 @@ function genFixedEvents(
   }
 
   for (const goal of settings.goals) {
+    if (goal.hidden) continue;
     const total = goal.lineItems.reduce((s, i) => s + i.amount, 0);
     if (total > 0) {
       ev.push({
@@ -850,6 +864,7 @@ export function useBudget() {
   const [spentPerPeriod, setSpentPerPeriod] = useState<number[]>([]);
   const [settings, setSettings] = useState<BudgetSettings>(DEFAULT_SETTINGS);
   const [needsStartDatePrompt, setNeedsStartDatePrompt] = useState(false);
+  const [isMutating, startMutation] = useTransition();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -1382,6 +1397,16 @@ export function useBudget() {
   const goalStats = useMemo((): GoalStat[] => {
     return settings.goals.map((goal) => {
       const total = goal.lineItems.reduce((s, item) => s + item.amount, 0);
+      if (goal.hidden) {
+        return {
+          goalId: goal.id,
+          totalCost: total,
+          preBalance: 0,
+          postBalance: 0,
+          isFeasible: true,
+          isWarning: false,
+        };
+      }
       const prePt = [...savingsTimeline]
         .filter((p) => p.rawDate < goal.startDate)
         .pop();
@@ -1419,6 +1444,7 @@ export function useBudget() {
     }
 
     for (const goal of settings.goals) {
+      if (goal.hidden) continue;
       const stat = goalStats.find((s) => s.goalId === goal.id);
       if (stat && !stat.isFeasible) {
         errors.push({
@@ -1524,60 +1550,96 @@ export function useBudget() {
   );
 
   const updateSettings = useCallback((patch: Partial<BudgetSettings>) => {
-    setSettings((prev) => ({ ...prev, ...patch }));
+    startMutation(() => {
+      setSettings((prev) => ({ ...prev, ...patch }));
+    });
   }, []);
 
   const addGoal = useCallback((goal: SavingsGoal) => {
-    setSettings((prev) => ({
-      ...prev,
-      goals: [...prev.goals, goal],
-    }));
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        goals: [...prev.goals, goal],
+      }));
+    });
   }, []);
 
   const updateGoal = useCallback((goal: SavingsGoal) => {
-    setSettings((prev) => ({
-      ...prev,
-      goals: prev.goals.map((g) => (g.id === goal.id ? goal : g)),
-    }));
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        goals: prev.goals.map((g) => (g.id === goal.id ? goal : g)),
+      }));
+    });
   }, []);
 
   const removeGoal = useCallback((id: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      goals: prev.goals.filter((g) => g.id !== id),
-    }));
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        goals: prev.goals.filter((g) => g.id !== id),
+      }));
+    });
+  }, []);
+
+  const toggleGoalHidden = useCallback((id: string) => {
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        goals: prev.goals.map((g) =>
+          g.id === id ? { ...g, hidden: !g.hidden } : g,
+        ),
+      }));
+    });
   }, []);
 
   const addRecurringExpense = useCallback(
     (expense: Omit<RecurringExpense, 'id'>) => {
-      setSettings((prev) => ({
-        ...prev,
-        recurringExpenses: [
-          ...prev.recurringExpenses,
-          { ...expense, id: crypto.randomUUID() },
-        ],
-      }));
+      startMutation(() => {
+        setSettings((prev) => ({
+          ...prev,
+          recurringExpenses: [
+            ...prev.recurringExpenses,
+            { ...expense, id: crypto.randomUUID() },
+          ],
+        }));
+      });
     },
     [],
   );
 
   const updateRecurringExpense = useCallback((expense: RecurringExpense) => {
-    setSettings((prev) => ({
-      ...prev,
-      recurringExpenses: prev.recurringExpenses.map((e) =>
-        e.id === expense.id ? expense : e,
-      ),
-    }));
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        recurringExpenses: prev.recurringExpenses.map((e) =>
+          e.id === expense.id ? expense : e,
+        ),
+      }));
+    });
   }, []);
 
   const removeRecurringExpense = useCallback((id: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      recurringExpenses: prev.recurringExpenses.filter((e) => e.id !== id),
-      recurringExpenseSkips: (prev.recurringExpenseSkips ?? []).filter(
-        (s) => s.recurringExpenseId !== id,
-      ),
-    }));
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        recurringExpenses: prev.recurringExpenses.filter((e) => e.id !== id),
+        recurringExpenseSkips: (prev.recurringExpenseSkips ?? []).filter(
+          (s) => s.recurringExpenseId !== id,
+        ),
+      }));
+    });
+  }, []);
+
+  const toggleRecurringExpenseHidden = useCallback((id: string) => {
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        recurringExpenses: prev.recurringExpenses.map((e) =>
+          e.id === id ? { ...e, hidden: !e.hidden } : e,
+        ),
+      }));
+    });
   }, []);
 
   const addRecurringExpenseSkip = useCallback(
@@ -1588,28 +1650,31 @@ export function useBudget() {
       amount = 0,
     ): { success: boolean; error?: string } => {
       let applied = false;
-      setSettings((prev) => {
-        const existing = prev.recurringExpenseSkips ?? [];
-        const idx = existing.findIndex(
-          (s) => s.recurringExpenseId === recurringExpenseId && s.date === date,
-        );
-        applied = true;
-        const next =
-          idx >= 0
-            ? existing.map((s, i) =>
-                i === idx ? { ...s, amount, note: note.trim() } : s,
-              )
-            : [
-                ...existing,
-                {
-                  id: crypto.randomUUID(),
-                  recurringExpenseId,
-                  date,
-                  amount,
-                  note: note.trim(),
-                },
-              ];
-        return { ...prev, recurringExpenseSkips: next };
+      startMutation(() => {
+        setSettings((prev) => {
+          const existing = prev.recurringExpenseSkips ?? [];
+          const idx = existing.findIndex(
+            (s) =>
+              s.recurringExpenseId === recurringExpenseId && s.date === date,
+          );
+          applied = true;
+          const next =
+            idx >= 0
+              ? existing.map((s, i) =>
+                  i === idx ? { ...s, amount, note: note.trim() } : s,
+                )
+              : [
+                  ...existing,
+                  {
+                    id: crypto.randomUUID(),
+                    recurringExpenseId,
+                    date,
+                    amount,
+                    note: note.trim(),
+                  },
+                ];
+          return { ...prev, recurringExpenseSkips: next };
+        });
       });
       return applied
         ? { success: true }
@@ -1620,12 +1685,15 @@ export function useBudget() {
 
   const removeRecurringExpenseSkip = useCallback(
     (recurringExpenseId: string, date: string) => {
-      setSettings((prev) => ({
-        ...prev,
-        recurringExpenseSkips: (prev.recurringExpenseSkips ?? []).filter(
-          (s) => s.recurringExpenseId !== recurringExpenseId || s.date !== date,
-        ),
-      }));
+      startMutation(() => {
+        setSettings((prev) => ({
+          ...prev,
+          recurringExpenseSkips: (prev.recurringExpenseSkips ?? []).filter(
+            (s) =>
+              s.recurringExpenseId !== recurringExpenseId || s.date !== date,
+          ),
+        }));
+      });
     },
     [],
   );
@@ -1637,33 +1705,35 @@ export function useBudget() {
 
   const applyPaydayIncomeAmounts = useCallback(
     (date: string, amounts: { sourceId: string; amount: number }[]) => {
-      setSettings((prev) => {
-        const paydayIncomeOverrides = [...prev.paydayIncomeOverrides];
-        for (const { sourceId, amount } of amounts) {
-          const source = prev.incomeSources.find((s) => s.id === sourceId);
-          if (!source) continue;
-          const base = getSourceAmountForDate(source, date);
-          const idx = paydayIncomeOverrides.findIndex(
-            (o) => o.date === date && o.sourceId === sourceId,
-          );
-          const nextAmount = amount;
-          if (Math.abs(nextAmount - base) < 0.005) {
-            if (idx >= 0) paydayIncomeOverrides.splice(idx, 1);
-          } else if (idx >= 0) {
-            paydayIncomeOverrides[idx] = {
-              ...paydayIncomeOverrides[idx],
-              amount: nextAmount,
-            };
-          } else {
-            paydayIncomeOverrides.push({
-              id: crypto.randomUUID(),
-              date,
-              sourceId,
-              amount: nextAmount,
-            });
+      startMutation(() => {
+        setSettings((prev) => {
+          const paydayIncomeOverrides = [...prev.paydayIncomeOverrides];
+          for (const { sourceId, amount } of amounts) {
+            const source = prev.incomeSources.find((s) => s.id === sourceId);
+            if (!source) continue;
+            const base = getSourceAmountForDate(source, date);
+            const idx = paydayIncomeOverrides.findIndex(
+              (o) => o.date === date && o.sourceId === sourceId,
+            );
+            const nextAmount = amount;
+            if (Math.abs(nextAmount - base) < 0.005) {
+              if (idx >= 0) paydayIncomeOverrides.splice(idx, 1);
+            } else if (idx >= 0) {
+              paydayIncomeOverrides[idx] = {
+                ...paydayIncomeOverrides[idx],
+                amount: nextAmount,
+              };
+            } else {
+              paydayIncomeOverrides.push({
+                id: crypto.randomUUID(),
+                date,
+                sourceId,
+                amount: nextAmount,
+              });
+            }
           }
-        }
-        return { ...prev, paydayIncomeOverrides };
+          return { ...prev, paydayIncomeOverrides };
+        });
       });
     },
     [],
@@ -1675,22 +1745,24 @@ export function useBudget() {
         return { success: false, error: 'Invalid pocket period' };
       }
       const nextAmount = Math.max(0, amount);
-      setSettings((prev) => {
-        const overrides = [...prev.pocketAmountOverrides];
-        const base = getPocketPerPeriodForDate(prev, date);
-        const idx = overrides.findIndex((o) => o.date === date);
-        if (Math.abs(nextAmount - base) < 0.005) {
-          if (idx >= 0) overrides.splice(idx, 1);
-        } else if (idx >= 0) {
-          overrides[idx] = { ...overrides[idx], amount: nextAmount };
-        } else {
-          overrides.push({
-            id: crypto.randomUUID(),
-            date,
-            amount: nextAmount,
-          });
-        }
-        return { ...prev, pocketAmountOverrides: overrides };
+      startMutation(() => {
+        setSettings((prev) => {
+          const overrides = [...prev.pocketAmountOverrides];
+          const base = getPocketPerPeriodForDate(prev, date);
+          const idx = overrides.findIndex((o) => o.date === date);
+          if (Math.abs(nextAmount - base) < 0.005) {
+            if (idx >= 0) overrides.splice(idx, 1);
+          } else if (idx >= 0) {
+            overrides[idx] = { ...overrides[idx], amount: nextAmount };
+          } else {
+            overrides.push({
+              id: crypto.randomUUID(),
+              date,
+              amount: nextAmount,
+            });
+          }
+          return { ...prev, pocketAmountOverrides: overrides };
+        });
       });
       return { success: true };
     },
@@ -1698,76 +1770,104 @@ export function useBudget() {
   );
 
   const resetPocketAmountForPayday = useCallback((date: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      pocketAmountOverrides: prev.pocketAmountOverrides.filter(
-        (o) => o.date !== date,
-      ),
-    }));
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        pocketAmountOverrides: prev.pocketAmountOverrides.filter(
+          (o) => o.date !== date,
+        ),
+      }));
+    });
   }, []);
 
   const addIncomeSource = useCallback((source: Omit<IncomeSource, 'id'>) => {
-    setSettings((prev) => ({
-      ...prev,
-      incomeSources: [
-        ...prev.incomeSources,
-        { ...source, id: crypto.randomUUID() },
-      ],
-    }));
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        incomeSources: [
+          ...prev.incomeSources,
+          { ...source, id: crypto.randomUUID() },
+        ],
+      }));
+    });
   }, []);
 
   const updateIncomeSource = useCallback((source: IncomeSource) => {
-    setSettings((prev) => ({
-      ...prev,
-      incomeSources: prev.incomeSources.map((s) =>
-        s.id === source.id ? source : s,
-      ),
-    }));
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        incomeSources: prev.incomeSources.map((s) =>
+          s.id === source.id ? source : s,
+        ),
+      }));
+    });
   }, []);
 
   const removeIncomeSource = useCallback((id: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      incomeSources: prev.incomeSources.filter((s) => s.id !== id),
-    }));
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        incomeSources: prev.incomeSources.filter((s) => s.id !== id),
+      }));
+    });
   }, []);
 
   const importState = useCallback((state: BudgetState) => {
-    setExpenses(state.expenses);
-    setSpentPerPeriod(state.spentPerPeriod);
-    setSettings(
-      migrateSettings(state.settings as unknown as Record<string, unknown>),
-    );
+    startMutation(() => {
+      setExpenses(state.expenses);
+      setSpentPerPeriod(state.spentPerPeriod);
+      setSettings(
+        migrateSettings(state.settings as unknown as Record<string, unknown>),
+      );
+    });
   }, []);
 
   const addOneTimeIncome = useCallback((item: Omit<OneTimeIncome, 'id'>) => {
-    setSettings((prev) => ({
-      ...prev,
-      oneTimeIncome: [
-        ...prev.oneTimeIncome,
-        { ...item, id: crypto.randomUUID() },
-      ],
-    }));
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        oneTimeIncome: [
+          ...prev.oneTimeIncome,
+          { ...item, id: crypto.randomUUID() },
+        ],
+      }));
+    });
   }, []);
 
   const updateOneTimeIncome = useCallback((item: OneTimeIncome) => {
-    setSettings((prev) => ({
-      ...prev,
-      oneTimeIncome: prev.oneTimeIncome.map((o) =>
-        o.id === item.id ? item : o,
-      ),
-    }));
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        oneTimeIncome: prev.oneTimeIncome.map((o) =>
+          o.id === item.id ? item : o,
+        ),
+      }));
+    });
   }, []);
 
   const removeOneTimeIncome = useCallback((id: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      oneTimeIncome: prev.oneTimeIncome.filter((o) => o.id !== id),
-    }));
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        oneTimeIncome: prev.oneTimeIncome.filter((o) => o.id !== id),
+      }));
+    });
+  }, []);
+
+  const toggleOneTimeIncomeHidden = useCallback((id: string) => {
+    startMutation(() => {
+      setSettings((prev) => ({
+        ...prev,
+        oneTimeIncome: prev.oneTimeIncome.map((o) =>
+          o.id === id ? { ...o, hidden: !o.hidden } : o,
+        ),
+      }));
+    });
   }, []);
 
   return {
     isLoaded,
+    isMutating,
     needsStartDatePrompt,
     expenses,
     spentPerPeriod,
@@ -1791,9 +1891,11 @@ export function useBudget() {
     addGoal,
     updateGoal,
     removeGoal,
+    toggleGoalHidden,
     addRecurringExpense,
     updateRecurringExpense,
     removeRecurringExpense,
+    toggleRecurringExpenseHidden,
     addRecurringExpenseSkip,
     removeRecurringExpenseSkip,
     getPaydayEditRowsForDate: getPaydayEditRowsForDateCallback,
@@ -1807,5 +1909,6 @@ export function useBudget() {
     addOneTimeIncome,
     updateOneTimeIncome,
     removeOneTimeIncome,
+    toggleOneTimeIncomeHidden,
   };
 }

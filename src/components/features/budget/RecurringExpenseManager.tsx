@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarIcon, Pencil, Plus, X } from 'lucide-react';
+import { CalendarIcon, Eye, EyeOff, Pencil, Plus, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -24,6 +24,7 @@ interface RecurringExpenseManagerProps {
   onAdd: (expense: Omit<RecurringExpense, 'id'>) => void;
   onUpdate: (expense: RecurringExpense) => void;
   onRemove: (id: string) => void;
+  onToggleHidden?: (id: string) => void;
   projectionStartDate?: string;
   startOpen?: boolean;
   onCancel?: () => void;
@@ -72,6 +73,7 @@ export function RecurringExpenseManager({
   onAdd,
   onUpdate,
   onRemove,
+  onToggleHidden,
   projectionStartDate = DEFAULT_START,
   startOpen = false,
   onCancel,
@@ -453,10 +455,15 @@ export function RecurringExpenseManager({
             ) : (
               <div
                 key={exp.id}
-                className="group flex items-center justify-between rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
+                className={cn(
+                  'group flex items-center justify-between rounded-lg px-2 py-2 transition-colors hover:bg-muted/50',
+                  exp.hidden && 'opacity-50',
+                )}
               >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                  <span>{exp.label}</span>
+                  <span className={cn(exp.hidden && 'line-through')}>
+                    {exp.label}
+                  </span>
                   <span className="font-mono text-red-400 text-xs">
                     -${exp.amount}
                   </span>
@@ -493,6 +500,25 @@ export function RecurringExpenseManager({
                   </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  {onToggleHidden && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                      onClick={() => onToggleHidden(exp.id)}
+                      title={
+                        exp.hidden
+                          ? 'Show in calculations'
+                          : 'Hide from calculations'
+                      }
+                    >
+                      {exp.hidden ? (
+                        <EyeOff className="h-3.5 w-3.5" />
+                      ) : (
+                        <Eye className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"

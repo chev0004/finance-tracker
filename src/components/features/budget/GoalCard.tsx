@@ -1,7 +1,14 @@
 'use client';
 
 import { format, parseISO } from 'date-fns';
-import { ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -14,6 +21,7 @@ interface GoalCardProps {
   recurringExpenses: RecurringExpense[];
   onEdit: () => void;
   onDelete: () => void;
+  onToggleHidden: () => void;
 }
 
 function formatDateRange(startDate: string, endDate: string): string {
@@ -34,6 +42,7 @@ export function GoalCard({
   recurringExpenses,
   onEdit,
   onDelete,
+  onToggleHidden,
 }: GoalCardProps) {
   const [expanded, setExpanded] = useState(false);
   const dateLabel = formatDateRange(goal.startDate, goal.endDate);
@@ -59,16 +68,60 @@ export function GoalCard({
   if (pausedNames.length > 0) details.push(`pauses ${pausedNames.join(', ')}`);
 
   return (
-    <Card className={cn('bg-card/50 p-4 transition-colors', statusBorder)}>
+    <Card
+      className={cn(
+        'gap-0 bg-card/50 p-3 transition-colors',
+        statusBorder,
+        goal.hidden && 'opacity-50',
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate font-medium text-sm">{goal.name}</h3>
-          <p className="mt-1 break-words text-muted-foreground text-xs">
-            {details.join(' · ')}
-          </p>
-        </div>
+        <button
+          type="button"
+          className="-m-1 flex min-w-0 flex-1 cursor-pointer items-start gap-2 rounded-md p-1 text-left transition-colors hover:bg-muted/40"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+        >
+          <span className="mt-0.5 shrink-0 text-muted-foreground">
+            {expanded ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3
+              className={cn(
+                'truncate font-medium text-sm',
+                goal.hidden && 'line-through',
+              )}
+            >
+              {goal.name}
+            </h3>
+            {!expanded && (
+              <p className="mt-0.5 truncate text-muted-foreground text-xs">
+                {dateLabel} · ${stat.totalCost.toLocaleString()}
+              </p>
+            )}
+          </div>
+        </button>
 
         <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            onClick={onToggleHidden}
+            title={
+              goal.hidden ? 'Show in calculations' : 'Hide from calculations'
+            }
+          >
+            {goal.hidden ? (
+              <EyeOff className="h-3.5 w-3.5" />
+            ) : (
+              <Eye className="h-3.5 w-3.5" />
+            )}
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -88,32 +141,25 @@ export function GoalCard({
         </div>
       </div>
 
-      {goal.lineItems.length > 1 && (
-        <button
-          type="button"
-          className="mt-2 flex cursor-pointer items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? (
-            <ChevronDown className="h-3 w-3" />
-          ) : (
-            <ChevronRight className="h-3 w-3" />
-          )}
-          {goal.lineItems.length} items
-        </button>
-      )}
+      {expanded && (
+        <div className="mt-3 space-y-2">
+          <p className="break-words text-muted-foreground text-xs">
+            {details.join(' · ')}
+          </p>
 
-      {(expanded || goal.lineItems.length === 1) && (
-        <div className="mt-2 space-y-1 border-border/30 border-t pt-2">
-          {goal.lineItems.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between text-xs"
-            >
-              <span className="text-muted-foreground">{item.label}</span>
-              <span className="font-mono">${item.amount.toLocaleString()}</span>
-            </div>
-          ))}
+          <div className="space-y-1 border-border/30 border-t pt-2">
+            {goal.lineItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between text-xs"
+              >
+                <span className="text-muted-foreground">{item.label}</span>
+                <span className="font-mono">
+                  ${item.amount.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </Card>

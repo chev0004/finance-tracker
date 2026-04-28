@@ -22,6 +22,7 @@ export interface SavingsGoal {
   incomeResumeDate?: string;
   pausePocket: boolean;
   pausedExpenseIds: string[];
+  hidden?: boolean;
 }
 
 export interface RecurringExpense {
@@ -33,6 +34,7 @@ export interface RecurringExpense {
   endMonth: string | null;
   deductFromPocket: boolean;
   deductIncomeSourceId?: string;
+  hidden?: boolean;
 }
 
 export interface RecurringExpenseSkip {
@@ -72,6 +74,7 @@ export interface OneTimeIncome {
   date: string;
   label: string;
   amount: number;
+  hidden?: boolean;
 }
 
 export interface PaydayIncomeOverride {
