@@ -14,6 +14,7 @@ export type MobileBalancesOverviewProps = {
   pocketPerPeriod: number;
   pocketFreqLabel: string;
   formatMoney: (n: number) => string;
+  todayLabel: string;
 };
 
 export function MobileBalancesOverview({
@@ -27,6 +28,7 @@ export function MobileBalancesOverview({
   pocketPerPeriod,
   pocketFreqLabel,
   formatMoney,
+  todayLabel,
 }: MobileBalancesOverviewProps) {
   const eoyVariant =
     eoyCombined < 0 ? 'danger' : eoyCombined < 500 ? 'warning' : 'success';
@@ -75,9 +77,14 @@ export function MobileBalancesOverview({
 
   return (
     <section className="space-y-5 sm:hidden">
-      <h2 className="font-semibold text-2xl text-foreground tracking-tight">
-        Balances
-      </h2>
+      <div>
+        <h2 className="font-semibold text-2xl text-foreground tracking-tight">
+          Balances
+        </h2>
+        <p className="mt-1 font-mono text-muted-foreground text-xs">
+          {todayLabel}
+        </p>
+      </div>
 
       <div className="glass-card">
         {accountRows.map((row, i) => (
@@ -107,7 +114,9 @@ export function MobileBalancesOverview({
         <p className="mt-1 font-bold font-mono text-3xl text-foreground tracking-tight">
           {formatMoney(combinedBalance)}
         </p>
-        <p className="mt-1 text-muted-foreground/80 text-xs">As of today</p>
+        <p className="mt-1 text-muted-foreground/80 text-xs">
+          As of {todayLabel}
+        </p>
       </div>
 
       <h2 className="pt-1 font-semibold text-foreground text-xl tracking-tight">

@@ -328,6 +328,10 @@ export default function Home() {
   }[eoyVariant];
 
   const today = getLocalDateString();
+  const todayParsed = parseISO(today);
+  const todayLabel = isValid(todayParsed)
+    ? format(todayParsed, 'EEE, MMM d, yyyy')
+    : today;
   const currentSavings =
     [...savingsTimeline].filter((p) => p.rawDate <= today).pop()?.balance ??
     settings.startingBalance;
@@ -426,7 +430,10 @@ export default function Home() {
             <h1 className="break-words font-mono text-muted-foreground text-sm uppercase tracking-wider">
               chev.dev / budget tracker
             </h1>
-            <p className="mt-1 text-muted-foreground/60 text-xs">
+            <p className="mt-1 font-mono text-foreground text-sm">
+              {todayLabel}
+            </p>
+            <p className="mt-0.5 text-muted-foreground/60 text-xs">
               {chartStartYear}-{chartEndYear} projection
             </p>
           </div>
@@ -497,6 +504,7 @@ export default function Home() {
           pocketPerPeriod={effectivePocketPerPeriod}
           pocketFreqLabel={pocketFreqLabel}
           formatMoney={formatMoney}
+          todayLabel={todayLabel}
         />
 
         <div className="hidden grid-cols-3 gap-3 sm:grid">
@@ -634,6 +642,7 @@ export default function Home() {
             </NavStepper>
             <SavingsChart
               data={savingsChartData}
+              today={today}
               getPaydayEditRowsForDate={getPaydayEditRowsForDate}
               onApplyPaydayIncomeAmounts={applyPaydayIncomeAmounts}
               onSkipRecurringInstance={(
