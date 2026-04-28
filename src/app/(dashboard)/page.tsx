@@ -889,6 +889,7 @@ export default function Home() {
             </NavStepper>
             <PocketChart
               data={pocketChartData}
+              today={today}
               onSelectExpensePeriod={openExpensePeriod}
               onSkipRecurringInstance={(
                 recurringExpenseId,

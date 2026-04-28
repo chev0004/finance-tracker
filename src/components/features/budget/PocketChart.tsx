@@ -8,6 +8,7 @@ import {
   Line,
   LineChart,
   ReferenceDot,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -28,6 +29,7 @@ import type { PocketExpenseItem, PocketPoint } from '@/types';
 
 interface PocketChartProps {
   data: PocketPoint[];
+  today: string;
   onSelectExpensePeriod?: (period: {
     start: string;
     end: string;
@@ -74,6 +76,9 @@ interface ChartDataPoint {
   date: string;
   rawDate: string;
   balance: number;
+  pastBalance: number | null;
+  futureBalance: number | null;
+  isFuture: boolean;
   available: number;
   spent: number;
   overage: number;
@@ -94,6 +99,7 @@ type SkipDialogTarget = {
 
 export function PocketChart({
   data,
+  today,
   onSelectExpensePeriod,
   onSkipRecurringInstance,
 }: PocketChartProps) {
@@ -104,26 +110,51 @@ export function PocketChart({
   const [skipNote, setSkipNote] = useState('');
 
   const chartData = useMemo<ChartDataPoint[]>(() => {
-    return data.map((point) => ({
-      date: point.date,
-      rawDate: point.rawDate,
-      balance: point.balance,
-      available: point.available,
-      spent: point.spent,
-      overage: point.overage,
-      type: point.type,
-      idx: point.idx,
-      expenseCount: point.expenseCount,
-      expenseItems: point.expenseItems,
-      color: getPocketColor(
-        point.type,
-        point.idx === selectedIdx,
-        point.spent,
-        point.balance,
-      ),
-      isSelected: point.idx === selectedIdx,
-    }));
-  }, [data, selectedIdx]);
+    let lastPastIdx = -1;
+    for (let i = 0; i < data.length; i++) {
+      if (data[i].rawDate <= today) lastPastIdx = i;
+    }
+    const lastPastBalance = lastPastIdx >= 0 ? data[lastPastIdx].balance : null;
+
+    return data.map((point, i) => {
+      const isFuture = point.rawDate > today;
+      const isBridge = lastPastIdx >= 0 && i === lastPastIdx + 1;
+      return {
+        date: point.date,
+        rawDate: point.rawDate,
+        balance: point.balance,
+        pastBalance: !isFuture
+          ? point.balance
+          : isBridge
+            ? lastPastBalance
+            : null,
+        futureBalance: isFuture ? point.balance : null,
+        isFuture,
+        available: point.available,
+        spent: point.spent,
+        overage: point.overage,
+        type: point.type,
+        idx: point.idx,
+        expenseCount: point.expenseCount,
+        expenseItems: point.expenseItems,
+        color: getPocketColor(
+          point.type,
+          point.idx === selectedIdx,
+          point.spent,
+          point.balance,
+        ),
+        isSelected: point.idx === selectedIdx,
+      };
+    });
+  }, [data, selectedIdx, today]);
+
+  const todayLineLabel = useMemo(() => {
+    let lastPastIdx = -1;
+    for (let i = 0; i < chartData.length; i++) {
+      if (chartData[i].rawDate <= today) lastPastIdx = i;
+    }
+    return lastPastIdx >= 0 ? chartData[lastPastIdx].date : null;
+  }, [chartData, today]);
 
   const tickInterval =
     chartData.length > 80 ? Math.floor(chartData.length / 80) : 0;
@@ -362,32 +393,41 @@ export function PocketChart({
             <Tooltip content={<CustomTooltip />} isAnimationActive={false} />
             <Line
               type="stepAfter"
-              dataKey="balance"
+              dataKey="pastBalance"
               stroke={BLUE}
               strokeWidth={2}
               dot={false}
-              activeDot={(dotProps: {
-                cx?: number;
-                cy?: number;
-                payload?: ChartDataPoint;
-              }) => {
-                const { cx, cy, payload } = dotProps;
-                if (cx == null || cy == null) return <g />;
-                return (
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={6}
-                    fill={payload?.color ?? GRAY}
-                    stroke="none"
-                    style={{ pointerEvents: 'none' }}
-                  />
-                );
-              }}
-              fill={`${BLUE}10`}
-              fillOpacity={0.1}
+              activeDot={false}
+              connectNulls={false}
               isAnimationActive={false}
             />
+            <Line
+              type="stepAfter"
+              dataKey="futureBalance"
+              stroke={BLUE}
+              strokeOpacity={0.45}
+              strokeWidth={2}
+              strokeDasharray="4 4"
+              dot={false}
+              activeDot={false}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+            {todayLineLabel && (
+              <ReferenceLine
+                x={todayLineLabel}
+                stroke="#9ca3af"
+                strokeDasharray="2 4"
+                strokeWidth={1}
+                label={{
+                  value: 'today',
+                  position: 'insideTopRight',
+                  fill: '#9ca3af',
+                  fontSize: 10,
+                  fontFamily: 'var(--font-space-mono)',
+                }}
+              />
+            )}
             {chartData.map((point, index) => {
               const baseR = point.isSelected
                 ? 8
@@ -425,6 +465,7 @@ export function PocketChart({
                           cy={cy}
                           r={innerR}
                           fill={point.color}
+                          fillOpacity={point.isFuture ? 0.45 : 1}
                           style={{ pointerEvents: 'none' }}
                         />
                         {/* biome-ignore lint/a11y/noStaticElementInteractions: chart svg hit target */}
