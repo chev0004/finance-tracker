@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ClipboardPaste, Copy, FileText } from 'lucide-react';
+import { Check, ClipboardPaste, Copy, Download } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,10 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  buildLlmSnapshotMarkdown,
-  type ExportPayload,
-} from '@/lib/exportBudget';
+import { buildBudgetXlsx, type ExportPayload } from '@/lib/exportBudget';
 import { cn } from '@/lib/utils';
 import type { BudgetState } from '@/types';
 
@@ -35,7 +32,7 @@ export function BudgetDataActions({
   buttonClassName,
 }: BudgetDataActionsProps) {
   const [copied, setCopied] = useState(false);
-  const [copiedMd, setCopiedMd] = useState(false);
+  const [exported, setExported] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pasteValue, setPasteValue] = useState('');
   const [importError, setImportError] = useState('');
@@ -66,18 +63,22 @@ export function BudgetDataActions({
     }
   }
 
-  function handleCopyMarkdown() {
-    const markdown = analysisPayload
-      ? buildLlmSnapshotMarkdown(analysisPayload)
-      : `# Budget data\n\n\`\`\`json\n${JSON.stringify(state, null, 2)}\n\`\`\``;
-
-    navigator.clipboard.writeText(markdown).then(
-      () => {
-        setCopiedMd(true);
-        setTimeout(() => setCopiedMd(false), 2000);
-      },
-      () => {},
-    );
+  async function handleExportSpreadsheet() {
+    if (!analysisPayload) return;
+    const buffer = await buildBudgetXlsx(analysisPayload);
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `budget-${analysisPayload.today}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setExported(true);
+    setTimeout(() => setExported(false), 2000);
   }
 
   const openImport = () => {
@@ -104,14 +105,15 @@ export function BudgetDataActions({
             orientation === 'column' && 'h-11 w-full justify-start',
             buttonClassName,
           )}
-          onClick={handleCopyMarkdown}
+          onClick={handleExportSpreadsheet}
+          disabled={!analysisPayload}
         >
-          {copiedMd ? (
+          {exported ? (
             <Check className="h-3.5 w-3.5" />
           ) : (
-            <FileText className="h-3.5 w-3.5" />
+            <Download className="h-3.5 w-3.5" />
           )}
-          {copiedMd ? 'Copied' : 'Copy MD'}
+          {exported ? 'Downloaded' : 'Export XLSX'}
         </Button>
         <Button
           variant="outline"

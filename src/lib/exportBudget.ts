@@ -1,9 +1,14 @@
+import ExcelJS from 'exceljs';
+
 import type {
   BudgetSettings,
   Expense,
+  FixedEvent,
   GoalStat,
+  PocketExpenseItem,
   PocketPoint,
   SavingsPoint,
+  SavingsPointEvent,
   ValidationError,
 } from '@/types';
 
@@ -25,284 +30,423 @@ export interface ExportPayload {
   validationErrors: ValidationError[];
 }
 
-function section(title: string, lines: string[]): string {
-  return `## ${title}\n${lines.join('\n')}\n`;
+type AccountName = 'Savings' | 'Pocket';
+
+interface LedgerDraft {
+  date: string;
+  account: AccountName;
+  category: string;
+  description: string;
+  reference: string;
+  delta: number;
+  order: number;
 }
 
-function formatCurrency(value: number): string {
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+interface LedgerRow extends LedgerDraft {
+  savingsBalance: number;
+  pocketBalance: number;
+  combinedBalance: number;
 }
 
-export function buildExportText(payload: ExportPayload): string {
-  const {
-    settings,
-    expenses,
-    spentPerPeriod,
-    currentSavings,
-    currentPocketBalance,
-    combinedBalance,
-    monthlyIncome,
-    monthlySavings,
-    savingsTimeline,
-    pocketTimeline,
-    goalStats,
-    eoyBalance,
-    validationErrors,
-  } = payload;
-  const pocketFreq =
-    settings.pocketFrequency === 'custom' && settings.pocketInterval
-      ? `every ${settings.pocketInterval} days`
-      : settings.pocketFrequency;
+function maxIsoDate(a: string, b: string): string {
+  return a > b ? a : b;
+}
 
-  const summary = [
-    `Current balance: $${formatCurrency(settings.startingBalance)}`,
-    `Current savings (as of today): $${formatCurrency(currentSavings)}`,
-    `Current pocket (as of today): $${formatCurrency(currentPocketBalance)}`,
-    `Current combined (as of today): $${formatCurrency(combinedBalance)}`,
-    `Savings per month: $${formatCurrency(monthlySavings)}`,
-    `Projected end of year: $${formatCurrency(eoyBalance)}`,
-  ];
+function getProjectionEnd(payload: ExportPayload): string {
+  const startYear = new Date(
+    `${payload.settings.startDate}T00:00:00`,
+  ).getFullYear();
+  let end = `${startYear + 4}-12-31`;
 
-  const pocketChangeLines =
-    settings.pocketPerPeriodChanges.length > 0
-      ? settings.pocketPerPeriodChanges
-          .slice()
-          .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
-          .map(
-            (c) =>
-              `  From ${c.effectiveDate}: $${c.amount.toLocaleString()} per period`,
-          )
-      : [];
+  for (const point of payload.savingsTimeline) {
+    end = maxIsoDate(end, point.rawDate);
+  }
+  for (const point of payload.pocketTimeline) {
+    end = maxIsoDate(end, point.weekEnd);
+  }
 
-  const settingsLines = [
-    `Pocket period: ${pocketFreq}`,
-    `Pocket start: ${settings.pocketFirstPayday}`,
-    `Monthly income: $${formatCurrency(monthlyIncome)}`,
-    `Base pocket / period: $${formatCurrency(settings.pocketPerPeriod)}`,
-    ...pocketChangeLines,
-    `Starting balance: $${formatCurrency(settings.startingBalance)}`,
-    `Start date: ${settings.startDate}`,
-  ];
+  return end;
+}
 
-  const recurringLines =
-    settings.recurringExpenses.length > 0
-      ? settings.recurringExpenses.map((e) => {
-          const matchedName =
-            e.deductIncomeSourceId &&
-            settings.incomeSources.find((s) => s.id === e.deductIncomeSourceId)
-              ?.name;
-          const parts: string[] = [];
-          if (matchedName) parts.push(matchedName);
-          if (e.deductFromPocket) parts.push('pocket');
-          const tag = parts.length > 0 ? ` [${parts.join(', ')}]` : '';
-          const when = e.deductIncomeSourceId
-            ? 'each payday of matched source'
-            : e.dayOfMonth === 0
-              ? 'last day'
-              : `day ${e.dayOfMonth}`;
-          return `${e.label}: $${e.amount.toLocaleString()} on ${when} (${e.startMonth} to ${e.endMonth})${tag}`;
-        })
-      : ['None'];
+function savingsCategory(type: FixedEvent['type']): string {
+  if (type === 'payday') return 'Income';
+  if (type === 'one-time') return 'Income';
+  if (type === 'recurring') return 'Recurring Expense';
+  if (type === 'goal') return 'Savings Goal';
+  if (type === 'user-expense') return 'Pocket Overage';
+  if (type === 'payday-recurring') return 'Mixed Activity';
+  return 'Adjustment';
+}
 
-  const paydayOverrideLines =
-    settings.paydayIncomeOverrides?.length > 0
-      ? settings.paydayIncomeOverrides
-          .slice()
-          .sort((a, b) => a.date.localeCompare(b.date))
-          .map(
-            (o) =>
-              `${o.date} | source ${o.sourceId} | $${o.amount.toLocaleString()}`,
-          )
-      : ['None'];
+function eventReference(event: SavingsPointEvent): string {
+  if (event.sourceId) return event.sourceId;
+  if (event.recurringExpenseId) return event.recurringExpenseId;
+  return event.type;
+}
 
-  const pocketOverrideLines =
-    settings.pocketAmountOverrides?.length > 0
-      ? settings.pocketAmountOverrides
-          .slice()
-          .sort((a, b) => a.date.localeCompare(b.date))
-          .map((o) => `${o.date} | $${o.amount.toLocaleString()}`)
-      : ['None'];
+function isExpenseInPeriod(
+  expense: Expense,
+  period: Pick<PocketPoint, 'weekStart' | 'weekEnd'>,
+): boolean {
+  return expense.date >= period.weekStart && expense.date <= period.weekEnd;
+}
 
-  const incomeSourceLines =
-    settings.incomeSources.length > 0
-      ? settings.incomeSources.flatMap((source) => {
-          const freq =
-            source.payFrequency === 'custom' && source.payInterval
-              ? `every ${source.payInterval} days`
-              : source.payFrequency;
-          const header = `${source.name}: $${source.amount.toLocaleString()} ${freq} (first: ${source.firstPayday})`;
-          if (source.rateChanges.length === 0) return [header];
-          const changes = source.rateChanges
-            .slice()
-            .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
-            .map(
-              (c) =>
-                `  From ${c.effectiveDate}: $${c.amount.toLocaleString()} per period`,
-            );
-          return [header, ...changes];
-        })
-      : ['None'];
+function findExpenseDate(
+  item: PocketExpenseItem,
+  period: PocketPoint,
+  expenses: Expense[],
+  usedExpenseIds: Set<string>,
+): string {
+  if (item.date) return item.date;
 
-  const oneTimeIncomeLines =
-    settings.oneTimeIncome?.length > 0
-      ? settings.oneTimeIncome
-          .slice()
-          .sort((a, b) => a.date.localeCompare(b.date))
-          .map((o) => `${o.date} | ${o.label} | +$${o.amount.toLocaleString()}`)
-      : ['None'];
-
-  const goalLines = settings.goals.map((goal) => {
-    const total = goal.lineItems.reduce((s, i) => s + i.amount, 0);
-    const items = goal.lineItems
-      .map((i) => `  - ${i.label}: $${i.amount.toLocaleString()}`)
-      .join('\n');
-    const pause = goal.pauseIncome ? 'Yes' : 'No';
-    const paused = goal.pausedExpenseIds.length
-      ? ` (paused: ${goal.pausedExpenseIds.join(', ')})`
-      : '';
-    const resume = goal.incomeResumeDate
-      ? `\n  Income resumes: ${goal.incomeResumeDate}`
-      : '';
-    return `${goal.name} (${goal.startDate} to ${goal.endDate}): $${total.toLocaleString()}\n${items}\n  Pause income: ${pause}${paused}${resume}`;
-  });
-
-  const expenseLines =
-    expenses.length > 0
-      ? expenses
-          .slice()
-          .sort((a, b) => a.date.localeCompare(b.date))
-          .map((e) => `${e.date} | ${e.label} | $${e.amount.toLocaleString()}`)
-      : ['None'];
-
-  const manualSpentLines =
-    spentPerPeriod.length > 0
-      ? spentPerPeriod.map((amount, idx) => `Period ${idx + 1}: $${amount}`)
-      : ['None'];
-
-  const timelineLines = savingsTimeline.map(
-    (p) =>
-      `${p.date} (${p.rawDate}): $${p.balance.toLocaleString()} - ${p.label}`,
+  const match = expenses.find(
+    (expense) =>
+      !usedExpenseIds.has(expense.id) &&
+      isExpenseInPeriod(expense, period) &&
+      expense.label === item.label &&
+      Math.abs(expense.amount - item.amount) < 0.005,
   );
+  if (!match) return period.weekEnd;
 
-  const pocketLines = pocketTimeline.map(
-    (p) =>
-      `${p.date}: spent $${p.spent.toLocaleString()}, available $${p.available.toLocaleString()}, carryover $${p.balance.toLocaleString()} (${p.type})`,
-  );
-
-  const goalStatLines = goalStats.map((s) => {
-    const goal = settings.goals.find((g) => g.id === s.goalId);
-    const name = goal?.name ?? s.goalId;
-    return `${name}: pre $${s.preBalance.toLocaleString()}, post $${s.postBalance.toLocaleString()}, feasible ${s.isFeasible}`;
-  });
-
-  const validationLines =
-    validationErrors.length > 0
-      ? validationErrors.map((e) => `- ${e.message}`)
-      : ['No issues'];
-
-  const parts = [
-    '# Budget snapshot (2026 full-year projection)\n',
-    section('Summary', summary),
-    section('Settings', settingsLines),
-    section('Recurring expenses', recurringLines),
-    section('One-off payday income overrides', paydayOverrideLines),
-    section('One-off pocket amount overrides', pocketOverrideLines),
-    section('Income sources', incomeSourceLines),
-    section('One-time income', oneTimeIncomeLines),
-    section('Savings goals', goalLines.length ? goalLines : ['None']),
-    section('Goal feasibility', goalStatLines),
-    section('Logged expenses', expenseLines),
-    section('Manual spent per period overrides', manualSpentLines),
-    section('Savings timeline', timelineLines),
-    section('Pocket money by period', pocketLines),
-    section('Validation', validationLines),
-  ];
-
-  return parts.join('\n');
+  usedExpenseIds.add(match.id);
+  return match.date;
 }
 
-export function buildLlmSnapshotMarkdown(payload: ExportPayload): string {
-  const {
-    settings,
-    expenses,
-    spentPerPeriod,
-    today,
-    currentSavings,
-    currentPocketBalance,
-    combinedBalance,
-    monthlyIncome,
-    monthlySavings,
-    savingsTimeline,
-    pocketTimeline,
-    goalStats,
-    eoyBalance,
-    eoyCombined,
-    validationErrors,
-  } = payload;
+function buildSavingsDrafts(payload: ExportPayload): LedgerDraft[] {
+  const rows: LedgerDraft[] = [];
+  const sorted = [...payload.savingsTimeline].sort((a, b) =>
+    a.rawDate.localeCompare(b.rawDate),
+  );
+  const opening =
+    sorted[0]?.balance ??
+    payload.currentSavings ??
+    payload.settings.startingBalance;
 
-  const recurringCount = settings.recurringExpenses.length;
-  const goalCount = settings.goals.length;
-  const incomeSourceCount = settings.incomeSources.length;
-  const oneTimeIncomeCount = settings.oneTimeIncome.length;
-  const paydayOverrideCount = settings.paydayIncomeOverrides.length;
-  const pocketOverrideCount = settings.pocketAmountOverrides.length;
+  rows.push({
+    date: payload.settings.startDate,
+    account: 'Savings',
+    category: 'Opening Balance',
+    description: 'Starting savings balance',
+    reference: 'start',
+    delta: opening,
+    order: 0,
+  });
 
-  const firstSavingsPoint = savingsTimeline[0];
-  const lastSavingsPoint = savingsTimeline[savingsTimeline.length - 1];
-  const firstPocketPoint = pocketTimeline[0];
-  const lastPocketPoint = pocketTimeline[pocketTimeline.length - 1];
+  for (const point of sorted) {
+    if (point.rawDate <= payload.settings.startDate) continue;
+    point.events.forEach((event, index) => {
+      rows.push({
+        date: point.rawDate,
+        account: 'Savings',
+        category: savingsCategory(event.type),
+        description: event.label,
+        reference: eventReference(event),
+        delta: event.delta,
+        order: 100 + index,
+      });
+    });
+  }
 
-  const feasibleGoals = goalStats.filter((g) => g.isFeasible).length;
-  const warningGoals = goalStats.filter((g) => g.isWarning).length;
+  return rows;
+}
 
-  const assumptions = [
-    '- Pocket spending is driven by expense logs first. If a period has no logged expenses, `spentPerPeriod` is used for that period.',
-    '- Pocket carryover is automatic each period, including negative carryover (overage).',
-    '- Recurring expenses matched to an income source are applied on each payday for that source.',
-    '- Savings goals and recurring expenses are projected across the configured 5-year window from `startDate`.',
+function buildPocketDrafts(payload: ExportPayload): LedgerDraft[] {
+  const rows: LedgerDraft[] = [];
+  const usedExpenseIds = new Set<string>();
+  let pocketBalance = 0;
+
+  for (const period of [...payload.pocketTimeline].sort((a, b) =>
+    a.weekStart.localeCompare(b.weekStart),
+  )) {
+    if (period.pocketAllocated > 0) {
+      rows.push({
+        date: period.rawDate,
+        account: 'Pocket',
+        category: 'Pocket Allocation',
+        description: 'Pocket money allocation',
+        reference: period.date,
+        delta: period.pocketAllocated,
+        order: 50,
+      });
+      pocketBalance += period.pocketAllocated;
+    }
+
+    const items = period.expenseItems
+      .map((item) => ({
+        item,
+        date: findExpenseDate(item, period, payload.expenses, usedExpenseIds),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    for (let i = 0; i < items.length; i++) {
+      const { date, item } = items[i];
+      const covered = Math.min(item.amount, pocketBalance);
+      if (covered <= 0) continue;
+
+      rows.push({
+        date,
+        account: 'Pocket',
+        category: item.recurringExpenseId ? 'Recurring Expense' : 'Expense',
+        description: item.label,
+        reference: item.recurringExpenseId ?? period.date,
+        delta: -covered,
+        order: 200 + i,
+      });
+      pocketBalance -= covered;
+    }
+
+    pocketBalance = period.balance;
+  }
+
+  return rows;
+}
+
+function buildLedgerRows(payload: ExportPayload): LedgerRow[] {
+  const projectionEnd = getProjectionEnd(payload);
+  const drafts = [
+    ...buildSavingsDrafts(payload),
+    ...buildPocketDrafts(payload),
+    {
+      date: projectionEnd,
+      account: 'Savings' as const,
+      category: 'Closing Balance',
+      description: 'Projection end balance',
+      reference: 'projection-end',
+      delta: 0,
+      order: 999,
+    },
+  ]
+    .filter((row) => row.date <= projectionEnd)
+    .sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) ||
+        a.order - b.order ||
+        a.account.localeCompare(b.account) ||
+        a.description.localeCompare(b.description),
+    );
+
+  let savingsBalance = 0;
+  let pocketBalance = 0;
+
+  return drafts.map((row) => {
+    if (row.account === 'Savings') savingsBalance += row.delta;
+    if (row.account === 'Pocket') pocketBalance += row.delta;
+
+    return {
+      ...row,
+      savingsBalance,
+      pocketBalance,
+      combinedBalance: savingsBalance + pocketBalance,
+    };
+  });
+}
+
+// --- Colour palettes ---
+
+function argb(hex: string): string {
+  return `FF${hex.replace('#', '')}`;
+}
+
+function accountFill(account: AccountName): ExcelJS.Fill {
+  return {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: argb(account === 'Savings' ? '#ede9fe' : '#dbeafe') },
+  };
+}
+
+function accountFontColor(account: AccountName): string {
+  return argb(account === 'Savings' ? '#5b21b6' : '#1d4ed8');
+}
+
+interface CategoryColors {
+  bg: string;
+  fg: string;
+}
+
+function categoryColors(category: string): CategoryColors {
+  if (category === 'Pocket Allocation') return { bg: '#e0f2fe', fg: '#0369a1' };
+  if (category === 'Opening Balance') return { bg: '#ede9fe', fg: '#5b21b6' };
+  if (category === 'Closing Balance') return { bg: '#ddd6fe', fg: '#4c1d95' };
+  if (category === 'Expense' || category === 'Recurring Expense')
+    return { bg: '#fee2e2', fg: '#991b1b' };
+  if (category === 'Pocket Overage') return { bg: '#ffedd5', fg: '#9a3412' };
+  if (category === 'Income') return { bg: '#dcfce7', fg: '#065f46' };
+  if (category === 'Savings Goal') return { bg: '#fce7f3', fg: '#9d174d' };
+  if (category === 'Mixed Activity') return { bg: '#e0e7ff', fg: '#3730a3' };
+  return { bg: '#e5e7eb', fg: '#374151' };
+}
+
+const THIN_BORDER: Partial<ExcelJS.Borders> = {
+  top: { style: 'thin', color: { argb: 'FFe2e8f0' } },
+  left: { style: 'thin', color: { argb: 'FFe2e8f0' } },
+  bottom: { style: 'thin', color: { argb: 'FFe2e8f0' } },
+  right: { style: 'thin', color: { argb: 'FFe2e8f0' } },
+};
+
+const MONEY_FMT = '#,##0.00';
+
+export async function buildBudgetXlsx(
+  payload: ExportPayload,
+): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Finance Tracker';
+  workbook.created = new Date();
+
+  const sheet = workbook.addWorksheet('Budget Ledger');
+
+  sheet.columns = [
+    { key: 'date', width: 13 },
+    { key: 'account', width: 10 },
+    { key: 'category', width: 19 },
+    { key: 'description', width: 46 },
+    { key: 'reference', width: 28 },
+    { key: 'income', width: 13 },
+    { key: 'expense', width: 13 },
+    { key: 'savingsBalance', width: 18 },
+    { key: 'pocketBalance', width: 17 },
+    { key: 'combinedBalance', width: 20 },
   ];
 
-  const gaps = [
-    '- No special real-world event modeling beyond the configured inputs (for example: inflation, taxes, interest, market returns, or irregular emergencies) unless manually encoded by the user.',
-    '- Pocket balance remains unchanged within a period unless there is logged spending or a manual `spentPerPeriod` override.',
-    '- Any future events not entered (new income sources, expenses, overrides, or goals) are not projected.',
-  ];
+  // Header row
+  const headerRow = sheet.addRow([
+    'Date',
+    'Account',
+    'Category',
+    'Description',
+    'Reference',
+    'Income',
+    'Expense',
+    'Savings Balance',
+    'Pocket Balance',
+    'Combined Balance',
+  ]);
 
-  return [
-    '# Budget context for LLM analysis',
-    '',
-    '## Objective',
-    'Use this snapshot to analyze current budget health, timeline risks, and likely future outcomes. Treat this as the full known state plus computed projections at export time.',
-    '',
-    '## Quick state summary',
-    `- Snapshot date: ${today}`,
-    `- Start date: ${settings.startDate}`,
-    `- Current savings (as of today): $${formatCurrency(currentSavings)}`,
-    `- Current pocket (as of today): $${formatCurrency(currentPocketBalance)}`,
-    `- Current combined (as of today): $${formatCurrency(combinedBalance)}`,
-    `- Monthly income (auto-calculated): $${formatCurrency(monthlyIncome)}`,
-    `- Monthly savings (auto-calculated): $${formatCurrency(monthlySavings)}`,
-    `- Projected end-of-year savings (auto-calculated): $${formatCurrency(eoyBalance)}`,
-    `- Projected end-of-year combined (auto-calculated): $${formatCurrency(eoyCombined)}`,
-    `- Inputs: ${expenses.length} logged expenses, ${recurringCount} recurring expenses, ${incomeSourceCount} income sources, ${oneTimeIncomeCount} one-time incomes, ${paydayOverrideCount} payday overrides, ${pocketOverrideCount} pocket overrides, ${goalCount} goals`,
-    '',
-    '## Auto-calculated outputs',
-    `- Savings timeline points: ${savingsTimeline.length}${firstSavingsPoint ? ` (${firstSavingsPoint.rawDate} to ${lastSavingsPoint?.rawDate ?? firstSavingsPoint.rawDate})` : ''}`,
-    `- Pocket timeline points: ${pocketTimeline.length}${firstPocketPoint ? ` (${firstPocketPoint.rawDate} to ${lastPocketPoint?.rawDate ?? firstPocketPoint.rawDate})` : ''}`,
-    `- Goal feasibility: ${feasibleGoals}/${goalStats.length} feasible, warnings: ${warningGoals}`,
-    `- Validation issues: ${validationErrors.length}`,
-    '',
-    '## Modeling assumptions in this app',
-    ...assumptions,
-    '',
-    '## Not auto-calculated or not modeled yet',
-    ...gaps,
-    '',
-    '## Manual inputs that affect projection',
-    '- `spentPerPeriod` values are manual overrides used when no expenses are logged in a pocket period.',
-    `- \`spentPerPeriod\` entries: ${spentPerPeriod.length}`,
-  ].join('\n');
+  const headerBg: Record<number, string> = {
+    8: '#c6edd9',
+    9: '#bfdbfe',
+    10: '#fde68a',
+  };
+
+  headerRow.eachCell((cell, col) => {
+    cell.font = { bold: true, size: 11, color: { argb: 'FF0f172a' } };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: argb(headerBg[col] ?? '#f0f4f8') },
+    };
+    cell.border = {
+      bottom: { style: 'medium', color: { argb: 'FFc8d6e0' } },
+    };
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: col >= 6 ? 'right' : 'left',
+      wrapText: false,
+    };
+  });
+  headerRow.height = 22;
+
+  // Data rows
+  const ledgerRows = buildLedgerRows(payload);
+
+  for (const row of ledgerRows) {
+    const income = row.delta > 0 ? row.delta : null;
+    const expense = row.delta < 0 ? Math.abs(row.delta) : null;
+    const cats = categoryColors(row.category);
+
+    const excelRow = sheet.addRow({
+      date: row.date,
+      account: row.account,
+      category: row.category,
+      description: row.description,
+      reference: row.reference,
+      income,
+      expense,
+      savingsBalance: row.savingsBalance,
+      pocketBalance: row.pocketBalance,
+      combinedBalance: row.combinedBalance,
+    });
+
+    excelRow.eachCell({ includeEmpty: true }, (cell, col) => {
+      cell.border = THIN_BORDER;
+      cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+
+      if (col === 2) {
+        cell.fill = accountFill(row.account);
+        cell.font = {
+          color: { argb: accountFontColor(row.account) },
+          bold: true,
+          size: 10,
+        };
+        cell.alignment = {
+          vertical: 'top',
+          horizontal: 'center',
+          wrapText: false,
+        };
+      } else if (col === 3) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: argb(cats.bg) },
+        };
+        cell.font = { color: { argb: argb(cats.fg) }, bold: true, size: 10 };
+        cell.alignment = {
+          vertical: 'top',
+          horizontal: 'center',
+          wrapText: false,
+        };
+      } else if (col === 6) {
+        cell.numFmt = MONEY_FMT;
+        cell.alignment = { horizontal: 'right', vertical: 'top' };
+        if (income !== null) {
+          cell.font = { color: { argb: 'FF047857' } };
+        }
+      } else if (col === 7) {
+        cell.numFmt = MONEY_FMT;
+        cell.alignment = { horizontal: 'right', vertical: 'top' };
+        if (expense !== null) {
+          cell.font = { color: { argb: 'FFb45309' } };
+        }
+      } else if (col === 8) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFe8f7ef' },
+        };
+        cell.numFmt = MONEY_FMT;
+        cell.alignment = { horizontal: 'right', vertical: 'top' };
+        if (row.savingsBalance < 0) {
+          cell.font = { color: { argb: 'FFb45309' } };
+        }
+      } else if (col === 9) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFdbeafe' },
+        };
+        cell.numFmt = MONEY_FMT;
+        cell.alignment = { horizontal: 'right', vertical: 'top' };
+        if (row.pocketBalance < 0) {
+          cell.font = { color: { argb: 'FFb45309' } };
+        }
+      } else if (col === 10) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFfef3c7' },
+        };
+        cell.numFmt = MONEY_FMT;
+        cell.alignment = { horizontal: 'right', vertical: 'top' };
+        cell.font = {
+          bold: true,
+          color: {
+            argb: row.combinedBalance < 0 ? 'FFb45309' : 'FF047857',
+          },
+        };
+      }
+    });
+  }
+
+  sheet.views = [{ state: 'frozen', ySplit: 1, xSplit: 0 }];
+
+  return workbook.xlsx.writeBuffer() as Promise<ArrayBuffer>;
 }
