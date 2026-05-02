@@ -418,7 +418,7 @@ function SourceItem({
         <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
           Last income day (optional)
         </Label>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <ResponsivePicker
             open={endsOnOpen}
             onOpenChange={setEndsOnOpen}
@@ -464,12 +464,12 @@ function SourceItem({
             )}
           </ResponsivePicker>
           {source.endsOn ? (
-            <>
+            <span className="inline-flex items-center gap-0.5">
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="icon"
-                className="h-11 w-11 shrink-0 sm:h-9 sm:w-9"
+                className="h-9 w-9 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
                 title={
                   source.endsOnIgnored
                     ? 'Apply last day in charts and totals'
@@ -490,9 +490,9 @@ function SourceItem({
               </Button>
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="icon"
-                className="h-11 w-11 shrink-0 text-red-400 hover:bg-red-500/10 sm:h-9 sm:w-9"
+                className="h-9 w-9 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
                 title="Clear last income day"
                 onClick={() =>
                   onUpdate({
@@ -504,7 +504,7 @@ function SourceItem({
               >
                 <X className="h-4 w-4" />
               </Button>
-            </>
+            </span>
           ) : null}
         </div>
       </div>
