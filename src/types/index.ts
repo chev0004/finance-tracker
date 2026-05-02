@@ -67,6 +67,9 @@ export interface IncomeSource {
   firstPayday: string;
   payInterval?: number;
   rateChanges: IncomeRateChange[];
+  hidden?: boolean;
+  endsOn?: string;
+  endsOnIgnored?: boolean;
 }
 
 export interface OneTimeIncome {
