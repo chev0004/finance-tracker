@@ -1,7 +1,15 @@
 'use client';
 
 import { format, isValid, parseISO } from 'date-fns';
-import { CalendarIcon, Pencil, Plus, Trash2, X } from 'lucide-react';
+import {
+  CalendarIcon,
+  Eye,
+  EyeOff,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -29,6 +37,7 @@ interface IncomeSourceManagerProps {
   onAdd: (source: Omit<IncomeSource, 'id'>) => void;
   onUpdate: (source: IncomeSource) => void;
   onRemove: (id: string) => void;
+  onToggleHidden?: (id: string) => void;
   startOpen?: boolean;
   onCancel?: () => void;
 }
@@ -250,13 +259,16 @@ function SourceItem({
   canRemove,
   onUpdate,
   onRemove,
+  onToggleHidden,
 }: {
   source: IncomeSource;
   canRemove: boolean;
   onUpdate: (source: IncomeSource) => void;
   onRemove: (id: string) => void;
+  onToggleHidden?: (id: string) => void;
 }) {
   const firstPaydayDate = parseISO(source.firstPayday);
+  const endsOnDate = source.endsOn ? parseISO(source.endsOn) : undefined;
 
   const [amountStr, setAmountStr] = useState(String(source.amount));
   const [amountFocused, setAmountFocused] = useState(false);
@@ -265,6 +277,7 @@ function SourceItem({
   );
   const [intervalFocused, setIntervalFocused] = useState(false);
   const [paydayOpen, setPaydayOpen] = useState(false);
+  const [endsOnOpen, setEndsOnOpen] = useState(false);
 
   useEffect(() => {
     if (!amountFocused) setAmountStr(String(source.amount));
@@ -277,7 +290,12 @@ function SourceItem({
   }, [source.payInterval, intervalFocused]);
 
   return (
-    <div className="space-y-3 rounded-lg border border-border/50 bg-muted/20 p-3">
+    <div
+      className={cn(
+        'space-y-3 rounded-lg border border-border/50 bg-muted/20 p-3',
+        source.hidden && 'opacity-50',
+      )}
+    >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="min-w-0 space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
@@ -394,9 +412,135 @@ function SourceItem({
             />
           </div>
         )}
-        {canRemove && (
-          <div className="flex items-end justify-end sm:col-span-2 lg:col-span-4">
+      </div>
+
+      <div className="space-y-2 border-border/30 border-t pt-3">
+        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+          Last income day (optional)
+        </Label>
+        <div className="flex flex-wrap items-center gap-2">
+          <ResponsivePicker
+            open={endsOnOpen}
+            onOpenChange={setEndsOnOpen}
+            sheetTitle="Last income day"
+            popoverContentClassName="w-auto p-0"
+            trigger={
+              <Button
+                type="button"
+                variant="outline"
+                className={cn(
+                  'h-11 min-h-11 justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:text-sm',
+                  !source.endsOn && 'text-muted-foreground',
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                {source.endsOn && endsOnDate && isValid(endsOnDate)
+                  ? format(endsOnDate, 'MMM d, yyyy')
+                  : 'None'}
+              </Button>
+            }
+          >
+            {(close) => (
+              <Calendar
+                mode="single"
+                selected={
+                  endsOnDate && isValid(endsOnDate) ? endsOnDate : undefined
+                }
+                onSelect={(d) => {
+                  if (d && isValid(d)) {
+                    onUpdate({
+                      ...source,
+                      endsOn: format(d, 'yyyy-MM-dd'),
+                      endsOnIgnored: false,
+                    });
+                    close();
+                  }
+                }}
+                defaultMonth={
+                  endsOnDate && isValid(endsOnDate) ? endsOnDate : new Date()
+                }
+                className="mx-auto w-full max-w-[100vw] rounded-lg"
+              />
+            )}
+          </ResponsivePicker>
+          {source.endsOn ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-11 w-11 shrink-0 sm:h-9 sm:w-9"
+                title={
+                  source.endsOnIgnored
+                    ? 'Apply last day in charts and totals'
+                    : 'Ignore last day in projection (plan as if still employed)'
+                }
+                onClick={() =>
+                  onUpdate({
+                    ...source,
+                    endsOnIgnored: !source.endsOnIgnored,
+                  })
+                }
+              >
+                {source.endsOnIgnored ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-11 w-11 shrink-0 text-red-400 hover:bg-red-500/10 sm:h-9 sm:w-9"
+                title="Clear last income day"
+                onClick={() =>
+                  onUpdate({
+                    ...source,
+                    endsOn: undefined,
+                    endsOnIgnored: false,
+                  })
+                }
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="space-y-1 border-border/30 border-t pt-3">
+        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+          Rate Changes
+        </Label>
+        <RateChangeList source={source} onUpdate={onUpdate} />
+      </div>
+
+      {(canRemove || onToggleHidden) && (
+        <div className="flex justify-end gap-0.5 border-border/30 border-t pt-3">
+          {onToggleHidden && (
             <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
+              title={
+                source.hidden
+                  ? 'Show in calculations'
+                  : 'Hide from calculations'
+              }
+              onClick={() => onToggleHidden(source.id)}
+            >
+              {source.hidden ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+          {canRemove && (
+            <Button
+              type="button"
               variant="ghost"
               size="icon"
               className="h-9 w-9 shrink-0 text-muted-foreground hover:text-red-500"
@@ -404,19 +548,9 @@ function SourceItem({
             >
               <Trash2 className="h-4 w-4" />
             </Button>
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-1 border-border/30 border-t pt-3">
-        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
-          Rate Changes
-        </Label>
-        <p className="text-muted-foreground/50 text-xs">
-          Overrides the base amount from the effective date onward.
-        </p>
-        <RateChangeList source={source} onUpdate={onUpdate} />
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -426,6 +560,7 @@ export function IncomeSourceManager({
   onAdd,
   onUpdate,
   onRemove,
+  onToggleHidden,
   startOpen = false,
   onCancel,
 }: IncomeSourceManagerProps) {
@@ -484,6 +619,7 @@ export function IncomeSourceManager({
           canRemove={sources.length > 1}
           onUpdate={onUpdate}
           onRemove={onRemove}
+          onToggleHidden={onToggleHidden}
         />
       ))}
 
