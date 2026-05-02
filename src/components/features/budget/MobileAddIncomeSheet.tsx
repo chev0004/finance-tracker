@@ -22,6 +22,7 @@ interface MobileAddIncomeSheetProps {
   onAddIncomeSource: (source: Omit<IncomeSource, 'id'>) => void;
   onUpdateIncomeSource: (source: IncomeSource) => void;
   onRemoveIncomeSource: (id: string) => void;
+  onToggleIncomeSourceHidden: (id: string) => void;
   onAddOneTimeIncome: (item: Omit<OneTimeIncome, 'id'>) => void;
   onUpdateOneTimeIncome: (item: OneTimeIncome) => void;
   onRemoveOneTimeIncome: (id: string) => void;
@@ -36,6 +37,7 @@ export function MobileAddIncomeSheet({
   onAddIncomeSource,
   onUpdateIncomeSource,
   onRemoveIncomeSource,
+  onToggleIncomeSourceHidden,
   onAddOneTimeIncome,
   onUpdateOneTimeIncome,
   onRemoveOneTimeIncome,
@@ -138,6 +140,7 @@ export function MobileAddIncomeSheet({
               onAdd={handleAddSource}
               onUpdate={onUpdateIncomeSource}
               onRemove={onRemoveIncomeSource}
+              onToggleHidden={onToggleIncomeSourceHidden}
               startOpen
               onCancel={() => setView('picker')}
             />
