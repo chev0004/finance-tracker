@@ -95,6 +95,7 @@ export default function Home() {
     addIncomeSource,
     updateIncomeSource,
     removeIncomeSource,
+    toggleIncomeSourceHidden,
     importState,
     addOneTimeIncome,
     updateOneTimeIncome,
@@ -486,12 +487,11 @@ export default function Home() {
               }}
               onImport={importState}
               settings={settings}
-              monthlyIncome={monthlyIncome}
-              monthlySavings={monthlySavings}
               onUpdateSettings={updateSettings}
               onAddIncomeSource={addIncomeSource}
               onUpdateIncomeSource={updateIncomeSource}
               onRemoveIncomeSource={removeIncomeSource}
+              onToggleIncomeSourceHidden={toggleIncomeSourceHidden}
             />
             <div className="hidden items-center gap-2 sm:flex">
               <AuthNavButton />
@@ -609,12 +609,11 @@ export default function Home() {
         <div className="hidden sm:block">
           <SettingsPanel
             settings={settings}
-            monthlyIncome={monthlyIncome}
-            monthlySavings={monthlySavings}
             onUpdate={updateSettings}
             onAddIncomeSource={addIncomeSource}
             onUpdateIncomeSource={updateIncomeSource}
             onRemoveIncomeSource={removeIncomeSource}
+            onToggleIncomeSourceHidden={toggleIncomeSourceHidden}
           />
         </div>
 
@@ -753,6 +752,7 @@ export default function Home() {
             onAddIncomeSource={addIncomeSource}
             onUpdateIncomeSource={updateIncomeSource}
             onRemoveIncomeSource={removeIncomeSource}
+            onToggleIncomeSourceHidden={toggleIncomeSourceHidden}
             onAddOneTimeIncome={addOneTimeIncome}
             onUpdateOneTimeIncome={updateOneTimeIncome}
             onRemoveOneTimeIncome={removeOneTimeIncome}
@@ -973,12 +973,6 @@ export default function Home() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-muted-foreground/70 text-xs leading-relaxed">
-              ${effectivePocketPerPeriod} allocated {pocketFreqLabel}. Click any
-              dot to jump to that period in the expense log, where you can
-              override the allocation or skip a recurring pocket charge. Unspent
-              balance carries over.
-            </p>
             <NavStepper
               disablePrev={chartYearClamped <= chartStartYear}
               disableNext={chartYearClamped >= chartEndYear}
