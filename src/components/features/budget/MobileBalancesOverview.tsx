@@ -8,6 +8,7 @@ export type MobileBalancesOverviewProps = {
   currentPocketBalance: number;
   combinedBalance: number;
   monthlySavings: number;
+  monthlyNetSavings: number;
   monthlyIncome: number;
   eoyCombined: number;
   chartYearClamped: number;
@@ -22,6 +23,7 @@ export function MobileBalancesOverview({
   currentPocketBalance,
   combinedBalance,
   monthlySavings,
+  monthlyNetSavings,
   monthlyIncome,
   eoyCombined,
   chartYearClamped,
@@ -38,7 +40,8 @@ export function MobileBalancesOverview({
     success: 'text-emerald-500',
   }[eoyVariant];
 
-  const savingsPrefix = monthlySavings >= 0 ? '+' : '';
+  const grossPrefix = monthlySavings >= 0 ? '+' : '';
+  const netPrefix = monthlyNetSavings >= 0 ? '+' : '';
 
   const accountRows = [
     { label: 'Savings', value: formatMoney(currentSavings) },
@@ -47,15 +50,28 @@ export function MobileBalancesOverview({
 
   const statTiles: {
     title: string;
-    value: string;
+    value?: string;
+    lines?: { micro: string; value: string; valueClassName?: string }[];
     subtitle: string;
     valueClassName?: string;
   }[] = [
     {
       title: 'Savings / mo',
-      value: `${savingsPrefix}${formatMoney(monthlySavings)}`,
-      subtitle: 'Avg per month',
-      valueClassName: monthlySavings >= 0 ? 'text-emerald-400' : 'text-red-400',
+      lines: [
+        {
+          micro: 'Gross',
+          value: `${grossPrefix}${formatMoney(monthlySavings)}`,
+          valueClassName:
+            monthlySavings >= 0 ? 'text-emerald-400' : 'text-red-400',
+        },
+        {
+          micro: 'Net',
+          value: `${netPrefix}${formatMoney(monthlyNetSavings)}`,
+          valueClassName:
+            monthlyNetSavings >= 0 ? 'text-emerald-400' : 'text-red-400',
+        },
+      ],
+      subtitle: 'Gross: income less pocket. Net: avg after deductions',
     },
     {
       title: 'Income / mo',
@@ -126,15 +142,35 @@ export function MobileBalancesOverview({
         {statTiles.map((tile) => (
           <div key={tile.title} className="glass-card min-w-0 p-4">
             <p className="text-muted-foreground text-xs">{tile.title}</p>
-            <p
-              className={cn(
-                'mt-2 break-words font-bold font-mono text-foreground text-lg tracking-tight',
-                tile.valueClassName,
-              )}
-            >
-              {tile.value}
-            </p>
-            <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground/80 leading-snug">
+            {tile.lines ? (
+              <div className="mt-2 space-y-2">
+                {tile.lines.map((line) => (
+                  <div key={line.micro}>
+                    <p className="text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+                      {line.micro}
+                    </p>
+                    <p
+                      className={cn(
+                        'break-words font-bold font-mono text-base text-foreground tracking-tight',
+                        line.valueClassName,
+                      )}
+                    >
+                      {line.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p
+                className={cn(
+                  'mt-2 break-words font-bold font-mono text-foreground text-lg tracking-tight',
+                  tile.valueClassName,
+                )}
+              >
+                {tile.value}
+              </p>
+            )}
+            <p className="mt-1 line-clamp-3 text-[11px] text-muted-foreground/80 leading-snug">
               {tile.subtitle}
             </p>
           </div>
