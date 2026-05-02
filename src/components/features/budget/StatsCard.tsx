@@ -7,6 +7,23 @@ interface StatsCardProps {
   prefix?: string;
   variant?: 'default' | 'success' | 'danger' | 'warning';
   isCurrency?: boolean;
+  secondaryLabel?: string;
+  secondaryValue?: string | number;
+  secondaryPrefix?: string;
+  secondaryVariant?: 'default' | 'success' | 'danger' | 'warning';
+}
+
+function formatCurrencyValue(value: string | number): string {
+  const num = Number(value);
+  return num < 0
+    ? `-$${Math.abs(num).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`
+    : `$${num.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
 }
 
 export function StatsCard({
@@ -15,19 +32,12 @@ export function StatsCard({
   prefix = '',
   variant = 'default',
   isCurrency = true,
+  secondaryLabel,
+  secondaryValue,
+  secondaryPrefix = '',
+  secondaryVariant = 'default',
 }: StatsCardProps) {
-  const num = Number(value);
-  const displayValue = isCurrency
-    ? num < 0
-      ? `-$${Math.abs(num).toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`
-      : `$${num.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`
-    : value;
+  const displayValue = isCurrency ? formatCurrencyValue(value) : value;
 
   const colorClass = {
     default: 'text-foreground',
@@ -36,16 +46,60 @@ export function StatsCard({
     warning: 'text-amber-500',
   }[variant];
 
+  const secondaryDisplay =
+    secondaryValue !== undefined
+      ? isCurrency
+        ? formatCurrencyValue(secondaryValue)
+        : secondaryValue
+      : null;
+  const secondaryColorClass =
+    secondaryDisplay !== null
+      ? {
+          default: 'text-foreground',
+          success: 'text-emerald-500',
+          danger: 'text-red-500',
+          warning: 'text-amber-500',
+        }[secondaryVariant]
+      : '';
+
   return (
     <Card className="border-border/50 bg-card/50 hover:border-border hover:shadow-md">
       <CardContent className="p-4">
         <div className="mb-1 text-muted-foreground text-xs uppercase tracking-wider">
           {label}
         </div>
-        <div className={cn('font-bold font-mono text-xl', colorClass)}>
-          {prefix}
-          {displayValue}
-        </div>
+        {secondaryDisplay !== null && secondaryLabel ? (
+          <div className="space-y-2">
+            <div>
+              <div className="mb-0.5 text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+                Gross
+              </div>
+              <div className={cn('font-bold font-mono text-lg', colorClass)}>
+                {prefix}
+                {displayValue}
+              </div>
+            </div>
+            <div>
+              <div className="mb-0.5 text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+                {secondaryLabel}
+              </div>
+              <div
+                className={cn(
+                  'font-bold font-mono text-lg',
+                  secondaryColorClass,
+                )}
+              >
+                {secondaryPrefix}
+                {secondaryDisplay}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className={cn('font-bold font-mono text-xl', colorClass)}>
+            {prefix}
+            {displayValue}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
