@@ -21,12 +21,11 @@ type DashboardNavSheetProps = {
   exportAnalysisPayload: ExportPayload;
   onImport: (state: BudgetState) => void;
   settings: BudgetSettings;
-  monthlyIncome: number;
-  monthlySavings: number;
   onUpdateSettings: (patch: Partial<BudgetSettings>) => void;
   onAddIncomeSource: (source: Omit<IncomeSource, 'id'>) => void;
   onUpdateIncomeSource: (source: IncomeSource) => void;
   onRemoveIncomeSource: (id: string) => void;
+  onToggleIncomeSourceHidden: (id: string) => void;
 };
 
 export function DashboardNavSheet({
@@ -34,12 +33,11 @@ export function DashboardNavSheet({
   exportAnalysisPayload,
   onImport,
   settings,
-  monthlyIncome,
-  monthlySavings,
   onUpdateSettings,
   onAddIncomeSource,
   onUpdateIncomeSource,
   onRemoveIncomeSource,
+  onToggleIncomeSourceHidden,
 }: DashboardNavSheetProps) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<'menu' | 'settings'>('menu');
@@ -124,12 +122,11 @@ export function DashboardNavSheet({
               <div className="min-h-0 flex-1 overflow-y-auto pt-2 pb-4">
                 <SettingsPanel
                   settings={settings}
-                  monthlyIncome={monthlyIncome}
-                  monthlySavings={monthlySavings}
                   onUpdate={onUpdateSettings}
                   onAddIncomeSource={onAddIncomeSource}
                   onUpdateIncomeSource={onUpdateIncomeSource}
                   onRemoveIncomeSource={onRemoveIncomeSource}
+                  onToggleIncomeSourceHidden={onToggleIncomeSourceHidden}
                   compact
                 />
               </div>
