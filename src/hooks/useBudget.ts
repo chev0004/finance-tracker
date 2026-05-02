@@ -250,12 +250,32 @@ function getPaydayAmountWithOverride(
   return getSourceAmountForDate(source, date);
 }
 
+function isValidIsoDate(s: string | undefined): s is string {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+function incomeEndedBeforeDate(source: IncomeSource, date: string): boolean {
+  if (!isValidIsoDate(source.endsOn) || source.endsOnIgnored) return false;
+  return date > source.endsOn;
+}
+
+function includeIncomeSourceInProjection(source: IncomeSource): boolean {
+  return !source.hidden;
+}
+
+function includeIncomePayday(source: IncomeSource, payday: string): boolean {
+  if (!includeIncomeSourceInProjection(source)) return false;
+  if (incomeEndedBeforeDate(source, payday)) return false;
+  return true;
+}
+
 function getPaydayEditRowsForDate(
   settings: BudgetSettings,
   date: string,
 ): PaydayEditRow[] {
   const rows: PaydayEditRow[] = [];
   for (const source of settings.incomeSources) {
+    if (!includeIncomePayday(source, date)) continue;
     const incomeListStart = alignPaydayContainingDate(
       settings.startDate,
       source.firstPayday,
@@ -283,10 +303,11 @@ function getPaydayEditRowsForDate(
 }
 
 function getIncomeForDate(settings: BudgetSettings, date: string): number {
-  return settings.incomeSources.reduce(
-    (total, source) => total + getSourceAmountForDate(source, date),
-    0,
-  );
+  return settings.incomeSources.reduce((total, source) => {
+    if (source.hidden) return total;
+    if (incomeEndedBeforeDate(source, date)) return total;
+    return total + getSourceAmountForDate(source, date);
+  }, 0);
 }
 
 function periodsPerYear(freq: PayFrequency, interval?: number): number {
@@ -300,6 +321,8 @@ function periodsPerYear(freq: PayFrequency, interval?: number): number {
 function getMonthlyIncome(settings: BudgetSettings): number {
   const today = getLocalDateString();
   return settings.incomeSources.reduce((sum, source) => {
+    if (source.hidden) return sum;
+    if (incomeEndedBeforeDate(source, today)) return sum;
     const amount = getSourceAmountForDate(source, today);
     const periods = periodsPerYear(source.payFrequency, source.payInterval);
     return sum + (amount * periods) / 12;
@@ -355,6 +378,7 @@ function getPocketDeductingRecurringPerPeriod(
         settings.startDate,
       );
       for (const payday of sourcePaydays) {
+        if (!includeIncomePayday(source, payday)) continue;
         if (isIncomePaydaySkipped(settings, payday)) continue;
         const monthStr = payday.slice(0, 7);
         if (monthStr < rec.startMonth || monthStr > endBound) continue;
@@ -438,6 +462,7 @@ function genFixedEvents(
       settings.startDate,
     );
     for (const payday of sourcePaydays) {
+      if (!includeIncomePayday(source, payday)) continue;
       if (!isIncomePaydaySkipped(settings, payday)) {
         const amount = getPaydayAmountWithOverride(settings, source, payday);
         ev.push({
@@ -489,6 +514,7 @@ function genFixedEvents(
           settings.startDate,
         );
         for (const payday of sourcePaydays) {
+          if (!includeIncomePayday(source, payday)) continue;
           if (isIncomePaydaySkipped(settings, payday)) continue;
           const monthStr = payday.slice(0, 7);
           if (monthStr < rec.startMonth || monthStr > endBound) continue;
@@ -675,6 +701,18 @@ function migratePocketPerPeriodChanges(raw: unknown): PocketPerPeriodChange[] {
     }));
 }
 
+function normalizeIncomeSource(s: IncomeSource): IncomeSource {
+  const rawEnd =
+    typeof s.endsOn === 'string' ? s.endsOn.slice(0, 10) : undefined;
+  const endsOn = rawEnd && isValidIsoDate(rawEnd) ? rawEnd : undefined;
+  return {
+    ...s,
+    hidden: Boolean(s.hidden),
+    endsOn,
+    endsOnIgnored: endsOn ? Boolean(s.endsOnIgnored) : false,
+  };
+}
+
 function migrateIncomeSources(raw: Record<string, unknown>): IncomeSource[] {
   const globalFreq =
     (raw.payFrequency as PayFrequency) ??
@@ -687,13 +725,16 @@ function migrateIncomeSources(raw: Record<string, unknown>): IncomeSource[] {
 
   if (Array.isArray(raw.incomeSources) && raw.incomeSources.length > 0) {
     return (raw.incomeSources as IncomeSource[]).map((s) => {
-      if ('payFrequency' in s && s.payFrequency) return s;
-      return {
-        ...s,
-        payFrequency: globalFreq,
-        firstPayday: s.firstPayday ?? globalPayday,
-        payInterval: s.payInterval,
-      };
+      const merged: IncomeSource =
+        'payFrequency' in s && s.payFrequency
+          ? (s as IncomeSource)
+          : {
+              ...(s as IncomeSource),
+              payFrequency: globalFreq,
+              firstPayday: (s as IncomeSource).firstPayday ?? globalPayday,
+              payInterval: (s as IncomeSource).payInterval,
+            };
+      return normalizeIncomeSource(merged);
     });
   }
 
@@ -706,7 +747,7 @@ function migrateIncomeSources(raw: Record<string, unknown>): IncomeSource[] {
     }[]) ?? [];
 
   return [
-    {
+    normalizeIncomeSource({
       id: crypto.randomUUID(),
       name: 'Income',
       amount: baseIncome,
@@ -717,7 +758,7 @@ function migrateIncomeSources(raw: Record<string, unknown>): IncomeSource[] {
         effectiveDate: c.effectiveDate,
         amount: c.incomePerPeriod,
       })),
-    },
+    }),
   ];
 }
 
@@ -1018,13 +1059,12 @@ export function useBudget() {
   );
 
   useEffect(() => {
-    if (settings.pocketIncomeSourceId) {
-      const exists = settings.incomeSources.some(
-        (s) => s.id === settings.pocketIncomeSourceId,
-      );
-      if (!exists) {
-        setSettings((prev) => ({ ...prev, pocketIncomeSourceId: undefined }));
-      }
+    if (!settings.pocketIncomeSourceId) return;
+    const src = settings.incomeSources.find(
+      (s) => s.id === settings.pocketIncomeSourceId,
+    );
+    if (!src || src.hidden) {
+      setSettings((prev) => ({ ...prev, pocketIncomeSourceId: undefined }));
     }
   }, [settings.pocketIncomeSourceId, settings.incomeSources]);
 
@@ -1805,7 +1845,10 @@ export function useBudget() {
         ...prev,
         incomeSources: [
           ...prev.incomeSources,
-          { ...source, id: crypto.randomUUID() },
+          normalizeIncomeSource({
+            ...source,
+            id: crypto.randomUUID(),
+          } as IncomeSource),
         ],
       }));
     });
@@ -1816,7 +1859,7 @@ export function useBudget() {
       setSettings((prev) => ({
         ...prev,
         incomeSources: prev.incomeSources.map((s) =>
-          s.id === source.id ? source : s,
+          s.id === source.id ? normalizeIncomeSource(source) : s,
         ),
       }));
     });
@@ -1884,6 +1927,24 @@ export function useBudget() {
     });
   }, []);
 
+  const toggleIncomeSourceHidden = useCallback((id: string) => {
+    startMutation(() => {
+      setSettings((prev) => {
+        const nextSources = prev.incomeSources.map((s) =>
+          s.id === id ? { ...s, hidden: !s.hidden } : s,
+        );
+        const next = nextSources.find((s) => s.id === id);
+        const clearPocket =
+          Boolean(next?.hidden) && prev.pocketIncomeSourceId === id;
+        return {
+          ...prev,
+          incomeSources: nextSources,
+          ...(clearPocket ? { pocketIncomeSourceId: undefined } : {}),
+        };
+      });
+    });
+  }, []);
+
   return {
     isLoaded,
     isMutating,
@@ -1925,6 +1986,7 @@ export function useBudget() {
     addIncomeSource,
     updateIncomeSource,
     removeIncomeSource,
+    toggleIncomeSourceHidden,
     importState,
     addOneTimeIncome,
     updateOneTimeIncome,
