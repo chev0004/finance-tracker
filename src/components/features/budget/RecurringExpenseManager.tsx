@@ -107,7 +107,10 @@ export function RecurringExpenseManager({
       { value: DEDUCT_ANCHOR_CALENDAR, label: 'None' },
     ];
     for (const s of incomeSources) {
-      rows.push({ value: s.id, label: s.name });
+      rows.push({
+        value: s.id,
+        label: s.hidden ? `${s.name} (hidden)` : s.name,
+      });
     }
     return rows;
   }, [incomeSources]);
