@@ -90,6 +90,7 @@ export default function Home() {
     resetPocketAmountForPayday,
     monthlyIncome,
     monthlySavings,
+    monthlyNetSavings,
     effectivePocketPerPeriod,
     addIncomeSource,
     updateIncomeSource,
@@ -524,6 +525,7 @@ export default function Home() {
           currentPocketBalance={currentPocketBalance}
           combinedBalance={combinedBalance}
           monthlySavings={monthlySavings}
+          monthlyNetSavings={monthlyNetSavings}
           monthlyIncome={monthlyIncome}
           eoyCombined={eoyCombined}
           chartYearClamped={chartYearClamped}
@@ -568,6 +570,10 @@ export default function Home() {
             value={monthlySavings}
             variant={monthlySavings >= 0 ? 'success' : 'danger'}
             prefix={monthlySavings >= 0 ? '+' : ''}
+            secondaryLabel="Net"
+            secondaryValue={monthlyNetSavings}
+            secondaryVariant={monthlyNetSavings >= 0 ? 'success' : 'danger'}
+            secondaryPrefix={monthlyNetSavings >= 0 ? '+' : ''}
           />
           <Card className="border-border/50 bg-card/50 hover:border-border hover:shadow-md">
             <CardContent className="p-4">
