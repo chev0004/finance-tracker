@@ -1059,6 +1059,25 @@ export function useBudget() {
     [settings, expenseDates],
   );
 
+  const monthlyNetSavings = useMemo(() => {
+    const startD = new Date(`${settings.startDate}T00:00:00`);
+    const startYear = startD.getFullYear();
+    const startMonth = startD.getMonth();
+    const endYear = startYear + 4;
+    const monthsInRange = (endYear - startYear) * 12 + (12 - startMonth);
+    if (monthsInRange <= 0) return 0;
+
+    const lastDate = `${endYear}-12-31`;
+    let total = 0;
+    for (const ev of fixedEvents) {
+      if (ev.type === 'pocket') continue;
+      if (ev.date <= settings.startDate) continue;
+      if (ev.date > lastDate) continue;
+      total += ev.delta;
+    }
+    return total / monthsInRange;
+  }, [fixedEvents, settings.startDate]);
+
   const expensesPerPeriod = useMemo(() => {
     const totals: number[] = pocketPeriodBounds.map(() => 0);
     const counts: number[] = pocketPeriodBounds.map(() => 0);
@@ -1877,6 +1896,7 @@ export function useBudget() {
     effectivePocketPerPeriod,
     monthlyIncome,
     monthlySavings,
+    monthlyNetSavings,
     paydays,
     savingsTimeline,
     pocketTimeline,
