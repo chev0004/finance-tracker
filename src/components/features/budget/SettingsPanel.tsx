@@ -14,10 +14,8 @@ import {
   ResponsiveSelect,
   type ResponsiveSelectOption,
 } from '@/components/ui/responsive-select';
-import { getPocketPerPeriodForDate } from '@/lib/pocket-per-period';
 import {
   cn,
-  getLocalDateString,
   normalizeNumInputBlur,
   normalizeNumInputLeading,
 } from '@/lib/utils';
@@ -248,23 +246,21 @@ function PocketPerPeriodChangeList({
 
 interface SettingsPanelProps {
   settings: BudgetSettings;
-  monthlyIncome: number;
-  monthlySavings: number;
   onUpdate: (patch: Partial<BudgetSettings>) => void;
   onAddIncomeSource: (source: Omit<IncomeSource, 'id'>) => void;
   onUpdateIncomeSource: (source: IncomeSource) => void;
   onRemoveIncomeSource: (id: string) => void;
+  onToggleIncomeSourceHidden?: (id: string) => void;
   compact?: boolean;
 }
 
 export function SettingsPanel({
   settings,
-  monthlyIncome,
-  monthlySavings,
   onUpdate,
   onAddIncomeSource,
   onUpdateIncomeSource,
   onRemoveIncomeSource,
+  onToggleIncomeSourceHidden,
   compact = false,
 }: SettingsPanelProps) {
   const pocketStartDate = parseISO(settings.pocketFirstPayday);
@@ -278,13 +274,12 @@ export function SettingsPanel({
         : undefined,
     [settings.pocketIncomeSourceId, settings.incomeSources],
   );
+  const visibleIncomeSources = useMemo(
+    () => settings.incomeSources.filter((s) => !s.hidden),
+    [settings.incomeSources],
+  );
+
   const isSourceMode = Boolean(selectedPocketSource);
-  const effectivePocketFrequency = isSourceMode
-    ? (selectedPocketSource?.payFrequency ?? settings.pocketFrequency)
-    : settings.pocketFrequency;
-  const effectivePocketInterval = isSourceMode
-    ? selectedPocketSource?.payInterval
-    : settings.pocketInterval;
 
   const [pocketStr, setPocketStr] = useState(String(settings.pocketPerPeriod));
   const [pocketFocused, setPocketFocused] = useState(false);
@@ -306,19 +301,19 @@ export function SettingsPanel({
     const out: ResponsiveSelectOption[] = [
       { value: 'calendar', label: 'Calendar schedule' },
     ];
-    if (settings.incomeSources.length > 0) {
+    if (visibleIncomeSources.length > 0) {
       out.push({ value: 'source', label: 'Match income source' });
     }
     return out;
-  }, [settings.incomeSources.length]);
+  }, [visibleIncomeSources.length]);
 
   const matchedSourceOptions = useMemo(
     (): ResponsiveSelectOption[] =>
-      settings.incomeSources.map((s) => ({
+      visibleIncomeSources.map((s) => ({
         value: s.id,
         label: s.name,
       })),
-    [settings.incomeSources],
+    [visibleIncomeSources],
   );
 
   useEffect(() => {
@@ -335,20 +330,6 @@ export function SettingsPanel({
           : String(settings.pocketInterval),
       );
   }, [settings.pocketInterval, intervalFocused]);
-
-  const pocketFreqLabel =
-    effectivePocketFrequency === 'custom' && effectivePocketInterval
-      ? `every ${effectivePocketInterval} days`
-      : effectivePocketFrequency === 'monthly'
-        ? 'monthly'
-        : effectivePocketFrequency === 'biweekly'
-          ? 'every 2 weeks'
-          : 'weekly';
-
-  const pocketPerPeriodToday = useMemo(
-    () => getPocketPerPeriodForDate(settings, getLocalDateString()),
-    [settings],
-  );
 
   const gridClass = compact
     ? 'flex flex-col gap-6'
@@ -387,10 +368,14 @@ export function SettingsPanel({
             onValueChange={(v) => {
               startModeTransition(() => {
                 if (v === 'source') {
-                  if (settings.incomeSources.length === 0) return;
+                  if (visibleIncomeSources.length === 0) return;
                   const fallbackId =
-                    settings.pocketIncomeSourceId ??
-                    settings.incomeSources[0].id;
+                    settings.pocketIncomeSourceId &&
+                    visibleIncomeSources.some(
+                      (s) => s.id === settings.pocketIncomeSourceId,
+                    )
+                      ? settings.pocketIncomeSourceId
+                      : visibleIncomeSources[0].id;
                   onUpdate({ pocketIncomeSourceId: fallbackId });
                   return;
                 }
@@ -410,7 +395,7 @@ export function SettingsPanel({
           )}
         </div>
 
-        {isSourceMode && settings.incomeSources.length > 1 && (
+        {isSourceMode && visibleIncomeSources.length > 1 && (
           <div className="space-y-2">
             <Label className="text-muted-foreground text-xs uppercase tracking-wider">
               Matched source
@@ -591,40 +576,19 @@ export function SettingsPanel({
         <Label className="text-muted-foreground text-xs uppercase tracking-wider">
           Scheduled pocket / period
         </Label>
-        <p className="text-muted-foreground/60 text-xs">
-          From each effective date onward, pocket per period uses that amount
-          until the next change (same idea as income rate changes).
-        </p>
         <PocketPerPeriodChangeList settings={settings} onUpdate={onUpdate} />
       </div>
-
-      <p className="text-muted-foreground/70 text-xs">
-        Saving ~$
-        {monthlySavings.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}
-        /mo ($
-        {monthlyIncome.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}{' '}
-        income minus ${pocketPerPeriodToday} pocket {pocketFreqLabel})
-      </p>
 
       <div className="space-y-2 border-border/50 border-t pt-4">
         <Label className="text-muted-foreground text-xs uppercase tracking-wider">
           Income Sources
         </Label>
-        <p className="text-muted-foreground/60 text-xs">
-          Add your income sources. Each has its own frequency (weekly, biweekly,
-          monthly, custom) and rate changes over time.
-        </p>
         <IncomeSourceManager
           sources={settings.incomeSources}
           onAdd={onAddIncomeSource}
           onUpdate={onUpdateIncomeSource}
           onRemove={onRemoveIncomeSource}
+          onToggleHidden={onToggleIncomeSourceHidden}
         />
       </div>
     </>
