@@ -281,7 +281,7 @@ const SavingsChartPlot = memo(function SavingsChartPlot({
                   id: dotId,
                   x: cx,
                   y: cy,
-                  hitRadius: Math.max(point.radius + 6, 12),
+                  hitRadius: point.radius,
                   point,
                 });
                 return (
