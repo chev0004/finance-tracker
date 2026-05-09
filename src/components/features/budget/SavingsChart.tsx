@@ -56,6 +56,7 @@ interface SavingsChartProps {
     recurringExpenseId: string,
     occurrenceDate: string,
   ) => void;
+  onBranchFromPoint?: (rawDate: string, savingsBalance: number) => void;
 }
 
 const GREEN = '#10b981';
@@ -99,6 +100,7 @@ interface ChartDataPoint {
   events: SavingsPointEvent[];
   canEditPayday: boolean;
   canSkipRecurring: boolean;
+  canBranchFromHere: boolean;
 }
 
 interface SavingsDotTarget {
@@ -292,7 +294,9 @@ const SavingsChartPlot = memo(function SavingsChartPlot({
                     <g
                       className={cn(
                         'chart-marker-scale-wrap',
-                        (point.canEditPayday || point.canSkipRecurring) &&
+                        (point.canEditPayday ||
+                          point.canSkipRecurring ||
+                          point.canBranchFromHere) &&
                           'chart-marker-scale-wrap--strong',
                       )}
                     >
@@ -307,7 +311,9 @@ const SavingsChartPlot = memo(function SavingsChartPlot({
                       <circle
                         className={cn(
                           'chart-marker-dot',
-                          (point.canEditPayday || point.canSkipRecurring) &&
+                          (point.canEditPayday ||
+                            point.canSkipRecurring ||
+                            point.canBranchFromHere) &&
                             'chart-marker-dot--interactive',
                         )}
                         cx={0}
@@ -335,6 +341,7 @@ export function SavingsChart({
   onApplyPaydayIncomeAmounts,
   onSkipRecurringInstance,
   onRestoreRecurringInstance,
+  onBranchFromPoint,
 }: SavingsChartProps) {
   const maxVisibleTicks = useChartMaxTicks();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -360,6 +367,18 @@ export function SavingsChart({
     left: number;
     top: number;
   } | null>(null);
+  const [activeActionGroup, setActiveActionGroup] = useState<
+    'recurring' | null
+  >(null);
+  const [actionSubmenuSide, setActionSubmenuSide] = useState<'left' | 'right'>(
+    'right',
+  );
+  const [actionSubmenuTop, setActionSubmenuTop] = useState(0);
+  const [actionSubmenuAnchor, setActionSubmenuAnchor] = useState<{
+    top: number;
+    bottom: number;
+  } | null>(null);
+  const actionSubmenuRef = useRef<HTMLDivElement>(null);
   const [hoverTooltip, setHoverTooltip] = useState<SavingsDotTarget | null>(
     null,
   );
@@ -387,6 +406,11 @@ export function SavingsChart({
         point.events.some(
           (e) => e.type === 'recurring' && e.recurringExpenseId,
         );
+      const canBranchFromHere =
+        Boolean(onBranchFromPoint) &&
+        point.label !== '…' &&
+        point.type !== 'start' &&
+        point.events.length > 0;
       const isFuture = point.rawDate > today;
       const isBridge = lastPastIdx >= 0 && i === lastPastIdx + 1;
       return {
@@ -407,9 +431,10 @@ export function SavingsChart({
         events: point.events,
         canEditPayday,
         canSkipRecurring,
+        canBranchFromHere,
       };
     });
-  }, [data, today]);
+  }, [data, onBranchFromPoint, today]);
 
   const todayLineLabel = useMemo(() => {
     let lastPastIdx = -1;
@@ -496,7 +521,10 @@ export function SavingsChart({
     const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
     const hit = pickDotUnderPointer(xRaw, y);
     const actionable =
-      hit && (hit.point.canEditPayday || hit.point.canSkipRecurring);
+      hit &&
+      (hit.point.canEditPayday ||
+        hit.point.canSkipRecurring ||
+        hit.point.canBranchFromHere);
     el.style.cursor = actionable ? 'pointer' : 'default';
     let minDotX = Number.POSITIVE_INFINITY;
     let maxDotX = Number.NEGATIVE_INFINITY;
@@ -538,7 +566,11 @@ export function SavingsChart({
     const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
     const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
     const target = pickDotUnderPointer(x, y);
-    if (!target?.point.canEditPayday && !target?.point.canSkipRecurring) {
+    if (
+      !target?.point.canEditPayday &&
+      !target?.point.canSkipRecurring &&
+      !target?.point.canBranchFromHere
+    ) {
       return;
     }
     openChartActionMenu(event.clientX, event.clientY, target.point);
@@ -549,7 +581,9 @@ export function SavingsChart({
     const t = hoverTooltipRef.current;
     if (!t) return;
     const p = t.point;
-    if (!p.canEditPayday && !p.canSkipRecurring) return;
+    if (!p.canEditPayday && !p.canSkipRecurring && !p.canBranchFromHere) {
+      return;
+    }
     event.preventDefault();
     openChartActionMenu(event.clientX, event.clientY, p);
   };
@@ -568,6 +602,8 @@ export function SavingsChart({
   const closeChartActionMenu = useCallback(() => {
     setChartActionMenu(null);
     setChartActionMenuStyle(null);
+    setActiveActionGroup(null);
+    setActionSubmenuAnchor(null);
     setFreezeChartTooltip(true);
   }, []);
 
@@ -588,6 +624,38 @@ export function SavingsChart({
       return { left, top };
     });
   }, [chartActionMenu]);
+
+  useLayoutEffect(() => {
+    if (activeActionGroup !== 'recurring' || !actionSubmenuAnchor) return;
+    const menuEl = chartActionMenuRef.current;
+    const submenuEl = actionSubmenuRef.current;
+    if (!menuEl || !submenuEl) return;
+
+    const pad = 12;
+    const gap = 4;
+    const menuRect = menuEl.getBoundingClientRect();
+    const submenuRect = submenuEl.getBoundingClientRect();
+    const roomRight = window.innerWidth - pad - menuRect.right;
+    const roomLeft = menuRect.left - pad;
+    const nextSide =
+      roomRight >= submenuRect.width + gap || roomRight >= roomLeft
+        ? 'right'
+        : 'left';
+
+    const triggerTop = actionSubmenuAnchor.top - menuRect.top;
+    const triggerBottom = actionSubmenuAnchor.bottom - menuRect.top;
+    const opensDown =
+      window.innerHeight - pad - actionSubmenuAnchor.top >= submenuRect.height;
+    const idealTop = opensDown
+      ? triggerTop
+      : triggerBottom - submenuRect.height;
+    const minTop = pad - menuRect.top;
+    const maxTop = window.innerHeight - pad - menuRect.top - submenuRect.height;
+    const nextTop = Math.max(minTop, Math.min(idealTop, maxTop));
+
+    setActionSubmenuSide(nextSide);
+    setActionSubmenuTop(nextTop);
+  }, [activeActionGroup, actionSubmenuAnchor]);
 
   useEffect(() => {
     if (!chartActionMenu) return;
@@ -681,6 +749,27 @@ export function SavingsChart({
     setErrorMsg(null);
   };
 
+  const chartMenuRecurringEvents =
+    chartActionMenu?.point.events.filter(
+      (
+        ev,
+      ): ev is SavingsPointEvent & {
+        recurringExpenseId: string;
+      } => ev.type === 'recurring' && Boolean(ev.recurringExpenseId),
+    ) ?? [];
+  const chartMenuHasEditActions = Boolean(
+    chartActionMenu?.point.canEditPayday || chartMenuRecurringEvents.length > 0,
+  );
+
+  const openRecurringActionGroup = (triggerEl: HTMLElement) => {
+    const triggerRect = triggerEl.getBoundingClientRect();
+    setActionSubmenuAnchor({
+      top: triggerRect.top,
+      bottom: triggerRect.bottom,
+    });
+    setActiveActionGroup('recurring');
+  };
+
   return (
     <div className="space-y-3">
       {errorMsg && (
@@ -732,7 +821,7 @@ export function SavingsChart({
         createPortal(
           <div
             ref={chartActionMenuRef}
-            className="fixed z-[100] min-w-[13.5rem] select-none"
+            className="fixed z-[100] select-none"
             style={{
               left: chartActionMenuStyle.left,
               top: chartActionMenuStyle.top,
@@ -741,7 +830,7 @@ export function SavingsChart({
             role="menu"
             aria-label="Chart actions"
           >
-            <div className="glass-card">
+            <div className="glass-card w-64 overflow-visible">
               <div className="border-border/40 border-b px-3.5 py-2.5">
                 <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
                   {chartActionMenu.point.date}
@@ -750,8 +839,12 @@ export function SavingsChart({
                   {chartActionMenu.point.rawDate}
                 </p>
               </div>
-              <div className="p-1.5">
-                {chartActionMenu.point.canEditPayday && (
+
+              {chartActionMenu.point.canBranchFromHere && (
+                <div className="p-1.5">
+                  <div className="px-2 pt-1 pb-1 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
+                    Projection
+                  </div>
                   <button
                     type="button"
                     role="menuitem"
@@ -763,42 +856,116 @@ export function SavingsChart({
                     onClick={() => {
                       const p = chartActionMenu.point;
                       closeChartActionMenu();
-                      openPaydayDialog(p);
+                      onBranchFromPoint?.(p.rawDate, p.balance);
                     }}
                   >
-                    Edit Income
+                    <span className="min-w-0 flex-1">Branch From Here</span>
                   </button>
-                )}
-                {chartActionMenu.point.events
-                  .filter(
-                    (
-                      ev,
-                    ): ev is SavingsPointEvent & {
-                      recurringExpenseId: string;
-                    } =>
-                      ev.type === 'recurring' && Boolean(ev.recurringExpenseId),
-                  )
-                  .map((ev) => (
-                    <button
-                      key={`${ev.recurringExpenseId}-${ev.label}`}
-                      type="button"
-                      role="menuitem"
-                      className={cn(
-                        'flex w-full cursor-pointer items-center rounded-md px-3 py-2 text-left text-sm transition-colors',
-                        'text-foreground/95 hover:bg-muted/60 active:bg-muted',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      )}
-                      onClick={() => {
-                        const p = chartActionMenu.point;
-                        closeChartActionMenu();
-                        openEditRecurringDialog(p, ev);
-                      }}
-                    >
-                      Edit {eventName(ev.label)}
-                    </button>
-                  ))}
-              </div>
+                </div>
+              )}
+
+              {chartMenuHasEditActions && (
+                <div className="border-border/40 border-t">
+                  <div className="px-3.5 pt-2 pb-1 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
+                    Edit Event
+                  </div>
+                  <div className="p-1.5 pt-0">
+                    {chartActionMenu.point.canEditPayday && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={cn(
+                          'flex w-full cursor-pointer items-center rounded-md px-3 py-2 text-left text-sm transition-colors',
+                          'text-foreground/95 hover:bg-muted/60 active:bg-muted',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        )}
+                        onClick={() => {
+                          const p = chartActionMenu.point;
+                          closeChartActionMenu();
+                          openPaydayDialog(p);
+                        }}
+                      >
+                        <span className="min-w-0 flex-1">Income</span>
+                      </button>
+                    )}
+                    {chartMenuRecurringEvents.length > 0 && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-haspopup="menu"
+                        aria-expanded={activeActionGroup === 'recurring'}
+                        className={cn(
+                          'flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                          'text-foreground/95 hover:bg-muted/60 active:bg-muted',
+                          activeActionGroup === 'recurring' && 'bg-muted/60',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        )}
+                        onFocus={(event) =>
+                          openRecurringActionGroup(event.currentTarget)
+                        }
+                        onPointerEnter={(event) =>
+                          openRecurringActionGroup(event.currentTarget)
+                        }
+                      >
+                        <span className="min-w-0 flex-1">
+                          Recurring expenses
+                        </span>
+                        <span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground tabular-nums">
+                          {chartMenuRecurringEvents.length}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {activeActionGroup === 'recurring' &&
+              chartMenuRecurringEvents.length > 0 && (
+                <div
+                  ref={actionSubmenuRef}
+                  className={cn(
+                    'glass-card absolute w-64 overflow-hidden p-1.5',
+                    actionSubmenuSide === 'right'
+                      ? 'left-full ml-1'
+                      : 'right-full mr-1',
+                  )}
+                  style={{ top: actionSubmenuTop }}
+                  role="menu"
+                  aria-label="Recurring expense actions"
+                  onFocus={() => setActiveActionGroup('recurring')}
+                  onPointerEnter={() => setActiveActionGroup('recurring')}
+                >
+                  <div className="border-border/40 border-b px-2 py-2">
+                    <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
+                      Recurring Expenses
+                    </p>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto py-1">
+                    {chartMenuRecurringEvents.map((ev) => (
+                      <button
+                        key={`${ev.recurringExpenseId}-${ev.label}`}
+                        type="button"
+                        role="menuitem"
+                        className={cn(
+                          'flex w-full cursor-pointer items-center rounded-md px-3 py-2 text-left text-sm transition-colors',
+                          'text-foreground/95 hover:bg-muted/60 active:bg-muted',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        )}
+                        onClick={() => {
+                          const p = chartActionMenu.point;
+                          closeChartActionMenu();
+                          openEditRecurringDialog(p, ev);
+                        }}
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {eventName(ev.label)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
           </div>,
           document.body,
         )}

@@ -920,6 +920,14 @@ function makeBranch(name: string, state: BudgetState): BudgetBranch {
   };
 }
 
+function uniqueBranchName(branches: BudgetBranch[], baseName: string): string {
+  const names = new Set(branches.map((branch) => branch.name));
+  if (!names.has(baseName)) return baseName;
+  let n = 2;
+  while (names.has(`${baseName} ${n}`)) n++;
+  return `${baseName} ${n}`;
+}
+
 function withCurrentBranchState(
   branches: BudgetBranch[],
   activeBranchId: string,
@@ -1010,6 +1018,17 @@ function parseStoredWorkspace(raw: unknown): {
     activeState,
     needsStartDatePrompt: parsed.needsStartDatePrompt,
   };
+}
+
+function getSavingsStartOffset(
+  settings: BudgetSettings,
+  expenseDates: readonly string[],
+): number {
+  const paydays = getPocketPaydays(settings, expenseDates);
+  const firstPeriodPayday = paydays[0];
+  return firstPeriodPayday && firstPeriodPayday <= settings.startDate
+    ? getPocketAmountForPayday(settings, firstPeriodPayday)
+    : 0;
 }
 
 export function useBudget() {
@@ -2087,6 +2106,58 @@ export function useBudget() {
     [activeBranchId, expenses, settings, spentPerPeriod],
   );
 
+  const branchFromSavingsPoint = useCallback(
+    (rawDate: string, savingsBalance: number) => {
+      if (!rawDate) return;
+      startMutation(() => {
+        const futureExpenses = expenses.filter(
+          (expense) => expense.date > rawDate,
+        );
+        const branchSettingsBase: BudgetSettings = {
+          ...settings,
+          startDate: rawDate,
+          pocketFirstPayday: settings.pocketIncomeSourceId
+            ? settings.pocketFirstPayday
+            : rawDate,
+        };
+        const startOffset = getSavingsStartOffset(
+          branchSettingsBase,
+          futureExpenses.map((expense) => expense.date),
+        );
+        const branchSettings: BudgetSettings = {
+          ...branchSettingsBase,
+          startingBalance: savingsBalance + startOffset,
+        };
+        const nextPaydays = getPocketPaydays(
+          branchSettings,
+          futureExpenses.map((expense) => expense.date),
+        );
+        const nextState = makeBudgetState(
+          futureExpenses,
+          nextPaydays.map(() => 0),
+          branchSettings,
+        );
+        const currentState = makeBudgetState(
+          expenses,
+          spentPerPeriod,
+          settings,
+        );
+        const branchName = uniqueBranchName(branches, `From ${rawDate}`);
+        const branch = makeBranch(branchName, nextState);
+        setBranches((prev) => [
+          ...withCurrentBranchState(prev, activeBranchId, currentState),
+          branch,
+        ]);
+        setActiveBranchId(branch.id);
+        setExpenses(nextState.expenses);
+        setSpentPerPeriod(nextState.spentPerPeriod);
+        setSettings(nextState.settings);
+        setNeedsStartDatePrompt(false);
+      });
+    },
+    [activeBranchId, branches, expenses, settings, spentPerPeriod],
+  );
+
   const renameBranch = useCallback((id: string, name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -2261,6 +2332,7 @@ export function useBudget() {
     toggleIncomeSourceHidden,
     switchBranch,
     createBranch,
+    branchFromSavingsPoint,
     renameBranch,
     deleteBranch,
     importState,

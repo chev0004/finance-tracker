@@ -101,6 +101,7 @@ export default function Home() {
     toggleIncomeSourceHidden,
     switchBranch,
     createBranch,
+    branchFromSavingsPoint,
     renameBranch,
     deleteBranch,
     importState,
@@ -691,6 +692,7 @@ export default function Home() {
               today={today}
               getPaydayEditRowsForDate={getPaydayEditRowsForDate}
               onApplyPaydayIncomeAmounts={applyPaydayIncomeAmounts}
+              onBranchFromPoint={branchFromSavingsPoint}
               onSkipRecurringInstance={(
                 recurringExpenseId,
                 occurrenceDate,
