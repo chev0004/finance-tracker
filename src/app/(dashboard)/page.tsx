@@ -17,7 +17,6 @@ import { DashboardNavSheet } from '@/components/features/budget/DashboardNavShee
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
 import { ExpenseList } from '@/components/features/budget/ExpenseList';
 import { ExportMenu } from '@/components/features/budget/ExportMenu';
-import { GoalCard } from '@/components/features/budget/GoalCard';
 import { GoalForm } from '@/components/features/budget/GoalForm';
 import { IncomeSourceManager } from '@/components/features/budget/IncomeSourceManager';
 import { MobileAddExpenseSheet } from '@/components/features/budget/MobileAddExpenseSheet';
@@ -28,6 +27,7 @@ import { PocketAllocationEditor } from '@/components/features/budget/PocketAlloc
 import { PocketChart } from '@/components/features/budget/PocketChart';
 import { RecurringExpenseManager } from '@/components/features/budget/RecurringExpenseManager';
 import { SavingsChart } from '@/components/features/budget/SavingsChart';
+import { SavingsGoalManager } from '@/components/features/budget/SavingsGoalManager';
 import { SettingsPanel } from '@/components/features/budget/SettingsPanel';
 import { StatsCard } from '@/components/features/budget/StatsCard';
 import { ValidationAlert } from '@/components/features/budget/ValidationAlert';
@@ -821,7 +821,7 @@ export default function Home() {
             <CardHeader className="pb-0">
               <button
                 type="button"
-                className="-mx-2 flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted/40"
+                className="-mx-2 flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted/40 hover:text-foreground"
                 onClick={() => toggleSection('goals')}
                 aria-expanded={!collapsedSections.goals}
               >
@@ -840,38 +840,17 @@ export default function Home() {
               </button>
             </CardHeader>
             {!collapsedSections.goals && (
-              <CardContent className="space-y-3">
-                {settings.goals.map((goal) => {
-                  const stat = goalStats.find((s) => s.goalId === goal.id);
-                  if (!stat) return null;
-
-                  if (editingGoalId === goal.id) {
-                    return (
-                      <GoalForm
-                        key={goal.id}
-                        goal={goal}
-                        recurringExpenses={settings.recurringExpenses}
-                        onSave={(updated) => {
-                          updateGoal(updated);
-                          setEditingGoalId(null);
-                        }}
-                        onCancel={() => setEditingGoalId(null)}
-                      />
-                    );
-                  }
-
-                  return (
-                    <GoalCard
-                      key={goal.id}
-                      goal={goal}
-                      stat={stat}
-                      recurringExpenses={settings.recurringExpenses}
-                      onEdit={() => setEditingGoalId(goal.id)}
-                      onDelete={() => removeGoal(goal.id)}
-                      onToggleHidden={() => toggleGoalHidden(goal.id)}
-                    />
-                  );
-                })}
+              <CardContent>
+                <SavingsGoalManager
+                  goals={settings.goals}
+                  goalStats={goalStats}
+                  recurringExpenses={settings.recurringExpenses}
+                  editingGoalId={editingGoalId}
+                  onEditingGoalChange={setEditingGoalId}
+                  onUpdate={updateGoal}
+                  onRemove={removeGoal}
+                  onToggleHidden={toggleGoalHidden}
+                />
               </CardContent>
             )}
           </Card>

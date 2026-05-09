@@ -46,6 +46,9 @@ export function GoalCard({
 }: GoalCardProps) {
   const [expanded, setExpanded] = useState(false);
   const dateLabel = formatDateRange(goal.startDate, goal.endDate);
+  const finished = goal.endDate < format(new Date(), 'yyyy-MM-dd');
+  const amountClassName = finished ? 'text-red-400' : 'text-foreground';
+  const amountPrefix = finished ? '-' : '';
 
   const pausedNames = goal.pausedExpenseIds
     .map((id) => recurringExpenses.find((e) => e.id === id)?.label)
@@ -57,7 +60,7 @@ export function GoalCard({
       ? 'border-amber-500/20'
       : 'border-border/50';
 
-  const details: string[] = [dateLabel, `$${stat.totalCost.toLocaleString()}`];
+  const details: string[] = [];
   if (goal.pauseIncome) {
     details.push('no income');
     if (goal.incomeResumeDate)
@@ -70,7 +73,7 @@ export function GoalCard({
   return (
     <Card
       className={cn(
-        'gap-0 bg-card/50 p-3 transition-colors',
+        'gap-0 bg-card/50 p-3 transition-colors hover:border-border/80 hover:bg-card/70',
         statusBorder,
         goal.hidden && 'opacity-50',
       )}
@@ -78,7 +81,7 @@ export function GoalCard({
       <div className="flex items-start justify-between gap-3">
         <button
           type="button"
-          className="-m-1 flex min-w-0 flex-1 cursor-pointer items-start gap-2 rounded-md p-1 text-left transition-colors hover:bg-muted/40"
+          className="-m-1 flex min-w-0 flex-1 cursor-pointer items-start gap-2 rounded-md p-1 text-left transition-colors hover:bg-muted/40 hover:text-foreground"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
         >
@@ -100,7 +103,10 @@ export function GoalCard({
             </h3>
             {!expanded && (
               <p className="mt-0.5 truncate text-muted-foreground text-xs">
-                {dateLabel} · ${stat.totalCost.toLocaleString()}
+                {dateLabel} ·{' '}
+                <span className={cn('font-mono', amountClassName)}>
+                  {amountPrefix}${stat.totalCost.toLocaleString()}
+                </span>
               </p>
             )}
           </div>
@@ -144,7 +150,11 @@ export function GoalCard({
       {expanded && (
         <div className="mt-3 space-y-2">
           <p className="break-words text-muted-foreground text-xs">
-            {details.join(' · ')}
+            {dateLabel} ·{' '}
+            <span className={cn('font-mono', amountClassName)}>
+              {amountPrefix}${stat.totalCost.toLocaleString()}
+            </span>
+            {details.length > 0 && ` · ${details.join(' · ')}`}
           </p>
 
           <div className="space-y-1 border-border/30 border-t pt-2">
@@ -154,8 +164,8 @@ export function GoalCard({
                 className="flex items-center justify-between text-xs"
               >
                 <span className="text-muted-foreground">{item.label}</span>
-                <span className="font-mono">
-                  ${item.amount.toLocaleString()}
+                <span className={cn('font-mono', amountClassName)}>
+                  {amountPrefix}${item.amount.toLocaleString()}
                 </span>
               </div>
             ))}
