@@ -250,7 +250,7 @@ const PocketChartPlot = memo(function PocketChartPlot({
         {chartData.map((point, index) => {
           const baseR = point.isSelected ? 8 : point.expenseCount > 0 ? 6 : 5;
           const dotId = `pocket-${point.idx}-${index}`;
-          const hitRadius = Math.max(baseR + 6, 12);
+          const hitRadius = baseR;
           return (
             <ReferenceDot
               key={`${point.idx}-${index}`}
