@@ -509,6 +509,13 @@ export function PocketChart({
     handleDotClick(target.idx);
   };
 
+  const handleChartContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const t = hoverTooltipRef.current;
+    if (!t) return;
+    event.preventDefault();
+    handleDotClick(t.idx);
+  };
+
   const openSkipDialog = (item: PocketExpenseItem) => {
     if (!item.recurringExpenseId || !item.date) return;
     setSkipNote('');
@@ -620,6 +627,7 @@ export function PocketChart({
         onPointerMoveCapture={updateHoverCursor}
         onPointerLeave={clearHoverTarget}
         onClick={handleChartClick}
+        onContextMenu={handleChartContextMenu}
       >
         <PocketChartPlot
           chartData={chartData}
