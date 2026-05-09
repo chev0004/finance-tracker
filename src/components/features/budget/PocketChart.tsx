@@ -2,7 +2,16 @@
 
 import { format, isValid, parseISO } from 'date-fns';
 import { AlertCircle } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import {
+  type MutableRefObject,
+  memo,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  startTransition,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   CartesianGrid,
   Line,
@@ -10,7 +19,6 @@ import {
   ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -90,12 +98,207 @@ interface ChartDataPoint {
   isSelected: boolean;
 }
 
+interface PocketDotTarget {
+  id: string;
+  x: number;
+  y: number;
+  hitRadius: number;
+  idx: number;
+  point: ChartDataPoint;
+}
+
 type SkipDialogTarget = {
   recurringExpenseId: string;
   occurrenceDate: string;
   label: string;
   amount: number;
 };
+
+const PocketTooltipBody = memo(function PocketTooltipBody({
+  point,
+}: {
+  point: ChartDataPoint;
+}) {
+  return (
+    <div className="glass-card p-3">
+      <div className="mb-2 text-muted-foreground text-xs">{point.date}</div>
+      {point.expenseItems.length > 0 ? (
+        <div className="mb-1 space-y-0.5">
+          {point.expenseItems.map((item, i) => (
+            <div key={i} className="flex justify-between gap-4 text-sm">
+              <span className="text-muted-foreground">{item.label}</span>
+              <span className="font-mono text-foreground text-sm">
+                -${fmtAmount(item.amount)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        point.spent > 0 && (
+          <div className="mb-1 flex justify-between gap-4 text-sm">
+            <span className="text-muted-foreground">Spent</span>
+            <span className="font-mono text-foreground">
+              -${fmtAmount(point.spent)}
+            </span>
+          </div>
+        )
+      )}
+      {point.balance > 0 && (
+        <div className="mt-1 font-mono text-green-400 text-sm">
+          ${fmtAmount(point.balance)} unspent
+        </div>
+      )}
+      {point.overage > 0 && (
+        <div className="mt-1 font-mono text-red-400 text-sm">
+          ${fmtAmount(point.overage)} over budget
+        </div>
+      )}
+    </div>
+  );
+});
+
+interface PocketChartPlotProps {
+  chartData: ChartDataPoint[];
+  todayLineLabel: string | null;
+  tickInterval: number;
+  dotTargetsRef: MutableRefObject<Map<string, PocketDotTarget>>;
+}
+
+const PocketChartPlot = memo(function PocketChartPlot({
+  chartData,
+  todayLineLabel,
+  tickInterval,
+  dotTargetsRef,
+}: PocketChartPlotProps) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart
+        data={chartData}
+        margin={{ top: 10, right: 8, left: 4, bottom: 5 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+        <XAxis
+          dataKey="date"
+          tick={{
+            fill: '#6b7280',
+            fontSize: 9,
+            fontFamily: 'var(--font-dm-sans)',
+          }}
+          axisLine={{ stroke: 'transparent' }}
+          tickLine={false}
+          interval={tickInterval}
+          angle={-35}
+          textAnchor="end"
+          height={50}
+        />
+        <YAxis
+          width={48}
+          tick={{
+            fill: '#6b7280',
+            fontSize: 9,
+            fontFamily: 'var(--font-space-mono)',
+          }}
+          axisLine={{ stroke: 'transparent' }}
+          tickLine={false}
+          tickCount={10}
+          tickMargin={4}
+          minTickGap={0}
+          tickFormatter={(value) =>
+            value < 0
+              ? `-$${Math.abs(value).toLocaleString()}`
+              : `$${value.toLocaleString()}`
+          }
+          domain={[0, 'auto']}
+        />
+        <Line
+          type="stepAfter"
+          dataKey="pastBalance"
+          stroke={BLUE}
+          strokeWidth={2}
+          dot={false}
+          activeDot={false}
+          connectNulls={false}
+          isAnimationActive={false}
+        />
+        <Line
+          type="stepAfter"
+          dataKey="futureBalance"
+          stroke={BLUE}
+          strokeOpacity={0.45}
+          strokeWidth={2}
+          strokeDasharray="4 4"
+          dot={false}
+          activeDot={false}
+          connectNulls={false}
+          isAnimationActive={false}
+        />
+        {todayLineLabel && (
+          <ReferenceLine
+            x={todayLineLabel}
+            stroke="#9ca3af"
+            strokeDasharray="2 4"
+            strokeWidth={1}
+            label={{
+              value: 'today',
+              position: 'insideTopRight',
+              fill: '#9ca3af',
+              fontSize: 10,
+              fontFamily: 'var(--font-space-mono)',
+            }}
+          />
+        )}
+        {chartData.map((point, index) => {
+          const baseR = point.isSelected ? 8 : point.expenseCount > 0 ? 6 : 5;
+          const dotId = `pocket-${point.idx}-${index}`;
+          const hitRadius = Math.max(baseR + 6, 12);
+          return (
+            <ReferenceDot
+              key={`${point.idx}-${index}`}
+              x={point.date}
+              y={point.balance}
+              r={0}
+              zIndex={DOT_HIT_Z}
+              fill="transparent"
+              stroke="none"
+              shape={(props: { cx?: number; cy?: number }) => {
+                const { cx, cy } = props;
+                if (cx == null || cy == null) return <g />;
+                dotTargetsRef.current.set(dotId, {
+                  id: dotId,
+                  x: cx,
+                  y: cy,
+                  hitRadius,
+                  idx: point.idx,
+                  point,
+                });
+                return (
+                  <g className="chart-marker-layer">
+                    <ellipse
+                      className="chart-marker-mask"
+                      cx={cx}
+                      cy={cy}
+                      rx={baseR}
+                      ry={baseR}
+                      fill="var(--card)"
+                    />
+                    <circle
+                      className="chart-marker-dot"
+                      cx={cx}
+                      cy={cy}
+                      r={baseR}
+                      fill={point.color}
+                      fillOpacity={point.isFuture ? 0.45 : 1}
+                    />
+                  </g>
+                );
+              }}
+            />
+          );
+        })}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+});
 
 export function PocketChart({
   data,
@@ -104,10 +307,17 @@ export function PocketChart({
   onSkipRecurringInstance,
 }: PocketChartProps) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [skipTarget, setSkipTarget] = useState<SkipDialogTarget | null>(null);
   const [skipNote, setSkipNote] = useState('');
+  const [hoverTooltip, setHoverTooltip] = useState<PocketDotTarget | null>(
+    null,
+  );
+  const dotTargetsRef = useRef<Map<string, PocketDotTarget>>(new Map());
+  const hoverTooltipRef = useRef<PocketDotTarget | null>(null);
+  const cursorLineRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const chartAreaRef = useRef<HTMLDivElement>(null);
 
   const chartData = useMemo<ChartDataPoint[]>(() => {
     let lastPastIdx = -1;
@@ -159,6 +369,58 @@ export function PocketChart({
   const tickInterval =
     chartData.length > 80 ? Math.floor(chartData.length / 80) : 0;
 
+  const visibleDotIds = useMemo(
+    () =>
+      new Set(chartData.map((point, index) => `pocket-${point.idx}-${index}`)),
+    [chartData],
+  );
+
+  const pickDotUnderPointer = (px: number, py: number) => {
+    let best: PocketDotTarget | null = null;
+    let bestD2 = Number.POSITIVE_INFINITY;
+
+    for (const target of dotTargetsRef.current.values()) {
+      if (!visibleDotIds.has(target.id)) continue;
+      const dx = target.x - px;
+      const dy = target.y - py;
+      const d2 = dx * dx + dy * dy;
+      const r = target.hitRadius;
+      if (d2 <= r * r && d2 < bestD2) {
+        bestD2 = d2;
+        best = target;
+      }
+    }
+
+    return best;
+  };
+
+  const pickNearestByX = (px: number) => {
+    let nearest: PocketDotTarget | null = null;
+    let best = Number.POSITIVE_INFINITY;
+
+    for (const target of dotTargetsRef.current.values()) {
+      if (!visibleDotIds.has(target.id)) continue;
+      const d = Math.abs(target.x - px);
+      if (d < best) {
+        best = d;
+        nearest = target;
+      }
+    }
+
+    return nearest;
+  };
+
+  const commitHoverTooltip = (next: PocketDotTarget | null) => {
+    const prevId = hoverTooltipRef.current?.id ?? null;
+    const nextId = next?.id ?? null;
+    hoverTooltipRef.current = next;
+    if (prevId !== nextId) {
+      startTransition(() => {
+        setHoverTooltip(next);
+      });
+    }
+  };
+
   const selectedPoint =
     selectedIdx !== null
       ? (data.find((p) => p.idx === selectedIdx) ?? null)
@@ -194,6 +456,54 @@ export function PocketChart({
     }
   };
 
+  const updateHoverCursor = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const el = event.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const xRaw = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+    el.style.cursor = pickDotUnderPointer(xRaw, y) ? 'pointer' : 'default';
+    let minDotX = Number.POSITIVE_INFINITY;
+    let maxDotX = Number.NEGATIVE_INFINITY;
+    for (const target of dotTargetsRef.current.values()) {
+      if (!visibleDotIds.has(target.id)) continue;
+      minDotX = Math.min(minDotX, target.x);
+      maxDotX = Math.max(maxDotX, target.x);
+    }
+    const xHighlight =
+      minDotX <= maxDotX ? Math.max(minDotX, Math.min(maxDotX, xRaw)) : xRaw;
+    const line = cursorLineRef.current;
+    if (line) {
+      line.style.opacity = '1';
+      line.style.left = `${xHighlight}px`;
+    }
+    const tip = tooltipRef.current;
+    if (tip) {
+      tip.style.transform = `translate3d(${xHighlight + 14}px, ${Math.max(8, y - 76)}px, 0)`;
+    }
+    commitHoverTooltip(pickNearestByX(xHighlight));
+  };
+
+  const clearHoverTarget = () => {
+    const area = chartAreaRef.current;
+    if (area) {
+      area.style.cursor = '';
+    }
+    if (cursorLineRef.current) {
+      cursorLineRef.current.style.opacity = '0';
+    }
+    commitHoverTooltip(null);
+  };
+
+  const handleChartClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const el = event.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+    const target = pickDotUnderPointer(x, y);
+    if (!target) return;
+    handleDotClick(target.idx);
+  };
+
   const openSkipDialog = (item: PocketExpenseItem) => {
     if (!item.recurringExpenseId || !item.date) return;
     setSkipNote('');
@@ -224,55 +534,6 @@ export function PocketChart({
   const fmtOccurrence = (dateStr: string) => {
     const d = parseISO(dateStr);
     return isValid(d) ? format(d, 'MMM d, yyyy') : dateStr;
-  };
-
-  const CustomTooltip = ({
-    active,
-    payload,
-  }: {
-    active?: boolean;
-    payload?: Array<{ payload: ChartDataPoint }>;
-  }) => {
-    if (active && payload && payload.length) {
-      const point = payload[0].payload;
-      return (
-        <div className="glass-card p-3">
-          <div className="mb-2 text-muted-foreground text-xs">{point.date}</div>
-          {point.expenseItems.length > 0 ? (
-            <div className="mb-1 space-y-0.5">
-              {point.expenseItems.map((item, i) => (
-                <div key={i} className="flex justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">{item.label}</span>
-                  <span className="font-mono text-foreground text-sm">
-                    -${fmtAmount(item.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            point.spent > 0 && (
-              <div className="mb-1 flex justify-between gap-4 text-sm">
-                <span className="text-muted-foreground">Spent</span>
-                <span className="font-mono text-foreground">
-                  -${fmtAmount(point.spent)}
-                </span>
-              </div>
-            )
-          )}
-          {point.balance > 0 && (
-            <div className="mt-1 font-mono text-green-400 text-sm">
-              ${fmtAmount(point.balance)} unspent
-            </div>
-          )}
-          {point.overage > 0 && (
-            <div className="mt-1 font-mono text-red-400 text-sm">
-              ${fmtAmount(point.overage)} over budget
-            </div>
-          )}
-        </div>
-      );
-    }
-    return null;
   };
 
   return (
@@ -347,147 +608,32 @@ export function PocketChart({
         </div>
       )}
 
-      <div className="h-[200px] w-full sm:h-[240px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={chartData}
-            margin={{ top: 10, right: 8, left: 4, bottom: 5 }}
-          >
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="rgba(255,255,255,0.05)"
-            />
-            <XAxis
-              dataKey="date"
-              tick={{
-                fill: '#6b7280',
-                fontSize: 9,
-                fontFamily: 'var(--font-dm-sans)',
-              }}
-              axisLine={{ stroke: 'transparent' }}
-              tickLine={false}
-              interval={tickInterval}
-              angle={-35}
-              textAnchor="end"
-              height={50}
-            />
-            <YAxis
-              width={48}
-              tick={{
-                fill: '#6b7280',
-                fontSize: 9,
-                fontFamily: 'var(--font-space-mono)',
-              }}
-              axisLine={{ stroke: 'transparent' }}
-              tickLine={false}
-              tickCount={10}
-              tickMargin={4}
-              minTickGap={0}
-              tickFormatter={(value) =>
-                value < 0
-                  ? `-$${Math.abs(value).toLocaleString()}`
-                  : `$${value.toLocaleString()}`
-              }
-              domain={[0, 'auto']}
-            />
-            <Tooltip content={<CustomTooltip />} isAnimationActive={false} />
-            <Line
-              type="stepAfter"
-              dataKey="pastBalance"
-              stroke={BLUE}
-              strokeWidth={2}
-              dot={false}
-              activeDot={false}
-              connectNulls={false}
-              isAnimationActive={false}
-            />
-            <Line
-              type="stepAfter"
-              dataKey="futureBalance"
-              stroke={BLUE}
-              strokeOpacity={0.45}
-              strokeWidth={2}
-              strokeDasharray="4 4"
-              dot={false}
-              activeDot={false}
-              connectNulls={false}
-              isAnimationActive={false}
-            />
-            {todayLineLabel && (
-              <ReferenceLine
-                x={todayLineLabel}
-                stroke="#9ca3af"
-                strokeDasharray="2 4"
-                strokeWidth={1}
-                label={{
-                  value: 'today',
-                  position: 'insideTopRight',
-                  fill: '#9ca3af',
-                  fontSize: 10,
-                  fontFamily: 'var(--font-space-mono)',
-                }}
-              />
-            )}
-            {chartData.map((point, index) => {
-              const baseR = point.isSelected
-                ? 8
-                : point.expenseCount > 0
-                  ? 6
-                  : 5;
-              const innerR =
-                hoveredIdx === point.idx && !point.isSelected
-                  ? baseR + 2
-                  : baseR;
-              const hitR = Math.max(innerR + 10, 14);
-              return (
-                <ReferenceDot
-                  key={`${point.idx}-${index}`}
-                  x={point.date}
-                  y={point.balance}
-                  r={0}
-                  zIndex={DOT_HIT_Z}
-                  fill="transparent"
-                  stroke="none"
-                  shape={(props: { cx?: number; cy?: number }) => {
-                    const { cx, cy } = props;
-                    if (cx == null || cy == null) return <g />;
-                    return (
-                      // biome-ignore lint/a11y/noStaticElementInteractions: chart svg hit target
-                      <g
-                        className="cursor-pointer"
-                        onMouseEnter={() => setHoveredIdx(point.idx)}
-                        onMouseLeave={() =>
-                          setHoveredIdx((h) => (h === point.idx ? null : h))
-                        }
-                      >
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={innerR}
-                          fill={point.color}
-                          fillOpacity={point.isFuture ? 0.45 : 1}
-                          style={{ pointerEvents: 'none' }}
-                        />
-                        {/* biome-ignore lint/a11y/noStaticElementInteractions: chart svg hit target */}
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={hitR}
-                          fill="transparent"
-                          style={{ pointerEvents: 'all' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDotClick(point.idx);
-                          }}
-                        />
-                      </g>
-                    );
-                  }}
-                />
-              );
-            })}
-          </LineChart>
-        </ResponsiveContainer>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: chart uses pointer capture for smooth overlay */}
+      <div
+        ref={chartAreaRef}
+        className="relative h-[200px] w-full sm:h-[240px]"
+        onPointerMoveCapture={updateHoverCursor}
+        onPointerLeave={clearHoverTarget}
+        onClick={handleChartClick}
+      >
+        <PocketChartPlot
+          chartData={chartData}
+          todayLineLabel={todayLineLabel}
+          tickInterval={tickInterval}
+          dotTargetsRef={dotTargetsRef}
+        />
+        <div
+          ref={cursorLineRef}
+          aria-hidden="true"
+          className="chart-hover-cursor-overlay"
+        />
+        <div
+          ref={tooltipRef}
+          aria-hidden={!hoverTooltip}
+          className={cn('chart-floating-tooltip', hoverTooltip && 'is-visible')}
+        >
+          {hoverTooltip && <PocketTooltipBody point={hoverTooltip.point} />}
+        </div>
       </div>
 
       {selectedPoint && skippableRecurring.length > 0 && (
