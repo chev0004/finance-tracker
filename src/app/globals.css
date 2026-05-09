@@ -100,13 +100,39 @@ body {
   transition: opacity 80ms ease;
 }
 
-.chart-marker-layer {
+.chart-marker-mask {
   pointer-events: none;
 }
 
-.chart-marker-mask,
-.chart-marker-dot {
-  pointer-events: none;
+.budget-chart .chart-marker-scale-wrap {
+  transform-origin: 0 0;
+  transition: transform 150ms ease;
+}
+
+.budget-chart .chart-marker-scale-wrap:hover {
+  transform: scale(1.11);
+}
+
+.budget-chart .chart-marker-scale-wrap--strong:hover {
+  transform: scale(1.15);
+}
+
+.budget-chart .chart-marker-dot {
+  pointer-events: auto;
+  cursor: default;
+  transition: filter 150ms ease;
+}
+
+.budget-chart .chart-marker-dot--interactive {
+  cursor: pointer;
+}
+
+.budget-chart .chart-marker-dot:hover {
+  filter: brightness(1.14);
+}
+
+.budget-chart .chart-marker-dot--interactive:hover {
+  filter: brightness(1.22);
 }
 
 .chart-hover-cursor-overlay {
@@ -154,6 +180,24 @@ body {
 
   .chart-hover-cursor-overlay {
     will-change: auto;
+  }
+
+  .budget-chart .chart-marker-dot {
+    transition: none;
+  }
+
+  .budget-chart .chart-marker-scale-wrap {
+    transition: none;
+  }
+
+  .budget-chart .chart-marker-scale-wrap:hover,
+  .budget-chart .chart-marker-scale-wrap--strong:hover {
+    transform: none;
+  }
+
+  .budget-chart .chart-marker-dot:hover,
+  .budget-chart .chart-marker-dot--interactive:hover {
+    filter: none;
   }
 }
 
