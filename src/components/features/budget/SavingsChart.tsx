@@ -1,6 +1,11 @@
 'use client';
 
 import {
+  type MutableRefObject,
+  memo,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  startTransition,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -16,7 +21,6 @@ import {
   ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -60,8 +64,6 @@ const ORANGE = '#f59e0b';
 const GRAY = '#6b7280';
 const BLUE = '#3b82f6';
 
-const PAYDAY_DOT_HIT = 'data-payday-hit';
-
 const DOT_HIT_Z = 2500;
 
 function getSavingsColor(
@@ -99,6 +101,14 @@ interface ChartDataPoint {
   canSkipRecurring: boolean;
 }
 
+interface SavingsDotTarget {
+  id: string;
+  x: number;
+  y: number;
+  hitRadius: number;
+  point: ChartDataPoint;
+}
+
 function eventName(label: string): string {
   return label.replace(/\s*\$[\d,.]+$/, '');
 }
@@ -112,6 +122,197 @@ function deltaColor(delta: number): string {
   return delta >= 0 ? GREEN : RED;
 }
 
+const SavingsTooltipBody = memo(function SavingsTooltipBody({
+  point,
+}: {
+  point: ChartDataPoint;
+}) {
+  const evs = point.events;
+  const net = evs.reduce((s, e) => s + e.delta, 0);
+
+  return (
+    <div className="glass-card p-3">
+      <div className="mb-2 text-muted-foreground text-xs">{point.date}</div>
+      {evs.length > 0 ? (
+        <div className="space-y-1">
+          {evs.map((ev, i) => (
+            <div key={i} className="flex items-baseline justify-between gap-4">
+              <span className="text-sm">{eventName(ev.label)}</span>
+              <span
+                className="font-mono text-sm"
+                style={{ color: deltaColor(ev.delta) }}
+              >
+                {formatDelta(ev.delta)}
+              </span>
+            </div>
+          ))}
+          {evs.length > 1 && (
+            <div className="flex items-baseline justify-between gap-4 border-border/50 border-t pt-1">
+              <span className="text-muted-foreground text-xs">Net</span>
+              <span
+                className="font-mono text-xs"
+                style={{ color: deltaColor(net) }}
+              >
+                {formatDelta(net)}
+              </span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="font-medium text-sm">{point.label}</div>
+      )}
+      <div className="mt-2 flex items-baseline justify-between gap-4 border-border/50 border-t pt-1">
+        <span className="text-muted-foreground text-xs">Balance</span>
+        <span className="font-mono text-sm">
+          {point.balance < 0
+            ? `-$${Math.abs(point.balance).toLocaleString()}`
+            : `$${point.balance.toLocaleString()}`}
+        </span>
+      </div>
+    </div>
+  );
+});
+
+interface SavingsChartPlotProps {
+  chartData: ChartDataPoint[];
+  todayLineLabel: string | null;
+  tickInterval: number;
+  dotTargetsRef: MutableRefObject<Map<string, SavingsDotTarget>>;
+}
+
+const SavingsChartPlot = memo(function SavingsChartPlot({
+  chartData,
+  todayLineLabel,
+  tickInterval,
+  dotTargetsRef,
+}: SavingsChartPlotProps) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart
+        data={chartData}
+        margin={{ top: 10, right: 8, left: 4, bottom: 5 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+        <XAxis
+          dataKey="date"
+          tick={{
+            fill: '#6b7280',
+            fontSize: 10,
+            fontFamily: 'var(--font-dm-sans)',
+          }}
+          axisLine={{ stroke: 'transparent' }}
+          tickLine={false}
+          interval={tickInterval}
+          angle={-35}
+          textAnchor="end"
+          height={50}
+        />
+        <YAxis
+          width={48}
+          tick={{
+            fill: '#6b7280',
+            fontSize: 9,
+            fontFamily: 'var(--font-space-mono)',
+          }}
+          axisLine={{ stroke: 'transparent' }}
+          tickLine={false}
+          tickCount={10}
+          tickMargin={4}
+          minTickGap={0}
+          tickFormatter={(value) =>
+            value < 0
+              ? `-$${Math.abs(value).toLocaleString()}`
+              : `$${value.toLocaleString()}`
+          }
+          domain={[0, 'auto']}
+        />
+        <Line
+          type="stepAfter"
+          dataKey="pastBalance"
+          stroke={BLUE}
+          strokeWidth={2}
+          dot={false}
+          activeDot={false}
+          connectNulls={false}
+          isAnimationActive={false}
+        />
+        <Line
+          type="stepAfter"
+          dataKey="futureBalance"
+          stroke={BLUE}
+          strokeOpacity={0.45}
+          strokeWidth={2}
+          strokeDasharray="4 4"
+          dot={false}
+          activeDot={false}
+          connectNulls={false}
+          isAnimationActive={false}
+        />
+        {todayLineLabel && (
+          <ReferenceLine
+            x={todayLineLabel}
+            stroke="#9ca3af"
+            strokeDasharray="2 4"
+            strokeWidth={1}
+            label={{
+              value: 'today',
+              position: 'insideTopRight',
+              fill: '#9ca3af',
+              fontSize: 10,
+              fontFamily: 'var(--font-space-mono)',
+            }}
+          />
+        )}
+        {chartData.map((point, index) => {
+          const dotId = `savings-${index}`;
+          return (
+            <ReferenceDot
+              key={index}
+              x={point.date}
+              y={point.balance}
+              r={0}
+              zIndex={DOT_HIT_Z}
+              fill="transparent"
+              stroke="none"
+              shape={(props: { cx?: number; cy?: number }) => {
+                const { cx, cy } = props;
+                if (cx == null || cy == null) return <g />;
+                dotTargetsRef.current.set(dotId, {
+                  id: dotId,
+                  x: cx,
+                  y: cy,
+                  hitRadius: Math.max(point.radius + 6, 12),
+                  point,
+                });
+                return (
+                  <g className="chart-marker-layer">
+                    <ellipse
+                      className="chart-marker-mask"
+                      cx={cx}
+                      cy={cy}
+                      rx={point.radius}
+                      ry={point.radius}
+                      fill="var(--card)"
+                    />
+                    <circle
+                      className="chart-marker-dot"
+                      cx={cx}
+                      cy={cy}
+                      r={point.radius}
+                      fill={point.color}
+                      fillOpacity={point.isFuture ? 0.45 : 1}
+                    />
+                  </g>
+                );
+              }}
+            />
+          );
+        })}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+});
+
 export function SavingsChart({
   data,
   today,
@@ -121,7 +322,6 @@ export function SavingsChart({
   onRestoreRecurringInstance,
 }: SavingsChartProps) {
   const maxVisibleTicks = useChartMaxTicks();
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogRawDate, setDialogRawDate] = useState('');
   const [dialogRows, setDialogRows] = useState<PaydayEditRow[]>([]);
@@ -145,7 +345,15 @@ export function SavingsChart({
     left: number;
     top: number;
   } | null>(null);
+  const [hoverTooltip, setHoverTooltip] = useState<SavingsDotTarget | null>(
+    null,
+  );
   const [freezeChartTooltip, setFreezeChartTooltip] = useState(false);
+  const dotTargetsRef = useRef<Map<string, SavingsDotTarget>>(new Map());
+  const hoverTooltipRef = useRef<SavingsDotTarget | null>(null);
+  const cursorLineRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const chartAreaRef = useRef<HTMLDivElement>(null);
 
   const chartData = useMemo<ChartDataPoint[]>(() => {
     let lastPastIdx = -1;
@@ -201,6 +409,57 @@ export function SavingsChart({
       ? Math.floor(chartData.length / maxVisibleTicks)
       : 0;
 
+  const visibleDotIds = useMemo(
+    () => new Set(chartData.map((_, index) => `savings-${index}`)),
+    [chartData],
+  );
+
+  const pickDotUnderPointer = (px: number, py: number) => {
+    let best: SavingsDotTarget | null = null;
+    let bestD2 = Number.POSITIVE_INFINITY;
+
+    for (const target of dotTargetsRef.current.values()) {
+      if (!visibleDotIds.has(target.id)) continue;
+      const dx = target.x - px;
+      const dy = target.y - py;
+      const d2 = dx * dx + dy * dy;
+      const r = target.hitRadius;
+      if (d2 <= r * r && d2 < bestD2) {
+        bestD2 = d2;
+        best = target;
+      }
+    }
+
+    return best;
+  };
+
+  const pickNearestByX = (px: number) => {
+    let nearest: SavingsDotTarget | null = null;
+    let best = Number.POSITIVE_INFINITY;
+
+    for (const target of dotTargetsRef.current.values()) {
+      if (!visibleDotIds.has(target.id)) continue;
+      const d = Math.abs(target.x - px);
+      if (d < best) {
+        best = d;
+        nearest = target;
+      }
+    }
+
+    return nearest;
+  };
+
+  const commitHoverTooltip = (next: SavingsDotTarget | null) => {
+    const prevId = hoverTooltipRef.current?.id ?? null;
+    const nextId = next?.id ?? null;
+    hoverTooltipRef.current = next;
+    if (prevId !== nextId) {
+      startTransition(() => {
+        setHoverTooltip(next);
+      });
+    }
+  };
+
   const openPaydayDialog = (point: ChartDataPoint) => {
     if (!point.canEditPayday) return;
     const rows = getPaydayEditRowsForDate(point.rawDate);
@@ -215,20 +474,76 @@ export function SavingsChart({
     setDialogOpen(true);
   };
 
+  const updateHoverCursor = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const el = event.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const xRaw = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+    const hit = pickDotUnderPointer(xRaw, y);
+    const actionable =
+      hit && (hit.point.canEditPayday || hit.point.canSkipRecurring);
+    el.style.cursor = actionable ? 'pointer' : 'default';
+    let minDotX = Number.POSITIVE_INFINITY;
+    let maxDotX = Number.NEGATIVE_INFINITY;
+    for (const target of dotTargetsRef.current.values()) {
+      if (!visibleDotIds.has(target.id)) continue;
+      minDotX = Math.min(minDotX, target.x);
+      maxDotX = Math.max(maxDotX, target.x);
+    }
+    const xHighlight =
+      minDotX <= maxDotX ? Math.max(minDotX, Math.min(maxDotX, xRaw)) : xRaw;
+    const line = cursorLineRef.current;
+    if (line) {
+      line.style.opacity = '1';
+      line.style.left = `${xHighlight}px`;
+    }
+    const tip = tooltipRef.current;
+    if (tip) {
+      tip.style.transform = `translate3d(${xHighlight + 14}px, ${Math.max(8, y - 88)}px, 0)`;
+    }
+    if (!chartActionMenu && !freezeChartTooltip) {
+      commitHoverTooltip(pickNearestByX(xHighlight));
+    }
+  };
+
+  const clearHoverTarget = () => {
+    const area = chartAreaRef.current;
+    if (area) {
+      area.style.cursor = '';
+    }
+    if (cursorLineRef.current) {
+      cursorLineRef.current.style.opacity = '0';
+    }
+    commitHoverTooltip(null);
+  };
+
+  const handleChartClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const el = event.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+    const target = pickDotUnderPointer(x, y);
+    if (!target?.point.canEditPayday && !target?.point.canSkipRecurring) {
+      return;
+    }
+    openChartActionMenu(event.clientX, event.clientY, target.point);
+  };
+
   const openChartActionMenu = (
     clientX: number,
     clientY: number,
     point: ChartDataPoint,
   ) => {
+    commitHoverTooltip(null);
     setFreezeChartTooltip(false);
     setChartActionMenu({ x: clientX, y: clientY, point });
     setChartActionMenuStyle({ left: clientX + 10, top: clientY });
   };
 
   const closeChartActionMenu = useCallback(() => {
-    setFreezeChartTooltip(true);
     setChartActionMenu(null);
     setChartActionMenuStyle(null);
+    setFreezeChartTooltip(true);
   }, []);
 
   useLayoutEffect(() => {
@@ -254,10 +569,6 @@ export function SavingsChart({
     const onPointerDown = (ev: PointerEvent) => {
       const t = ev.target as Node;
       if (chartActionMenuRef.current?.contains(t)) return;
-      const el = ev.target;
-      if (el instanceof Element && el.closest(`[${PAYDAY_DOT_HIT}]`)) {
-        return;
-      }
       closeChartActionMenu();
     };
     const onKeyDown = (ev: KeyboardEvent) => {
@@ -345,67 +656,6 @@ export function SavingsChart({
     setErrorMsg(null);
   };
 
-  const CustomTooltip = ({
-    active,
-    payload,
-  }: {
-    active?: boolean;
-    payload?: Array<{ payload: ChartDataPoint }>;
-  }) => {
-    if (chartActionMenu || freezeChartTooltip) return null;
-    if (active && payload && payload.length) {
-      const point = payload[0].payload;
-      const evs = point.events;
-      const net = evs.reduce((s, e) => s + e.delta, 0);
-
-      return (
-        <div className="glass-card p-3">
-          <div className="mb-2 text-muted-foreground text-xs">{point.date}</div>
-          {evs.length > 0 ? (
-            <div className="space-y-1">
-              {evs.map((ev, i) => (
-                <div
-                  key={i}
-                  className="flex items-baseline justify-between gap-4"
-                >
-                  <span className="text-sm">{eventName(ev.label)}</span>
-                  <span
-                    className="font-mono text-sm"
-                    style={{ color: deltaColor(ev.delta) }}
-                  >
-                    {formatDelta(ev.delta)}
-                  </span>
-                </div>
-              ))}
-              {evs.length > 1 && (
-                <div className="flex items-baseline justify-between gap-4 border-border/50 border-t pt-1">
-                  <span className="text-muted-foreground text-xs">Net</span>
-                  <span
-                    className="font-mono text-xs"
-                    style={{ color: deltaColor(net) }}
-                  >
-                    {formatDelta(net)}
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="font-medium text-sm">{point.label}</div>
-          )}
-          <div className="mt-2 flex items-baseline justify-between gap-4 border-border/50 border-t pt-1">
-            <span className="text-muted-foreground text-xs">Balance</span>
-            <span className="font-mono text-sm">
-              {point.balance < 0
-                ? `-$${Math.abs(point.balance).toLocaleString()}`
-                : `$${point.balance.toLocaleString()}`}
-            </span>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
   return (
     <div className="space-y-3">
       {errorMsg && (
@@ -414,154 +664,40 @@ export function SavingsChart({
         </div>
       )}
 
-      <div className="h-[280px] w-full sm:h-[320px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={chartData}
-            margin={{ top: 10, right: 8, left: 4, bottom: 5 }}
-          >
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="rgba(255,255,255,0.05)"
-            />
-            <XAxis
-              dataKey="date"
-              tick={{
-                fill: '#6b7280',
-                fontSize: 10,
-                fontFamily: 'var(--font-dm-sans)',
-              }}
-              axisLine={{ stroke: 'transparent' }}
-              tickLine={false}
-              interval={tickInterval}
-              angle={-35}
-              textAnchor="end"
-              height={50}
-            />
-            <YAxis
-              width={48}
-              tick={{
-                fill: '#6b7280',
-                fontSize: 9,
-                fontFamily: 'var(--font-space-mono)',
-              }}
-              axisLine={{ stroke: 'transparent' }}
-              tickLine={false}
-              tickCount={10}
-              tickMargin={4}
-              minTickGap={0}
-              tickFormatter={(value) =>
-                value < 0
-                  ? `-$${Math.abs(value).toLocaleString()}`
-                  : `$${value.toLocaleString()}`
-              }
-              domain={[0, 'auto']}
-            />
-            <Tooltip
-              content={<CustomTooltip />}
-              isAnimationActive={false}
-              active={freezeChartTooltip ? false : undefined}
-            />
-            <Line
-              type="stepAfter"
-              dataKey="pastBalance"
-              stroke={BLUE}
-              strokeWidth={2}
-              dot={false}
-              activeDot={false}
-              connectNulls={false}
-              isAnimationActive={false}
-            />
-            <Line
-              type="stepAfter"
-              dataKey="futureBalance"
-              stroke={BLUE}
-              strokeOpacity={0.45}
-              strokeWidth={2}
-              strokeDasharray="4 4"
-              dot={false}
-              activeDot={false}
-              connectNulls={false}
-              isAnimationActive={false}
-            />
-            {todayLineLabel && (
-              <ReferenceLine
-                x={todayLineLabel}
-                stroke="#9ca3af"
-                strokeDasharray="2 4"
-                strokeWidth={1}
-                label={{
-                  value: 'today',
-                  position: 'insideTopRight',
-                  fill: '#9ca3af',
-                  fontSize: 10,
-                  fontFamily: 'var(--font-space-mono)',
-                }}
-              />
-            )}
-            {chartData.map((point, index) => {
-              const isHover = hoveredIndex === index;
-              const innerR = isHover ? point.radius + 2 : point.radius;
-              const hitR = Math.max(innerR + 10, 14);
-              return (
-                <ReferenceDot
-                  key={index}
-                  x={point.date}
-                  y={point.balance}
-                  r={0}
-                  zIndex={DOT_HIT_Z}
-                  fill="transparent"
-                  stroke="none"
-                  shape={(props: { cx?: number; cy?: number }) => {
-                    const { cx, cy } = props;
-                    if (cx == null || cy == null) return <g />;
-                    return (
-                      // biome-ignore lint/a11y/noStaticElementInteractions: chart svg hit target
-                      <g
-                        style={{
-                          cursor:
-                            point.canEditPayday || point.canSkipRecurring
-                              ? 'pointer'
-                              : 'default',
-                        }}
-                        onMouseEnter={() => setHoveredIndex(index)}
-                        onMouseLeave={() =>
-                          setHoveredIndex((h) => (h === index ? null : h))
-                        }
-                      >
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={innerR}
-                          fill={point.color}
-                          fillOpacity={point.isFuture ? 0.45 : 1}
-                          style={{ pointerEvents: 'none' }}
-                        />
-                        {/* biome-ignore lint/a11y/noStaticElementInteractions: chart svg hit target */}
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={hitR}
-                          fill="transparent"
-                          style={{ pointerEvents: 'all' }}
-                          {...(point.canEditPayday || point.canSkipRecurring
-                            ? { [PAYDAY_DOT_HIT]: 'true' }
-                            : {})}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (point.canEditPayday || point.canSkipRecurring) {
-                              openChartActionMenu(e.clientX, e.clientY, point);
-                            }
-                          }}
-                        />
-                      </g>
-                    );
-                  }}
-                />
-              );
-            })}
-          </LineChart>
-        </ResponsiveContainer>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: chart uses pointer capture for smooth overlay */}
+      <div
+        ref={chartAreaRef}
+        className="relative h-[280px] w-full sm:h-[320px]"
+        onPointerMoveCapture={updateHoverCursor}
+        onPointerLeave={clearHoverTarget}
+        onClick={handleChartClick}
+      >
+        <SavingsChartPlot
+          chartData={chartData}
+          todayLineLabel={todayLineLabel}
+          tickInterval={tickInterval}
+          dotTargetsRef={dotTargetsRef}
+        />
+        <div
+          ref={cursorLineRef}
+          aria-hidden="true"
+          className="chart-hover-cursor-overlay"
+        />
+        <div
+          ref={tooltipRef}
+          aria-hidden={Boolean(
+            !hoverTooltip || chartActionMenu || freezeChartTooltip,
+          )}
+          className={cn(
+            'chart-floating-tooltip',
+            hoverTooltip &&
+              !chartActionMenu &&
+              !freezeChartTooltip &&
+              'is-visible',
+          )}
+        >
+          {hoverTooltip && <SavingsTooltipBody point={hoverTooltip.point} />}
+        </div>
       </div>
 
       {chartActionMenu &&
