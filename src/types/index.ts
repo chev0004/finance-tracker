@@ -195,3 +195,16 @@ export interface BudgetState {
   spentPerPeriod: number[];
   settings: BudgetSettings;
 }
+
+export interface BudgetBranch {
+  id: string;
+  name: string;
+  state: BudgetState;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BudgetWorkspace {
+  activeBranchId: string;
+  branches: BudgetBranch[];
+}

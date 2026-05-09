@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { budget } from '@/db/schema';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import type { BudgetState } from '@/types';
+import type { BudgetState, BudgetWorkspace } from '@/types';
 
 export async function GET() {
   const session = await auth.api.getSession({
@@ -22,7 +22,7 @@ export async function GET() {
   if (!row) {
     return NextResponse.json(null);
   }
-  const data = JSON.parse(row.data) as BudgetState;
+  const data = JSON.parse(row.data) as BudgetState | BudgetWorkspace;
   return NextResponse.json(data);
 }
 
@@ -33,7 +33,7 @@ export async function PUT(request: Request) {
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const body = (await request.json()) as BudgetState;
+  const body = (await request.json()) as BudgetState | BudgetWorkspace;
   const data = JSON.stringify(body);
   await db
     .insert(budget)

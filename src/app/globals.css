@@ -218,6 +218,42 @@ body {
   box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.65);
 }
 
+.branch-select-content [data-slot="select-item"],
+.branch-select-content [data-slot="select-item"]:focus,
+.branch-select-content [data-slot="select-item"]:focus-visible {
+  outline: none;
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+.branch-select-trigger[data-navigation-mode="pointer"]:focus,
+.branch-select-trigger[data-navigation-mode="pointer"]:focus-visible {
+  outline: none;
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+.branch-select-trigger[data-navigation-mode="pointer"][data-state="open"],
+.branch-select-trigger[data-navigation-mode="pointer"]:focus {
+  border-color: color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.branch-select-content[data-navigation-mode="pointer"]
+  [data-slot="select-item"]:focus,
+.branch-select-content[data-navigation-mode="pointer"]
+  [data-slot="select-item"][data-highlighted] {
+  background: transparent;
+  color: var(--foreground);
+}
+
+.branch-select-content[data-navigation-mode="keyboard"]
+  [data-slot="select-item"]:focus,
+.branch-select-content[data-navigation-mode="keyboard"]
+  [data-slot="select-item"][data-highlighted] {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  color: var(--foreground);
+}
+
 *:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;

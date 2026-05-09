@@ -21,8 +21,10 @@ import {
 } from '@/lib/pocketPeriods';
 import { getLocalDateString } from '@/lib/utils';
 import type {
+  BudgetBranch,
   BudgetSettings,
   BudgetState,
+  BudgetWorkspace,
   Expense,
   FixedEvent,
   GoalStat,
@@ -55,6 +57,8 @@ const DEFAULT_SETTINGS: BudgetSettings = {
   paydayIncomeOverrides: [],
   pocketAmountOverrides: [],
 };
+
+const DEFAULT_BRANCH_NAME = 'Main';
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
@@ -897,6 +901,117 @@ function parseAndApplyStored(raw: unknown): {
   };
 }
 
+function makeBudgetState(
+  expenses: Expense[],
+  spentPerPeriod: number[],
+  settings: BudgetSettings,
+): BudgetState {
+  return { expenses, spentPerPeriod, settings };
+}
+
+function makeBranch(name: string, state: BudgetState): BudgetBranch {
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    name,
+    state,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function withCurrentBranchState(
+  branches: BudgetBranch[],
+  activeBranchId: string,
+  state: BudgetState,
+): BudgetBranch[] {
+  const now = new Date().toISOString();
+  return branches.map((branch) =>
+    branch.id === activeBranchId
+      ? { ...branch, state, updatedAt: now }
+      : branch,
+  );
+}
+
+function parseStoredWorkspace(raw: unknown): {
+  branches: BudgetBranch[];
+  activeBranchId: string;
+  activeState: BudgetState;
+  needsStartDatePrompt: boolean;
+} {
+  if (
+    raw &&
+    typeof raw === 'object' &&
+    Array.isArray((raw as Partial<BudgetWorkspace>).branches)
+  ) {
+    const workspace = raw as Partial<BudgetWorkspace>;
+    const branches = (workspace.branches ?? [])
+      .map((branch, index) => {
+        if (!branch || typeof branch !== 'object') return null;
+        const parsed = parseAndApplyStored(
+          (branch as Partial<BudgetBranch>).state,
+        );
+        const now = new Date().toISOString();
+        return {
+          id:
+            typeof (branch as Partial<BudgetBranch>).id === 'string'
+              ? (branch as BudgetBranch).id
+              : crypto.randomUUID(),
+          name:
+            typeof (branch as Partial<BudgetBranch>).name === 'string' &&
+            (branch as BudgetBranch).name.trim()
+              ? (branch as BudgetBranch).name.trim()
+              : `Branch ${index + 1}`,
+          state: makeBudgetState(
+            parsed.expenses,
+            parsed.spentPerPeriod,
+            parsed.settings,
+          ),
+          createdAt:
+            typeof (branch as Partial<BudgetBranch>).createdAt === 'string'
+              ? (branch as BudgetBranch).createdAt
+              : now,
+          updatedAt:
+            typeof (branch as Partial<BudgetBranch>).updatedAt === 'string'
+              ? (branch as BudgetBranch).updatedAt
+              : now,
+        };
+      })
+      .filter((branch): branch is BudgetBranch => branch !== null);
+
+    if (branches.length > 0) {
+      const activeBranchId = branches.some(
+        (branch) => branch.id === workspace.activeBranchId,
+      )
+        ? (workspace.activeBranchId as string)
+        : branches[0].id;
+      const activeBranch = branches.find(
+        (branch) => branch.id === activeBranchId,
+      ) as BudgetBranch;
+      return {
+        branches,
+        activeBranchId,
+        activeState: activeBranch.state,
+        needsStartDatePrompt: false,
+      };
+    }
+  }
+
+  const parsed = parseAndApplyStored(raw);
+  const activeState = makeBudgetState(
+    parsed.expenses,
+    parsed.spentPerPeriod,
+    parsed.settings,
+  );
+  const branch = makeBranch(DEFAULT_BRANCH_NAME, activeState);
+  return {
+    branches: [branch],
+    activeBranchId: branch.id,
+    activeState,
+    needsStartDatePrompt: parsed.needsStartDatePrompt,
+  };
+}
+
 export function useBudget() {
   const { data: session, isPending: isSessionPending } =
     authClient.useSession();
@@ -904,6 +1019,8 @@ export function useBudget() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [spentPerPeriod, setSpentPerPeriod] = useState<number[]>([]);
   const [settings, setSettings] = useState<BudgetSettings>(DEFAULT_SETTINGS);
+  const [branches, setBranches] = useState<BudgetBranch[]>([]);
+  const [activeBranchId, setActiveBranchId] = useState('');
   const [needsStartDatePrompt, setNeedsStartDatePrompt] = useState(false);
   const [isMutating, startMutation] = useTransition();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -917,10 +1034,12 @@ export function useBudget() {
         if (res.ok) {
           const body = await res.json();
           if (body) {
-            const parsed = parseAndApplyStored(body);
-            setExpenses(parsed.expenses);
-            setSpentPerPeriod(parsed.spentPerPeriod);
-            setSettings(parsed.settings);
+            const parsed = parseStoredWorkspace(body);
+            setBranches(parsed.branches);
+            setActiveBranchId(parsed.activeBranchId);
+            setExpenses(parsed.activeState.expenses);
+            setSpentPerPeriod(parsed.activeState.spentPerPeriod);
+            setSettings(parsed.activeState.settings);
             setNeedsStartDatePrompt(parsed.needsStartDatePrompt);
             setIsLoaded(true);
             return;
@@ -935,37 +1054,73 @@ export function useBudget() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(localData),
             });
-            const parsed = parseAndApplyStored(localData);
-            setExpenses(parsed.expenses);
-            setSpentPerPeriod(parsed.spentPerPeriod);
-            setSettings(parsed.settings);
-            setNeedsStartDatePrompt(false);
+            const parsed = parseStoredWorkspace(localData);
+            setBranches(parsed.branches);
+            setActiveBranchId(parsed.activeBranchId);
+            setExpenses(parsed.activeState.expenses);
+            setSpentPerPeriod(parsed.activeState.spentPerPeriod);
+            setSettings(parsed.activeState.settings);
+            setNeedsStartDatePrompt(parsed.needsStartDatePrompt);
           } else {
             setNeedsStartDatePrompt(true);
             const pd = getPocketPaydays(DEFAULT_SETTINGS);
+            const activeState = makeBudgetState(
+              [],
+              pd.map(() => 0),
+              DEFAULT_SETTINGS,
+            );
+            const branch = makeBranch(DEFAULT_BRANCH_NAME, activeState);
+            setBranches([branch]);
+            setActiveBranchId(branch.id);
             setSpentPerPeriod(pd.map(() => 0));
           }
         } catch {
           setNeedsStartDatePrompt(true);
           const pd = getPocketPaydays(DEFAULT_SETTINGS);
+          const activeState = makeBudgetState(
+            [],
+            pd.map(() => 0),
+            DEFAULT_SETTINGS,
+          );
+          const branch = makeBranch(DEFAULT_BRANCH_NAME, activeState);
+          setBranches([branch]);
+          setActiveBranchId(branch.id);
           setSpentPerPeriod(pd.map(() => 0));
         }
       } else {
         try {
           const stored = localStorage.getItem(BUDGET_STORAGE_KEY);
           if (stored) {
-            const parsed = parseAndApplyStored(JSON.parse(stored));
-            setExpenses(parsed.expenses);
-            setSpentPerPeriod(parsed.spentPerPeriod);
-            setSettings(parsed.settings);
+            const parsed = parseStoredWorkspace(JSON.parse(stored));
+            setBranches(parsed.branches);
+            setActiveBranchId(parsed.activeBranchId);
+            setExpenses(parsed.activeState.expenses);
+            setSpentPerPeriod(parsed.activeState.spentPerPeriod);
+            setSettings(parsed.activeState.settings);
             setNeedsStartDatePrompt(parsed.needsStartDatePrompt);
           } else {
             setNeedsStartDatePrompt(true);
             const pd = getPocketPaydays(DEFAULT_SETTINGS);
+            const activeState = makeBudgetState(
+              [],
+              pd.map(() => 0),
+              DEFAULT_SETTINGS,
+            );
+            const branch = makeBranch(DEFAULT_BRANCH_NAME, activeState);
+            setBranches([branch]);
+            setActiveBranchId(branch.id);
             setSpentPerPeriod(pd.map(() => 0));
           }
         } catch {
           const pd = getPocketPaydays(DEFAULT_SETTINGS);
+          const activeState = makeBudgetState(
+            [],
+            pd.map(() => 0),
+            DEFAULT_SETTINGS,
+          );
+          const branch = makeBranch(DEFAULT_BRANCH_NAME, activeState);
+          setBranches([branch]);
+          setActiveBranchId(branch.id);
           setSpentPerPeriod(pd.map(() => 0));
           setNeedsStartDatePrompt(false);
         }
@@ -978,10 +1133,14 @@ export function useBudget() {
 
   useEffect(() => {
     if (!isLoaded || isSessionPending) return;
-    const data: BudgetState = {
-      expenses,
-      spentPerPeriod,
-      settings,
+    const activeState = makeBudgetState(expenses, spentPerPeriod, settings);
+    const workspaceBranches =
+      branches.length > 0 && activeBranchId
+        ? withCurrentBranchState(branches, activeBranchId, activeState)
+        : [makeBranch(DEFAULT_BRANCH_NAME, activeState)];
+    const workspace: BudgetWorkspace = {
+      activeBranchId: activeBranchId || workspaceBranches[0].id,
+      branches: workspaceBranches,
     };
     if (session) {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -989,13 +1148,13 @@ export function useBudget() {
         fetch('/api/budget', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
+          body: JSON.stringify(workspace),
         });
         saveTimeoutRef.current = null;
       }, 500);
     } else {
       try {
-        localStorage.setItem(BUDGET_STORAGE_KEY, JSON.stringify(data));
+        localStorage.setItem(BUDGET_STORAGE_KEY, JSON.stringify(workspace));
       } catch {
         // localStorage unavailable
       }
@@ -1003,7 +1162,16 @@ export function useBudget() {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [expenses, spentPerPeriod, settings, isLoaded, isSessionPending, session]);
+  }, [
+    expenses,
+    spentPerPeriod,
+    settings,
+    branches,
+    activeBranchId,
+    isLoaded,
+    isSessionPending,
+    session,
+  ]);
 
   const currentIncome = useMemo(() => {
     const today = getLocalDateString();
@@ -1874,15 +2042,117 @@ export function useBudget() {
     });
   }, []);
 
-  const importState = useCallback((state: BudgetState) => {
+  const switchBranch = useCallback(
+    (id: string) => {
+      if (id === activeBranchId) return;
+      const target = branches.find((branch) => branch.id === id);
+      if (!target) return;
+      startMutation(() => {
+        const currentState = makeBudgetState(
+          expenses,
+          spentPerPeriod,
+          settings,
+        );
+        setBranches((prev) =>
+          withCurrentBranchState(prev, activeBranchId, currentState),
+        );
+        setActiveBranchId(target.id);
+        setExpenses(target.state.expenses);
+        setSpentPerPeriod(target.state.spentPerPeriod);
+        setSettings(target.state.settings);
+        setNeedsStartDatePrompt(false);
+      });
+    },
+    [activeBranchId, branches, expenses, settings, spentPerPeriod],
+  );
+
+  const createBranch = useCallback(
+    (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      startMutation(() => {
+        const currentState = makeBudgetState(
+          expenses,
+          spentPerPeriod,
+          settings,
+        );
+        const branch = makeBranch(trimmed, currentState);
+        setBranches((prev) => [
+          ...withCurrentBranchState(prev, activeBranchId, currentState),
+          branch,
+        ]);
+        setActiveBranchId(branch.id);
+      });
+    },
+    [activeBranchId, expenses, settings, spentPerPeriod],
+  );
+
+  const renameBranch = useCallback((id: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
     startMutation(() => {
-      setExpenses(state.expenses);
-      setSpentPerPeriod(state.spentPerPeriod);
-      setSettings(
-        migrateSettings(state.settings as unknown as Record<string, unknown>),
+      setBranches((prev) =>
+        prev.map((branch) =>
+          branch.id === id
+            ? { ...branch, name: trimmed, updatedAt: new Date().toISOString() }
+            : branch,
+        ),
       );
     });
   }, []);
+
+  const deleteBranch = useCallback(
+    (id: string) => {
+      if (branches.length <= 1) return;
+      const nextBranch = branches.find((branch) => branch.id !== id);
+      if (!nextBranch) return;
+      startMutation(() => {
+        const currentState = makeBudgetState(
+          expenses,
+          spentPerPeriod,
+          settings,
+        );
+        setBranches((prev) =>
+          withCurrentBranchState(prev, activeBranchId, currentState).filter(
+            (branch) => branch.id !== id,
+          ),
+        );
+        if (id === activeBranchId) {
+          setActiveBranchId(nextBranch.id);
+          setExpenses(nextBranch.state.expenses);
+          setSpentPerPeriod(nextBranch.state.spentPerPeriod);
+          setSettings(nextBranch.state.settings);
+          setNeedsStartDatePrompt(false);
+        }
+      });
+    },
+    [activeBranchId, branches, expenses, settings, spentPerPeriod],
+  );
+
+  const importState = useCallback(
+    (state: BudgetState) => {
+      startMutation(() => {
+        const nextState = makeBudgetState(
+          state.expenses,
+          state.spentPerPeriod,
+          migrateSettings(state.settings as unknown as Record<string, unknown>),
+        );
+        setExpenses(state.expenses);
+        setSpentPerPeriod(state.spentPerPeriod);
+        setSettings(nextState.settings);
+        if (activeBranchId) {
+          setBranches((prev) =>
+            withCurrentBranchState(prev, activeBranchId, nextState),
+          );
+        } else {
+          const branch = makeBranch(DEFAULT_BRANCH_NAME, nextState);
+          setActiveBranchId(branch.id);
+          setBranches([branch]);
+        }
+      });
+    },
+    [activeBranchId],
+  );
 
   const addOneTimeIncome = useCallback((item: Omit<OneTimeIncome, 'id'>) => {
     startMutation(() => {
@@ -1952,6 +2222,8 @@ export function useBudget() {
     expenses,
     spentPerPeriod,
     settings,
+    branches,
+    activeBranchId,
     currentIncome,
     savedPerPeriod,
     effectivePocketPerPeriod,
@@ -1987,6 +2259,10 @@ export function useBudget() {
     updateIncomeSource,
     removeIncomeSource,
     toggleIncomeSourceHidden,
+    switchBranch,
+    createBranch,
+    renameBranch,
+    deleteBranch,
     importState,
     addOneTimeIncome,
     updateOneTimeIncome,

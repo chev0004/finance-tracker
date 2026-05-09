@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AuthNavButton } from '@/components/features/auth/AuthNavButton';
+import { BranchManager } from '@/components/features/budget/BranchManager';
 import { DashboardNavSheet } from '@/components/features/budget/DashboardNavSheet';
 import { ExpenseForm } from '@/components/features/budget/ExpenseForm';
 import { ExpenseList } from '@/components/features/budget/ExpenseList';
@@ -64,6 +65,8 @@ export default function Home() {
     expenses,
     spentPerPeriod,
     settings,
+    branches,
+    activeBranchId,
     savingsTimeline,
     pocketTimeline,
     currentPocketBalance,
@@ -96,6 +99,10 @@ export default function Home() {
     updateIncomeSource,
     removeIncomeSource,
     toggleIncomeSourceHidden,
+    switchBranch,
+    createBranch,
+    renameBranch,
+    deleteBranch,
     importState,
     addOneTimeIncome,
     updateOneTimeIncome,
@@ -466,6 +473,14 @@ export default function Home() {
             </p>
           </div>
           <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
+            <BranchManager
+              branches={branches}
+              activeBranchId={activeBranchId}
+              onSwitchBranch={switchBranch}
+              onCreateBranch={createBranch}
+              onRenameBranch={renameBranch}
+              onDeleteBranch={deleteBranch}
+            />
             <DashboardNavSheet
               exportState={{ settings, expenses, spentPerPeriod }}
               exportAnalysisPayload={{
