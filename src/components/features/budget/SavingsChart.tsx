@@ -544,6 +544,16 @@ export function SavingsChart({
     openChartActionMenu(event.clientX, event.clientY, target.point);
   };
 
+  const handleChartContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (chartActionMenu || freezeChartTooltip) return;
+    const t = hoverTooltipRef.current;
+    if (!t) return;
+    const p = t.point;
+    if (!p.canEditPayday && !p.canSkipRecurring) return;
+    event.preventDefault();
+    openChartActionMenu(event.clientX, event.clientY, p);
+  };
+
   const openChartActionMenu = (
     clientX: number,
     clientY: number,
@@ -686,6 +696,7 @@ export function SavingsChart({
         onPointerMoveCapture={updateHoverCursor}
         onPointerLeave={clearHoverTarget}
         onClick={handleChartClick}
+        onContextMenu={handleChartContextMenu}
       >
         <SavingsChartPlot
           chartData={chartData}
