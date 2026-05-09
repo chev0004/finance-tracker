@@ -95,18 +95,66 @@ body {
   outline: none;
 }
 
-.recharts-reference-dot circle {
-  transition:
-    r 150ms ease,
-    opacity 150ms ease;
+.recharts-tooltip-wrapper {
+  pointer-events: none;
+  transition: opacity 80ms ease;
 }
 
-.recharts-reference-dot:hover circle {
-  opacity: 0.85;
+.chart-marker-layer {
+  pointer-events: none;
 }
 
-.recharts-reference-dot.cursor-pointer:hover circle {
-  filter: brightness(1.2);
+.chart-marker-mask,
+.chart-marker-dot {
+  pointer-events: none;
+}
+
+.chart-hover-cursor-overlay {
+  pointer-events: none;
+  position: absolute;
+  top: 10px;
+  bottom: 55px;
+  left: 0;
+  z-index: 85;
+  display: block;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.28);
+  opacity: 0;
+  transition: opacity 80ms ease;
+  will-change: left;
+}
+
+.chart-floating-tooltip {
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 90;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate3d(0, 0, 0);
+  contain: content;
+}
+
+.chart-floating-tooltip * {
+  pointer-events: none;
+}
+
+.chart-floating-tooltip.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recharts-tooltip-wrapper {
+    transition: none;
+  }
+
+  .chart-hover-cursor-overlay {
+    will-change: auto;
+  }
 }
 
 .glass-card {
