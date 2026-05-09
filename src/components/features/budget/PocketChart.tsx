@@ -272,23 +272,28 @@ const PocketChartPlot = memo(function PocketChartPlot({
                   point,
                 });
                 return (
-                  <g className="chart-marker-layer">
-                    <ellipse
-                      className="chart-marker-mask"
-                      cx={cx}
-                      cy={cy}
-                      rx={baseR}
-                      ry={baseR}
-                      fill="var(--card)"
-                    />
-                    <circle
-                      className="chart-marker-dot"
-                      cx={cx}
-                      cy={cy}
-                      r={baseR}
-                      fill={point.color}
-                      fillOpacity={point.isFuture ? 0.45 : 1}
-                    />
+                  <g
+                    className="chart-marker-layer"
+                    transform={`translate(${cx},${cy})`}
+                  >
+                    <g className="chart-marker-scale-wrap chart-marker-scale-wrap--strong">
+                      <ellipse
+                        className="chart-marker-mask"
+                        cx={0}
+                        cy={0}
+                        rx={baseR}
+                        ry={baseR}
+                        fill="var(--card)"
+                      />
+                      <circle
+                        className="chart-marker-dot chart-marker-dot--interactive"
+                        cx={0}
+                        cy={0}
+                        r={baseR}
+                        fill={point.color}
+                        fillOpacity={point.isFuture ? 0.45 : 1}
+                      />
+                    </g>
                   </g>
                 );
               }}
@@ -611,7 +616,7 @@ export function PocketChart({
       {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: chart uses pointer capture for smooth overlay */}
       <div
         ref={chartAreaRef}
-        className="relative h-[200px] w-full sm:h-[240px]"
+        className="budget-chart relative h-[200px] w-full sm:h-[240px]"
         onPointerMoveCapture={updateHoverCursor}
         onPointerLeave={clearHoverTarget}
         onClick={handleChartClick}
