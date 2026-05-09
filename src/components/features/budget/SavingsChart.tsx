@@ -285,23 +285,38 @@ const SavingsChartPlot = memo(function SavingsChartPlot({
                   point,
                 });
                 return (
-                  <g className="chart-marker-layer">
-                    <ellipse
-                      className="chart-marker-mask"
-                      cx={cx}
-                      cy={cy}
-                      rx={point.radius}
-                      ry={point.radius}
-                      fill="var(--card)"
-                    />
-                    <circle
-                      className="chart-marker-dot"
-                      cx={cx}
-                      cy={cy}
-                      r={point.radius}
-                      fill={point.color}
-                      fillOpacity={point.isFuture ? 0.45 : 1}
-                    />
+                  <g
+                    className="chart-marker-layer"
+                    transform={`translate(${cx},${cy})`}
+                  >
+                    <g
+                      className={cn(
+                        'chart-marker-scale-wrap',
+                        (point.canEditPayday || point.canSkipRecurring) &&
+                          'chart-marker-scale-wrap--strong',
+                      )}
+                    >
+                      <ellipse
+                        className="chart-marker-mask"
+                        cx={0}
+                        cy={0}
+                        rx={point.radius}
+                        ry={point.radius}
+                        fill="var(--card)"
+                      />
+                      <circle
+                        className={cn(
+                          'chart-marker-dot',
+                          (point.canEditPayday || point.canSkipRecurring) &&
+                            'chart-marker-dot--interactive',
+                        )}
+                        cx={0}
+                        cy={0}
+                        r={point.radius}
+                        fill={point.color}
+                        fillOpacity={point.isFuture ? 0.45 : 1}
+                      />
+                    </g>
                   </g>
                 );
               }}
@@ -667,7 +682,7 @@ export function SavingsChart({
       {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: chart uses pointer capture for smooth overlay */}
       <div
         ref={chartAreaRef}
-        className="relative h-[280px] w-full sm:h-[320px]"
+        className="budget-chart relative h-[280px] w-full sm:h-[320px]"
         onPointerMoveCapture={updateHoverCursor}
         onPointerLeave={clearHoverTarget}
         onClick={handleChartClick}
