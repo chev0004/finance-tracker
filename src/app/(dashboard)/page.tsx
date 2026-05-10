@@ -689,6 +689,7 @@ export default function Home() {
             </NavStepper>
             <SavingsChart
               data={savingsChartData}
+              comparisonData={savingsTimeline}
               today={today}
               getPaydayEditRowsForDate={getPaydayEditRowsForDate}
               onApplyPaydayIncomeAmounts={applyPaydayIncomeAmounts}

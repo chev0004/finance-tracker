@@ -40,6 +40,7 @@ import type { PaydayEditRow, SavingsPoint, SavingsPointEvent } from '@/types';
 
 interface SavingsChartProps {
   data: SavingsPoint[];
+  comparisonData?: SavingsPoint[];
   today: string;
   getPaydayEditRowsForDate: (rawDate: string) => PaydayEditRow[];
   onApplyPaydayIncomeAmounts: (
@@ -101,6 +102,13 @@ interface ChartDataPoint {
   canEditPayday: boolean;
   canSkipRecurring: boolean;
   canBranchFromHere: boolean;
+  monthComparison: MonthComparison;
+}
+
+interface MonthComparison {
+  currentMonthNet: number;
+  previousMonthNet: number | null;
+  changeFromPreviousMonth: number | null;
 }
 
 interface SavingsDotTarget {
@@ -120,8 +128,36 @@ function formatDelta(delta: number): string {
   return delta >= 0 ? `+$${abs}` : `-$${abs}`;
 }
 
+function formatSignedMoney(amount: number): string {
+  if (amount === 0) return '$0';
+  return formatDelta(amount);
+}
+
+function formatMoney(amount: number): string {
+  const abs = Math.abs(amount).toLocaleString();
+  return amount < 0 ? `-$${abs}` : `$${abs}`;
+}
+
 function deltaColor(delta: number): string {
   return delta >= 0 ? GREEN : RED;
+}
+
+function comparisonColor(delta: number): string {
+  if (delta > 0) return GREEN;
+  if (delta < 0) return RED;
+  return GRAY;
+}
+
+function getMonthKey(rawDate: string): string {
+  return rawDate.slice(0, 7);
+}
+
+function getPreviousMonthKey(monthKey: string): string {
+  const [yearText, monthText] = monthKey.split('-');
+  const previousMonth = new Date(Number(yearText), Number(monthText) - 2, 1);
+  const year = previousMonth.getFullYear();
+  const month = String(previousMonth.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
 }
 
 const SavingsTooltipBody = memo(function SavingsTooltipBody({
@@ -131,6 +167,7 @@ const SavingsTooltipBody = memo(function SavingsTooltipBody({
 }) {
   const evs = point.events;
   const net = evs.reduce((s, e) => s + e.delta, 0);
+  const { monthComparison } = point;
 
   return (
     <div className="glass-card p-3">
@@ -165,11 +202,56 @@ const SavingsTooltipBody = memo(function SavingsTooltipBody({
       )}
       <div className="mt-2 flex items-baseline justify-between gap-4 border-border/50 border-t pt-1">
         <span className="text-muted-foreground text-xs">Balance</span>
-        <span className="font-mono text-sm">
-          {point.balance < 0
-            ? `-$${Math.abs(point.balance).toLocaleString()}`
-            : `$${point.balance.toLocaleString()}`}
-        </span>
+        <span className="font-mono text-sm">{formatMoney(point.balance)}</span>
+      </div>
+      <div className="mt-2 space-y-1 border-border/50 border-t pt-2">
+        <div className="flex items-baseline justify-between gap-4">
+          <span className="text-muted-foreground text-xs">This month</span>
+          <span
+            className="font-mono text-xs"
+            style={{
+              color: comparisonColor(monthComparison.currentMonthNet),
+            }}
+          >
+            {formatSignedMoney(monthComparison.currentMonthNet)}
+          </span>
+        </div>
+        {monthComparison.previousMonthNet === null ||
+        monthComparison.changeFromPreviousMonth === null ? (
+          <div className="flex items-baseline justify-between gap-4">
+            <span className="text-muted-foreground text-xs">Last month</span>
+            <span className="font-mono text-muted-foreground text-xs">
+              no data
+            </span>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="text-muted-foreground text-xs">Last month</span>
+              <span
+                className="font-mono text-xs"
+                style={{
+                  color: comparisonColor(monthComparison.previousMonthNet),
+                }}
+              >
+                {formatSignedMoney(monthComparison.previousMonthNet)}
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="text-muted-foreground text-xs">Difference</span>
+              <span
+                className="font-mono text-xs"
+                style={{
+                  color: comparisonColor(
+                    monthComparison.changeFromPreviousMonth,
+                  ),
+                }}
+              >
+                {formatSignedMoney(monthComparison.changeFromPreviousMonth)}
+              </span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -336,6 +418,7 @@ const SavingsChartPlot = memo(function SavingsChartPlot({
 
 export function SavingsChart({
   data,
+  comparisonData = data,
   today,
   getPaydayEditRowsForDate,
   onApplyPaydayIncomeAmounts,
@@ -389,6 +472,27 @@ export function SavingsChart({
   const tooltipRef = useRef<HTMLDivElement>(null);
   const chartAreaRef = useRef<HTMLDivElement>(null);
 
+  const monthlySavings = useMemo(() => {
+    const totals = new Map<string, number>();
+    let firstMonthKey: string | null = null;
+
+    for (const point of comparisonData) {
+      const monthKey = getMonthKey(point.rawDate);
+      if (firstMonthKey === null || monthKey < firstMonthKey) {
+        firstMonthKey = monthKey;
+      }
+      if (!totals.has(monthKey)) totals.set(monthKey, 0);
+      if (point.label === '…') continue;
+      totals.set(
+        monthKey,
+        (totals.get(monthKey) ?? 0) +
+          point.events.reduce((sum, event) => sum + event.delta, 0),
+      );
+    }
+
+    return { firstMonthKey, totals };
+  }, [comparisonData]);
+
   const chartData = useMemo<ChartDataPoint[]>(() => {
     let lastPastIdx = -1;
     for (let i = 0; i < data.length; i++) {
@@ -413,6 +517,15 @@ export function SavingsChart({
         point.events.length > 0;
       const isFuture = point.rawDate > today;
       const isBridge = lastPastIdx >= 0 && i === lastPastIdx + 1;
+      const monthKey = getMonthKey(point.rawDate);
+      const previousMonthKey = getPreviousMonthKey(monthKey);
+      const hasPreviousMonth =
+        monthlySavings.firstMonthKey !== null &&
+        previousMonthKey >= monthlySavings.firstMonthKey;
+      const currentMonthNet = monthlySavings.totals.get(monthKey) ?? 0;
+      const previousMonthNet = hasPreviousMonth
+        ? (monthlySavings.totals.get(previousMonthKey) ?? 0)
+        : null;
       return {
         date: point.date,
         rawDate: point.rawDate,
@@ -432,9 +545,17 @@ export function SavingsChart({
         canEditPayday,
         canSkipRecurring,
         canBranchFromHere,
+        monthComparison: {
+          currentMonthNet,
+          previousMonthNet,
+          changeFromPreviousMonth:
+            previousMonthNet === null
+              ? null
+              : currentMonthNet - previousMonthNet,
+        },
       };
     });
-  }, [data, onBranchFromPoint, today]);
+  }, [data, monthlySavings, onBranchFromPoint, today]);
 
   const todayLineLabel = useMemo(() => {
     let lastPastIdx = -1;
