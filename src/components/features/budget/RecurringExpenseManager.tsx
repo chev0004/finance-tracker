@@ -98,11 +98,73 @@ function presetForDay(d: number): DayPreset {
   return 'custom';
 }
 
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+function formatDateValue(date: Date): string {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function dateFromValue(value: string): Date {
+  return new Date(`${value}T00:00:00`);
+}
+
+function lastDayOf(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+function recurringDateForMonth(
+  dayOfMonth: number,
+  year: number,
+  month: number,
+): string {
+  const normalizedDay = Number.isFinite(dayOfMonth) ? dayOfMonth : 1;
+  const day =
+    normalizedDay <= 0
+      ? lastDayOf(year, month)
+      : Math.min(normalizedDay, lastDayOf(year, month));
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
+function startDateForExpense(exp: RecurringExpense): string {
+  const startDate = exp.startDate?.slice(0, 10);
+  if (startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate)) return startDate;
+
+  const [year, month] = exp.startMonth.split('-').map(Number);
+  if (Number.isFinite(year) && Number.isFinite(month)) {
+    return recurringDateForMonth(exp.dayOfMonth, year, month);
+  }
+
+  return `${exp.startMonth}-01`;
+}
+
+function dateLabel(value: string): string {
+  return dateFromValue(value).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function presetForDate(date: Date): DayPreset {
+  const day = date.getDate();
+  if (day === 1) return '1';
+  if (day === 15) return '15';
+  if (day === lastDayOf(date.getFullYear(), date.getMonth() + 1)) {
+    return 'end';
+  }
+  return 'custom';
+}
+
 const DEFAULT_START = '2026-01-01';
 
-function currentMonthValue(): string {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+function currentDateValue(): string {
+  return formatDateValue(new Date());
+}
+
+function dateOrder(date: string): number {
+  return Number.parseInt(date.replaceAll('-', ''), 10);
 }
 
 function monthOrder(month: string): number {
@@ -117,10 +179,12 @@ function visibleExpenseTotal(expenses: RecurringExpense[]): number {
 
 function sectionForExpense(
   exp: RecurringExpense,
-  currentMonth: string,
+  currentDate: string,
 ): ExpenseSectionKey {
-  if (exp.startMonth > currentMonth) return 'upcoming';
-  if (exp.endMonth != null && exp.endMonth < currentMonth) return 'ended';
+  if (startDateForExpense(exp) > currentDate) return 'upcoming';
+  if (exp.endMonth != null && exp.endMonth < currentDate.slice(0, 7)) {
+    return 'ended';
+  }
   return 'active';
 }
 
@@ -154,13 +218,20 @@ export function RecurringExpenseManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
-  const [dayPreset, setDayPreset] = useState<DayPreset>('1');
-  const [customDay, setCustomDay] = useState('');
-  const [startMonth, setStartMonth] = useState(projectionStartMonth);
+  const [dayPreset, setDayPreset] = useState<DayPreset>(() =>
+    presetForDate(dateFromValue(projectionStartDate)),
+  );
+  const [customDay, setCustomDay] = useState(() => {
+    const start = dateFromValue(projectionStartDate);
+    return presetForDate(start) === 'custom' ? String(start.getDate()) : '';
+  });
+  const [startDate, setStartDate] = useState(projectionStartDate);
   const [endMonth, setEndMonth] = useState(projectionEndMonth);
   const [endOngoing, setEndOngoing] = useState(true);
-  const [startMonthOpen, setStartMonthOpen] = useState(false);
+  const [startDateOpen, setStartDateOpen] = useState(false);
   const [endMonthOpen, setEndMonthOpen] = useState(false);
+  const [prorateFirstMonth, setProrateFirstMonth] = useState(false);
+  const [renewalManuallySet, setRenewalManuallySet] = useState(false);
   const [deductFromPocket, setDeductFromPocket] = useState(false);
   const [deductIncomeSourceId, setDeductIncomeSourceId] = useState('');
   const [activeOpen, setActiveOpen] = useState(true);
@@ -184,6 +255,8 @@ export function RecurringExpenseManager({
     return rows;
   }, [incomeSources]);
 
+  const startMonth = startDate.slice(0, 7);
+  const projectionEndDate = `${projectionEndMonth}-31`;
   const resolvedDay =
     dayPreset === 'end'
       ? 0
@@ -191,7 +264,7 @@ export function RecurringExpenseManager({
         ? Number.parseInt(customDay, 10) || 1
         : Number.parseInt(dayPreset, 10);
 
-  const currentMonth = currentMonthValue();
+  const currentDate = currentDateValue();
 
   const compareExpenses = (a: RecurringExpense, b: RecurringExpense) => {
     if (expenseSort === 'name') {
@@ -211,13 +284,13 @@ export function RecurringExpenseManager({
 
   const sorted = [...expenses].sort(compareExpenses);
   const activeExpenses = sorted.filter(
-    (exp) => sectionForExpense(exp, currentMonth) === 'active',
+    (exp) => sectionForExpense(exp, currentDate) === 'active',
   );
   const upcomingExpenses = sorted.filter(
-    (exp) => sectionForExpense(exp, currentMonth) === 'upcoming',
+    (exp) => sectionForExpense(exp, currentDate) === 'upcoming',
   );
   const endedExpenses = sorted.filter(
-    (exp) => sectionForExpense(exp, currentMonth) === 'ended',
+    (exp) => sectionForExpense(exp, currentDate) === 'ended',
   );
 
   const groupForExpense = (
@@ -225,10 +298,11 @@ export function RecurringExpenseManager({
     exp: RecurringExpense,
   ) => {
     if (section === 'upcoming') {
+      const start = startDateForExpense(exp);
       return {
-        key: `upcoming:${exp.startMonth}`,
-        label: `Starts ${monthLabel(exp.startMonth)}`,
-        order: monthOrder(exp.startMonth),
+        key: `upcoming:${start}`,
+        label: `Starts ${dateLabel(start)}`,
+        order: dateOrder(start),
       };
     }
 
@@ -301,7 +375,7 @@ export function RecurringExpenseManager({
   const endedGroups = buildExpenseGroups('ended', endedExpenses);
   const allExpenseGroups = [...activeGroups, ...upcomingGroups, ...endedGroups];
   const openGroupForExpense = (exp: RecurringExpense) => {
-    const section = sectionForExpense(exp, currentMonth);
+    const section = sectionForExpense(exp, currentDate);
     if (section === 'active') setActiveOpen(true);
     if (section === 'upcoming') setUpcomingOpen(true);
     if (section === 'ended') setEndedOpen(true);
@@ -357,14 +431,22 @@ export function RecurringExpenseManager({
     setOpenExpenseGroups(new Set());
   };
 
+  const setRenewalFromStartDate = (date: Date) => {
+    const detectedPreset = presetForDate(date);
+    setDayPreset(detectedPreset);
+    setCustomDay(detectedPreset === 'custom' ? String(date.getDate()) : '');
+  };
+
   const resetForm = () => {
+    const defaultStart = dateFromValue(projectionStartDate);
     setLabel('');
     setAmount('');
-    setDayPreset('1');
-    setCustomDay('');
-    setStartMonth(projectionStartMonth);
+    setRenewalFromStartDate(defaultStart);
+    setStartDate(projectionStartDate);
     setEndMonth(projectionEndMonth);
     setEndOngoing(true);
+    setProrateFirstMonth(false);
+    setRenewalManuallySet(false);
     setDeductFromPocket(false);
     setDeductIncomeSourceId('');
     setFormMode(null);
@@ -384,9 +466,11 @@ export function RecurringExpenseManager({
     const p = presetForDay(exp.dayOfMonth);
     setDayPreset(p);
     setCustomDay(p === 'custom' ? String(exp.dayOfMonth) : '');
-    setStartMonth(exp.startMonth);
+    setStartDate(startDateForExpense(exp));
     setEndOngoing(exp.endMonth == null);
     setEndMonth(exp.endMonth ?? projectionEndMonth);
+    setProrateFirstMonth(exp.prorateFirstMonth ?? false);
+    setRenewalManuallySet(true);
     setDeductFromPocket(exp.deductFromPocket ?? false);
     setDeductIncomeSourceId(exp.deductIncomeSourceId ?? '');
   };
@@ -409,8 +493,10 @@ export function RecurringExpenseManager({
         label: label.trim(),
         amount: numAmount,
         dayOfMonth: day,
+        startDate,
         startMonth,
         endMonth: resolvedEndMonth,
+        prorateFirstMonth: resolvedDeductSource ? false : prorateFirstMonth,
         deductFromPocket,
         deductIncomeSourceId: resolvedDeductSource,
         hidden: currentExpense?.hidden,
@@ -420,13 +506,23 @@ export function RecurringExpenseManager({
         label: label.trim(),
         amount: numAmount,
         dayOfMonth: day,
+        startDate,
         startMonth,
         endMonth: resolvedEndMonth,
+        prorateFirstMonth: resolvedDeductSource ? false : prorateFirstMonth,
         deductFromPocket,
         deductIncomeSourceId: resolvedDeductSource,
       });
     }
     resetForm();
+  };
+
+  const selectDayPreset = (value: DayPreset) => {
+    setRenewalManuallySet(true);
+    setDayPreset(value);
+    if (value === 'custom' && !customDay) {
+      setCustomDay(String(dateFromValue(startDate).getDate()));
+    }
   };
 
   const presetBtn = (value: DayPreset, text: string) => (
@@ -438,7 +534,7 @@ export function RecurringExpenseManager({
           ? 'bg-background text-foreground shadow-sm'
           : 'text-muted-foreground hover:bg-background/50 hover:text-foreground',
       )}
-      onClick={() => setDayPreset(value)}
+      onClick={() => selectDayPreset(value)}
     >
       {text}
     </button>
@@ -479,15 +575,21 @@ export function RecurringExpenseManager({
           </span>
           <span className="text-muted-foreground text-xs">
             {exp.deductIncomeSourceId ? (
-              <>each payday &middot; </>
+              <>
+                starts {dateLabel(startDateForExpense(exp))} &middot; each
+                payday
+              </>
             ) : (
               <>
-                {exp.dayOfMonth === 0 ? 'Last' : ordinal(exp.dayOfMonth)}{' '}
-                &middot;{' '}
+                starts {dateLabel(startDateForExpense(exp))} &middot; renews{' '}
+                {exp.dayOfMonth === 0 ? 'last' : ordinal(exp.dayOfMonth)}
               </>
-            )}
-            {monthLabel(exp.startMonth)}-
-            {exp.endMonth == null ? 'ongoing' : monthLabel(exp.endMonth)}
+            )}{' '}
+            &middot;{' '}
+            {exp.endMonth == null
+              ? 'ongoing'
+              : `through ${monthLabel(exp.endMonth)}`}
+            {exp.prorateFirstMonth && <> &middot; prorated first</>}
             {exp.deductIncomeSourceId && (
               <>
                 {' '}
@@ -709,38 +811,18 @@ export function RecurringExpenseManager({
               onValueChange={(v) => {
                 if (v === DEDUCT_ANCHOR_CALENDAR) {
                   setDeductIncomeSourceId('');
+                  if (!renewalManuallySet) {
+                    setRenewalFromStartDate(dateFromValue(startDate));
+                  }
                 } else {
                   setDeductIncomeSourceId(v);
+                  setProrateFirstMonth(false);
                 }
               }}
               options={incomeSourceMatchOptions}
               sheetTitle="Match income source"
               triggerClassName="w-full"
             />
-          </div>
-        )}
-        {!deductIncomeSourceId && (
-          <div className="min-w-0 space-y-1">
-            <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
-              Day
-            </Label>
-            <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
-              {presetBtn('1', '1st')}
-              {presetBtn('15', 'Mid')}
-              {presetBtn('end', 'End')}
-              {presetBtn('custom', '#')}
-            </div>
-            {dayPreset === 'custom' && (
-              <Input
-                type="number"
-                min={1}
-                max={31}
-                placeholder="1-31"
-                value={customDay}
-                onChange={(e) => setCustomDay(e.target.value)}
-                className="mt-1 font-mono"
-              />
-            )}
           </div>
         )}
         <div
@@ -750,22 +832,22 @@ export function RecurringExpenseManager({
           )}
         >
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
-            Months
+            Start / end
           </Label>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <ResponsivePicker
-              open={startMonthOpen}
-              onOpenChange={setStartMonthOpen}
-              sheetTitle="Start month"
+              open={startDateOpen}
+              onOpenChange={setStartDateOpen}
+              sheetTitle="Start date"
               popoverContentClassName="w-auto p-0"
               trigger={
                 <Button
                   type="button"
                   variant="outline"
-                  className="min-h-11 min-w-0 flex-1 justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:max-w-[140px] sm:text-sm"
+                  className="min-h-11 min-w-0 flex-1 justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:max-w-[170px] sm:text-sm"
                 >
                   <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                  {monthLabel(startMonth)}
+                  {dateLabel(startDate)}
                 </Button>
               }
             >
@@ -778,26 +860,30 @@ export function RecurringExpenseManager({
                     10,
                   )}
                   toYear={Number.parseInt(projectionEndMonth.slice(0, 4), 10)}
-                  selected={new Date(`${startMonth}-01T00:00:00`)}
+                  selected={dateFromValue(startDate)}
                   onSelect={(d) => {
                     if (!d) return;
-                    const selectedMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    const selectedDate = formatDateValue(d);
                     if (
-                      selectedMonth >= projectionStartMonth &&
-                      selectedMonth <= projectionEndMonth
+                      selectedDate >= projectionStartDate &&
+                      selectedDate <= projectionEndDate
                     ) {
-                      setStartMonth(selectedMonth);
+                      const selectedMonth = selectedDate.slice(0, 7);
+                      setStartDate(selectedDate);
                       if (endMonth < selectedMonth) {
                         setEndMonth(selectedMonth);
+                      }
+                      if (!deductIncomeSourceId && !renewalManuallySet) {
+                        setRenewalFromStartDate(d);
                       }
                       close();
                     }
                   }}
-                  defaultMonth={new Date(`${startMonth}-01T00:00:00`)}
+                  defaultMonth={dateFromValue(startDate)}
                   disabled={(date) => {
-                    const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    const value = formatDateValue(date);
                     return (
-                      month < projectionStartMonth || month > projectionEndMonth
+                      value < projectionStartDate || value > projectionEndDate
                     );
                   }}
                   className="mx-auto w-full max-w-[100vw] rounded-lg"
@@ -868,6 +954,49 @@ export function RecurringExpenseManager({
             </div>
           </div>
         </div>
+        {!deductIncomeSourceId && (
+          <div className="min-w-0 space-y-1 sm:col-span-2">
+            <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+              Renews monthly on
+            </Label>
+            <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+              {presetBtn('1', '1st')}
+              {presetBtn('15', 'Mid')}
+              {presetBtn('end', 'End')}
+              {presetBtn('custom', '#')}
+            </div>
+            {dayPreset === 'custom' && (
+              <Input
+                type="number"
+                min={1}
+                max={31}
+                placeholder="1-31"
+                value={customDay}
+                onChange={(e) => {
+                  setRenewalManuallySet(true);
+                  setCustomDay(e.target.value);
+                }}
+                className="mt-1 font-mono"
+              />
+            )}
+          </div>
+        )}
+        {!deductIncomeSourceId && (
+          <div className="flex min-w-0 cursor-pointer items-center gap-2 sm:col-span-2">
+            <Checkbox
+              id="recurring-prorate-first"
+              variant="muted"
+              checked={prorateFirstMonth}
+              onCheckedChange={(v) => setProrateFirstMonth(v === true)}
+            />
+            <Label
+              htmlFor="recurring-prorate-first"
+              className="cursor-pointer text-muted-foreground text-xs leading-snug"
+            >
+              Prorate first charge
+            </Label>
+          </div>
+        )}
         <div className="flex min-w-0 cursor-pointer items-center gap-2 sm:col-span-4">
           <Checkbox
             id="recurring-use-pocket"

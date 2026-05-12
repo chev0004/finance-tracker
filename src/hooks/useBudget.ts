@@ -258,6 +258,147 @@ function isValidIsoDate(s: string | undefined): s is string {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
+function getRecurringDateForMonth(
+  dayOfMonth: number,
+  year: number,
+  month: number,
+): string {
+  const normalizedDay = Number.isFinite(dayOfMonth) ? dayOfMonth : 1;
+  const day =
+    normalizedDay <= 0
+      ? lastDayOf(year, month)
+      : Math.min(normalizedDay, lastDayOf(year, month));
+  return fmtDate(year, month, day);
+}
+
+function getRecurringStartDate(rec: RecurringExpense): string {
+  const exactStart = rec.startDate?.slice(0, 10);
+  if (isValidIsoDate(exactStart)) return exactStart;
+
+  const [year, month] = rec.startMonth.split('-').map(Number);
+  if (Number.isFinite(year) && Number.isFinite(month)) {
+    return getRecurringDateForMonth(rec.dayOfMonth, year, month);
+  }
+
+  return getLocalDateString();
+}
+
+function addMonthsToYearMonth(
+  year: number,
+  month: number,
+  delta: number,
+): { year: number; month: number } {
+  const d = new Date(Date.UTC(year, month - 1 + delta, 1));
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
+}
+
+function getNextRecurringDateOnOrAfter(
+  date: string,
+  dayOfMonth: number,
+): string {
+  const [year, month] = date.split('-').map(Number);
+  const current = getRecurringDateForMonth(dayOfMonth, year, month);
+  if (current >= date) return current;
+
+  const next = addMonthsToYearMonth(year, month, 1);
+  return getRecurringDateForMonth(dayOfMonth, next.year, next.month);
+}
+
+function getPreviousRecurringDateBefore(
+  date: string,
+  dayOfMonth: number,
+): string {
+  const [year, month] = date.split('-').map(Number);
+  const current = getRecurringDateForMonth(dayOfMonth, year, month);
+  if (current < date) return current;
+
+  const previous = addMonthsToYearMonth(year, month, -1);
+  return getRecurringDateForMonth(dayOfMonth, previous.year, previous.month);
+}
+
+function calendarDayMs(date: string): number {
+  const [year, month, day] = date.split('-').map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+function diffCalendarDays(start: string, end: string): number {
+  return Math.round((calendarDayMs(end) - calendarDayMs(start)) / 86_400_000);
+}
+
+function roundCurrency(amount: number): number {
+  return Math.round((amount + Number.EPSILON) * 100) / 100;
+}
+
+function getProratedRecurringAmount(
+  amount: number,
+  startDate: string,
+  dayOfMonth: number,
+): number {
+  const nextRenewal = getNextRecurringDateOnOrAfter(startDate, dayOfMonth);
+  if (nextRenewal === startDate) return amount;
+
+  const previousRenewal = getPreviousRecurringDateBefore(
+    nextRenewal,
+    dayOfMonth,
+  );
+  const cycleDays = diffCalendarDays(previousRenewal, nextRenewal);
+  const activeDays = diffCalendarDays(startDate, nextRenewal);
+  if (cycleDays <= 0 || activeDays <= 0) return amount;
+
+  return roundCurrency(amount * Math.min(1, activeDays / cycleDays));
+}
+
+function getInitialRecurringAmount(
+  rec: RecurringExpense,
+  startDate: string,
+): number {
+  return rec.prorateFirstMonth
+    ? getProratedRecurringAmount(rec.amount, startDate, rec.dayOfMonth)
+    : rec.amount;
+}
+
+function getCalendarRecurringInstances(
+  rec: RecurringExpense,
+  projectionEndYear: number,
+): { date: string; amount: number }[] {
+  const endBound = rec.endMonth ?? `${projectionEndYear}-12`;
+  const startDate = getRecurringStartDate(rec);
+  const startMonth = startDate.slice(0, 7);
+  if (startMonth > endBound) return [];
+
+  const instances: { date: string; amount: number }[] = [];
+  const [startY, startM] = startMonth.split('-').map(Number);
+  const [endY, endM] = endBound.split('-').map(Number);
+  const startMonthRenewal = getRecurringDateForMonth(
+    rec.dayOfMonth,
+    startY,
+    startM,
+  );
+
+  if (startDate !== startMonthRenewal) {
+    instances.push({
+      date: startDate,
+      amount: getInitialRecurringAmount(rec, startDate),
+    });
+  }
+
+  let y = startY;
+  let m = startM;
+  while (y < endY || (y === endY && m <= endM)) {
+    const dateStr = getRecurringDateForMonth(rec.dayOfMonth, y, m);
+    if (dateStr >= startDate) {
+      instances.push({ date: dateStr, amount: rec.amount });
+    }
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+
+  return instances;
+}
+
 function incomeEndedBeforeDate(source: IncomeSource, date: string): boolean {
   if (!isValidIsoDate(source.endsOn) || source.endsOnIgnored) return false;
   return date > source.endsOn;
@@ -363,6 +504,7 @@ function getPocketDeductingRecurringPerPeriod(
     if (rec.hidden) continue;
     if (!rec.deductFromPocket) continue;
     const endBound = rec.endMonth ?? `${projectionEndYear}-12`;
+    const startDate = getRecurringStartDate(rec);
 
     if (rec.deductIncomeSourceId) {
       const source = settings.incomeSources.find(
@@ -385,6 +527,7 @@ function getPocketDeductingRecurringPerPeriod(
         if (!includeIncomePayday(source, payday)) continue;
         if (isIncomePaydaySkipped(settings, payday)) continue;
         const monthStr = payday.slice(0, 7);
+        if (payday < startDate) continue;
         if (monthStr < rec.startMonth || monthStr > endBound) continue;
         if (isExpensePausedOnDate(settings, rec.id, payday)) continue;
         const amount = getRecurringInstanceAmount(
@@ -407,20 +550,15 @@ function getPocketDeductingRecurringPerPeriod(
       continue;
     }
 
-    const [endY, endM] = endBound.split('-').map(Number);
-    let [y, m] = rec.startMonth.split('-').map(Number);
-
-    while (y < endY || (y === endY && m <= endM)) {
-      const day =
-        rec.dayOfMonth <= 0
-          ? lastDayOf(y, m)
-          : Math.min(rec.dayOfMonth, lastDayOf(y, m));
-      const dateStr = fmtDate(y, m, day);
-
+    for (const instance of getCalendarRecurringInstances(
+      rec,
+      projectionEndYear,
+    )) {
+      const dateStr = instance.date;
       if (!isExpensePausedOnDate(settings, rec.id, dateStr)) {
         const amount = getRecurringInstanceAmount(
           settings,
-          rec.amount,
+          instance.amount,
           rec.id,
           dateStr,
         );
@@ -434,11 +572,6 @@ function getPocketDeductingRecurringPerPeriod(
             recurringExpenseId: rec.id,
           });
         }
-      }
-      m++;
-      if (m > 12) {
-        m = 1;
-        y++;
       }
     }
   }
@@ -499,6 +632,7 @@ function genFixedEvents(
   for (const rec of settings.recurringExpenses) {
     if (rec.hidden) continue;
     const endBound = rec.endMonth ?? `${projectionEndYear}-12`;
+    const startDate = getRecurringStartDate(rec);
 
     if (rec.deductIncomeSourceId && !rec.deductFromPocket) {
       const source = settings.incomeSources.find(
@@ -521,6 +655,7 @@ function genFixedEvents(
           if (!includeIncomePayday(source, payday)) continue;
           if (isIncomePaydaySkipped(settings, payday)) continue;
           const monthStr = payday.slice(0, 7);
+          if (payday < startDate) continue;
           if (monthStr < rec.startMonth || monthStr > endBound) continue;
           if (isExpensePausedOnDate(settings, rec.id, payday)) continue;
           const amount = getRecurringInstanceAmount(
@@ -544,36 +679,26 @@ function genFixedEvents(
 
     if (rec.deductIncomeSourceId) continue;
 
-    const [endY, endM] = endBound.split('-').map(Number);
-    let [y, m] = rec.startMonth.split('-').map(Number);
-
-    while (y < endY || (y === endY && m <= endM)) {
-      if (!rec.deductFromPocket) {
-        const day =
-          rec.dayOfMonth <= 0
-            ? lastDayOf(y, m)
-            : Math.min(rec.dayOfMonth, lastDayOf(y, m));
-        const dateStr = fmtDate(y, m, day);
-        if (!isExpensePausedOnDate(settings, rec.id, dateStr)) {
-          const amount = getRecurringInstanceAmount(
-            settings,
-            rec.amount,
-            rec.id,
-            dateStr,
-          );
-          ev.push({
-            date: dateStr,
-            label: `${rec.label} $${amount}`,
-            delta: -amount,
-            type: 'recurring',
-            recurringExpenseId: rec.id,
-          });
-        }
-      }
-      m++;
-      if (m > 12) {
-        m = 1;
-        y++;
+    if (!rec.deductFromPocket) {
+      for (const instance of getCalendarRecurringInstances(
+        rec,
+        projectionEndYear,
+      )) {
+        const dateStr = instance.date;
+        if (isExpensePausedOnDate(settings, rec.id, dateStr)) continue;
+        const amount = getRecurringInstanceAmount(
+          settings,
+          instance.amount,
+          rec.id,
+          dateStr,
+        );
+        ev.push({
+          date: dateStr,
+          label: `${rec.label} $${amount}`,
+          delta: -amount,
+          type: 'recurring',
+          recurringExpenseId: rec.id,
+        });
       }
     }
   }
@@ -631,8 +756,12 @@ function migrateRecurringExpenses(
 ): RecurringExpense[] {
   return expenses.map((e) => {
     const base = e.dayOfMonth === 31 ? { ...e, dayOfMonth: 0 } : e;
+    const startDate = getRecurringStartDate(base);
     return {
       ...base,
+      startDate,
+      startMonth: startDate.slice(0, 7),
+      prorateFirstMonth: base.prorateFirstMonth ?? false,
       deductFromPocket: base.deductFromPocket ?? false,
       deductIncomeSourceId: base.deductIncomeSourceId,
     };
@@ -789,8 +918,10 @@ function migrateSettings(raw: Record<string, unknown>): BudgetSettings {
       label: p.label,
       amount: p.amount,
       dayOfMonth: 1,
+      startDate: `${startMonth}-01`,
       startMonth,
       endMonth: null,
+      prorateFirstMonth: false,
       deductFromPocket: true,
     }));
     return {
@@ -1842,11 +1973,18 @@ export function useBudget() {
   const addRecurringExpense = useCallback(
     (expense: Omit<RecurringExpense, 'id'>) => {
       startMutation(() => {
+        const startDate = getRecurringStartDate({ ...expense, id: '' });
         setSettings((prev) => ({
           ...prev,
           recurringExpenses: [
             ...prev.recurringExpenses,
-            { ...expense, id: crypto.randomUUID() },
+            {
+              ...expense,
+              id: crypto.randomUUID(),
+              startDate,
+              startMonth: startDate.slice(0, 7),
+              prorateFirstMonth: expense.prorateFirstMonth ?? false,
+            },
           ],
         }));
       });
@@ -1856,10 +1994,18 @@ export function useBudget() {
 
   const updateRecurringExpense = useCallback((expense: RecurringExpense) => {
     startMutation(() => {
+      const startDate = getRecurringStartDate(expense);
       setSettings((prev) => ({
         ...prev,
         recurringExpenses: prev.recurringExpenses.map((e) =>
-          e.id === expense.id ? expense : e,
+          e.id === expense.id
+            ? {
+                ...expense,
+                startDate,
+                startMonth: startDate.slice(0, 7),
+                prorateFirstMonth: expense.prorateFirstMonth ?? false,
+              }
+            : e,
         ),
       }));
     });

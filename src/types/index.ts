@@ -30,8 +30,10 @@ export interface RecurringExpense {
   label: string;
   amount: number;
   dayOfMonth: number;
+  startDate?: string;
   startMonth: string;
   endMonth: string | null;
+  prorateFirstMonth?: boolean;
   deductFromPocket: boolean;
   deductIncomeSourceId?: string;
   hidden?: boolean;
