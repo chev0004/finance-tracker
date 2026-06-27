@@ -722,6 +722,7 @@ function genFixedEvents(
         label: `${goal.name} $${total.toLocaleString()}`,
         delta: -total,
         type: 'goal',
+        sourceId: goal.id,
       });
     }
   }

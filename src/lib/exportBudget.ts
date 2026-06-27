@@ -30,6 +30,15 @@ export interface ExportPayload {
   validationErrors: ValidationError[];
 }
 
+export interface ExportDateRange {
+  startDate: string;
+  endDate: string;
+}
+
+export interface ExportOptions {
+  dateRanges?: ExportDateRange[];
+}
+
 type AccountName = 'Savings' | 'Pocket';
 
 interface LedgerDraft {
@@ -66,6 +75,31 @@ function getProjectionEnd(payload: ExportPayload): string {
   }
 
   return end;
+}
+
+export function getExportDateBounds(payload: ExportPayload): ExportDateRange {
+  return {
+    startDate: payload.settings.startDate,
+    endDate: getProjectionEnd(payload),
+  };
+}
+
+export function getExportYears(payload: ExportPayload): number[] {
+  const { startDate, endDate } = getExportDateBounds(payload);
+  const startYear = Number(startDate.slice(0, 4));
+  const endYear = Number(endDate.slice(0, 4));
+
+  return Array.from(
+    { length: endYear - startYear + 1 },
+    (_, index) => startYear + index,
+  );
+}
+
+function isDateIncluded(date: string, options?: ExportOptions): boolean {
+  if (!options?.dateRanges?.length) return true;
+  return options.dateRanges.some(
+    (range) => date >= range.startDate && date <= range.endDate,
+  );
 }
 
 function savingsCategory(type: FixedEvent['type']): string {
@@ -135,6 +169,26 @@ function buildSavingsDrafts(payload: ExportPayload): LedgerDraft[] {
   for (const point of sorted) {
     if (point.rawDate <= payload.settings.startDate) continue;
     point.events.forEach((event, index) => {
+      const goal =
+        event.type === 'goal'
+          ? payload.settings.goals.find((item) => item.id === event.sourceId)
+          : undefined;
+
+      if (goal && goal.lineItems.length > 0) {
+        goal.lineItems.forEach((item, itemIndex) => {
+          rows.push({
+            date: point.rawDate,
+            account: 'Savings',
+            category: 'Savings Goal',
+            description: `${goal.name}: ${item.label}`,
+            reference: goal.id,
+            delta: -item.amount,
+            order: 100 + index + itemIndex / 100,
+          });
+        });
+        return;
+      }
+
       rows.push({
         date: point.rawDate,
         account: 'Savings',
@@ -240,8 +294,6 @@ function buildLedgerRows(payload: ExportPayload): LedgerRow[] {
   });
 }
 
-// --- Colour palettes ---
-
 function argb(hex: string): string {
   return `FF${hex.replace('#', '')}`;
 }
@@ -285,8 +337,125 @@ const THIN_BORDER: Partial<ExcelJS.Borders> = {
 
 const MONEY_FMT = '#,##0.00';
 
+function styleHeaderRow(
+  row: ExcelJS.Row,
+  moneyColumns: Set<number>,
+  fills: Record<number, string> = {},
+): void {
+  row.eachCell((cell, col) => {
+    cell.font = { bold: true, size: 11, color: { argb: 'FF0f172a' } };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: argb(fills[col] ?? '#f0f4f8') },
+    };
+    cell.border = {
+      bottom: { style: 'medium', color: { argb: 'FFc8d6e0' } },
+    };
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: moneyColumns.has(col) ? 'right' : 'left',
+      wrapText: false,
+    };
+  });
+  row.height = 22;
+}
+
+function addGoalsSheet(
+  workbook: ExcelJS.Workbook,
+  payload: ExportPayload,
+  options?: ExportOptions,
+): void {
+  const sheet = workbook.addWorksheet('Goals');
+  sheet.columns = [
+    { key: 'goal', width: 28 },
+    { key: 'item', width: 34 },
+    { key: 'amount', width: 14 },
+    { key: 'total', width: 14 },
+    { key: 'startDate', width: 13 },
+    { key: 'endDate', width: 13 },
+    { key: 'visibility', width: 12 },
+    { key: 'status', width: 14 },
+    { key: 'preBalance', width: 17 },
+    { key: 'postBalance', width: 17 },
+  ];
+
+  const headerRow = sheet.addRow([
+    'Goal',
+    'Line Item',
+    'Amount',
+    'Goal Total',
+    'Start Date',
+    'End Date',
+    'Visibility',
+    'Status',
+    'Balance Before',
+    'Balance After',
+  ]);
+  styleHeaderRow(headerRow, new Set([3, 4, 9, 10]), {
+    3: '#fce7f3',
+    4: '#fce7f3',
+    9: '#c6edd9',
+    10: '#c6edd9',
+  });
+
+  const goals = [...payload.settings.goals]
+    .filter((goal) => isDateIncluded(goal.startDate, options))
+    .sort(
+      (a, b) =>
+        a.startDate.localeCompare(b.startDate) || a.name.localeCompare(b.name),
+    );
+
+  for (const goal of goals) {
+    const stat = payload.goalStats.find((item) => item.goalId === goal.id);
+    const total = goal.lineItems.reduce((sum, item) => sum + item.amount, 0);
+    const lineItems = goal.lineItems.length
+      ? goal.lineItems
+      : [{ id: '', label: '(No line items)', amount: 0 }];
+    const status = goal.hidden
+      ? 'Excluded'
+      : stat?.isFeasible === false
+        ? 'Shortfall'
+        : stat?.isWarning
+          ? 'Warning'
+          : 'Feasible';
+
+    for (const item of lineItems) {
+      const row = sheet.addRow({
+        goal: goal.name,
+        item: item.label,
+        amount: item.amount,
+        total,
+        startDate: goal.startDate,
+        endDate: goal.endDate,
+        visibility: goal.hidden ? 'Hidden' : 'Included',
+        status,
+        preBalance: stat?.preBalance ?? null,
+        postBalance: stat?.postBalance ?? null,
+      });
+
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        cell.border = THIN_BORDER;
+        cell.alignment = { vertical: 'top', horizontal: 'left' };
+        if ([3, 4, 9, 10].includes(col)) {
+          cell.numFmt = MONEY_FMT;
+          cell.alignment = { vertical: 'top', horizontal: 'right' };
+        }
+        if (col === 1) cell.font = { bold: true };
+        if (col === 8 && status !== 'Feasible') {
+          cell.font = { color: { argb: 'FFb45309' }, bold: true };
+        }
+      });
+    }
+  }
+
+  sheet.views = [{ state: 'frozen', ySplit: 1, xSplit: 0 }];
+  sheet.autoFilter = 'A1:J1';
+}
+
 export async function buildBudgetXlsx(
   payload: ExportPayload,
+  options?: ExportOptions,
 ): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Finance Tracker';
@@ -307,7 +476,6 @@ export async function buildBudgetXlsx(
     { key: 'combinedBalance', width: 20 },
   ];
 
-  // Header row
   const headerRow = sheet.addRow([
     'Date',
     'Account',
@@ -327,26 +495,11 @@ export async function buildBudgetXlsx(
     10: '#fde68a',
   };
 
-  headerRow.eachCell((cell, col) => {
-    cell.font = { bold: true, size: 11, color: { argb: 'FF0f172a' } };
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: argb(headerBg[col] ?? '#f0f4f8') },
-    };
-    cell.border = {
-      bottom: { style: 'medium', color: { argb: 'FFc8d6e0' } },
-    };
-    cell.alignment = {
-      vertical: 'middle',
-      horizontal: col >= 6 ? 'right' : 'left',
-      wrapText: false,
-    };
-  });
-  headerRow.height = 22;
+  styleHeaderRow(headerRow, new Set([6, 7, 8, 9, 10]), headerBg);
 
-  // Data rows
-  const ledgerRows = buildLedgerRows(payload);
+  const ledgerRows = buildLedgerRows(payload).filter((row) =>
+    isDateIncluded(row.date, options),
+  );
 
   for (const row of ledgerRows) {
     const income = row.delta > 0 ? row.delta : null;
@@ -447,6 +600,8 @@ export async function buildBudgetXlsx(
   }
 
   sheet.views = [{ state: 'frozen', ySplit: 1, xSplit: 0 }];
+  sheet.autoFilter = 'A1:J1';
+  addGoalsSheet(workbook, payload, options);
 
   return workbook.xlsx.writeBuffer() as Promise<ArrayBuffer>;
 }
