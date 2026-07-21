@@ -1127,13 +1127,8 @@ export function RecurringExpenseManager({
               </div>
               <div className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
                 {occurrenceSchedule.map((instance, index) => {
-                  const month = instance.scheduledDate.slice(0, 7);
-                  const monthStart = `${month}-01`;
-                  const earliestDate =
-                    month === startMonth && startDate > monthStart
-                      ? startDate
-                      : monthStart;
-                  const latestDate = lastDateOfMonth(month);
+                  const earliestDate = startDate;
+                  const latestDate = lastDateOfMonth(endMonth);
                   const override = occurrenceOverrides.find(
                     (candidate) =>
                       candidate.scheduledDate === instance.scheduledDate,
@@ -1177,8 +1172,11 @@ export function RecurringExpenseManager({
                           <Calendar
                             mode="single"
                             captionLayout="dropdown"
-                            fromYear={Number.parseInt(month.slice(0, 4), 10)}
-                            toYear={Number.parseInt(month.slice(0, 4), 10)}
+                            fromYear={Number.parseInt(
+                              startDate.slice(0, 4),
+                              10,
+                            )}
+                            toYear={Number.parseInt(endMonth.slice(0, 4), 10)}
                             selected={dateFromValue(instance.date)}
                             onSelect={(date) => {
                               if (!date) return;
