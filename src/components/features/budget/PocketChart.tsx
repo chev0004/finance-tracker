@@ -110,6 +110,7 @@ interface PocketDotTarget {
 type SkipDialogTarget = {
   recurringExpenseId: string;
   occurrenceDate: string;
+  displayDate: string;
   label: string;
   amount: number;
 };
@@ -521,7 +522,8 @@ export function PocketChart({
     setSkipNote('');
     setSkipTarget({
       recurringExpenseId: item.recurringExpenseId,
-      occurrenceDate: item.date,
+      occurrenceDate: item.recurringOccurrenceDate ?? item.date,
+      displayDate: item.date,
       label: item.label,
       amount: item.amount,
     });
@@ -567,7 +569,7 @@ export function PocketChart({
                 <>
                   {skipTarget.label} on{' '}
                   <span className="font-mono text-foreground">
-                    {fmtOccurrence(skipTarget.occurrenceDate)}
+                    {fmtOccurrence(skipTarget.displayDate)}
                   </span>
                   , -${fmtAmount(skipTarget.amount)} from pocket for this
                   period.

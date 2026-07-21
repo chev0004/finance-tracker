@@ -434,7 +434,8 @@ export function SavingsChart({
     {},
   );
   const [skipTarget, setSkipTarget] = useState<{
-    date: string;
+    occurrenceDate: string;
+    displayDate: string;
     event: SavingsPointEvent & { recurringExpenseId: string };
   } | null>(null);
   const [skipNote, setSkipNote] = useState('');
@@ -832,7 +833,11 @@ export function SavingsChart({
     point: ChartDataPoint,
     event: SavingsPointEvent & { recurringExpenseId: string },
   ) => {
-    setSkipTarget({ date: point.rawDate, event });
+    setSkipTarget({
+      occurrenceDate: event.recurringOccurrenceDate ?? point.rawDate,
+      displayDate: point.rawDate,
+      event,
+    });
     setSkipNote('');
     setSkipAmount(String(Math.abs(event.delta)));
     setErrorMsg(null);
@@ -844,7 +849,7 @@ export function SavingsChart({
       forcedAmount ?? Math.max(0, Number.parseFloat(skipAmount) || 0);
     const result = onSkipRecurringInstance(
       skipTarget.event.recurringExpenseId,
-      skipTarget.date,
+      skipTarget.occurrenceDate,
       skipNote,
       amount,
     );
@@ -862,7 +867,7 @@ export function SavingsChart({
     if (!skipTarget || !onRestoreRecurringInstance) return;
     onRestoreRecurringInstance(
       skipTarget.event.recurringExpenseId,
-      skipTarget.date,
+      skipTarget.occurrenceDate,
     );
     setSkipTarget(null);
     setSkipNote('');
@@ -1165,7 +1170,7 @@ export function SavingsChart({
                 <>
                   One-time adjustment on{' '}
                   <span className="font-mono text-foreground">
-                    {skipTarget.date}
+                    {skipTarget.displayDate}
                   </span>
                   . Other occurrences are unaffected.
                 </>

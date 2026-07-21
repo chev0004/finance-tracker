@@ -25,6 +25,13 @@ export interface SavingsGoal {
   hidden?: boolean;
 }
 
+export interface RecurringExpenseOccurrenceOverride {
+  scheduledDate: string;
+  date?: string;
+  amount?: number;
+  note?: string;
+}
+
 export interface RecurringExpense {
   id: string;
   label: string;
@@ -34,6 +41,7 @@ export interface RecurringExpense {
   startMonth: string;
   endMonth: string | null;
   prorateFirstMonth?: boolean;
+  occurrenceOverrides?: RecurringExpenseOccurrenceOverride[];
   deductFromPocket: boolean;
   deductIncomeSourceId?: string;
   hidden?: boolean;
@@ -135,6 +143,7 @@ export interface FixedEvent {
     | 'one-time';
   sourceId?: string;
   recurringExpenseId?: string;
+  recurringOccurrenceDate?: string;
 }
 
 export interface SavingsPointEvent {
@@ -143,6 +152,7 @@ export interface SavingsPointEvent {
   type: FixedEvent['type'];
   sourceId?: string;
   recurringExpenseId?: string;
+  recurringOccurrenceDate?: string;
 }
 
 export interface SavingsPoint {
@@ -159,6 +169,7 @@ export interface PocketExpenseItem {
   amount: number;
   date?: string;
   recurringExpenseId?: string;
+  recurringOccurrenceDate?: string;
 }
 
 export interface PocketPoint {
