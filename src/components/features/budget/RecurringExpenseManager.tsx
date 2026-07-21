@@ -26,8 +26,13 @@ import {
   ResponsiveSelect,
   type ResponsiveSelectOption,
 } from '@/components/ui/responsive-select';
+import { getCalendarRecurringInstances } from '@/lib/recurring-expenses';
 import { cn } from '@/lib/utils';
-import type { IncomeSource, RecurringExpense } from '@/types';
+import type {
+  IncomeSource,
+  RecurringExpense,
+  RecurringExpenseOccurrenceOverride,
+} from '@/types';
 
 const DEDUCT_ANCHOR_CALENDAR = 'calendar';
 
@@ -147,6 +152,11 @@ function dateLabel(value: string): string {
   });
 }
 
+function lastDateOfMonth(month: string): string {
+  const [year, monthNumber] = month.split('-').map(Number);
+  return `${month}-${pad(lastDayOf(year, monthNumber))}`;
+}
+
 function presetForDate(date: Date): DayPreset {
   const day = date.getDate();
   if (day === 1) return '1';
@@ -230,6 +240,15 @@ export function RecurringExpenseManager({
   const [endOngoing, setEndOngoing] = useState(true);
   const [startDateOpen, setStartDateOpen] = useState(false);
   const [endMonthOpen, setEndMonthOpen] = useState(false);
+  const [occurrenceDateOpen, setOccurrenceDateOpen] = useState<string | null>(
+    null,
+  );
+  const [occurrenceOverrides, setOccurrenceOverrides] = useState<
+    RecurringExpenseOccurrenceOverride[]
+  >([]);
+  const [occurrenceAmountDrafts, setOccurrenceAmountDrafts] = useState<
+    Record<string, string>
+  >({});
   const [prorateFirstMonth, setProrateFirstMonth] = useState(false);
   const [renewalManuallySet, setRenewalManuallySet] = useState(false);
   const [deductFromPocket, setDeductFromPocket] = useState(false);
@@ -263,6 +282,27 @@ export function RecurringExpenseManager({
       : dayPreset === 'custom'
         ? Number.parseInt(customDay, 10) || 1
         : Number.parseInt(dayPreset, 10);
+  const numericAmount = Number.parseFloat(amount) || 0;
+  const scheduleDay =
+    resolvedDay === 0 ? 0 : Math.min(31, Math.max(1, resolvedDay));
+  const occurrenceSchedule =
+    !endOngoing && !deductIncomeSourceId && numericAmount > 0
+      ? getCalendarRecurringInstances(
+          {
+            id: editingId ?? 'draft',
+            label: label.trim(),
+            amount: numericAmount,
+            dayOfMonth: scheduleDay,
+            startDate,
+            startMonth,
+            endMonth,
+            prorateFirstMonth,
+            occurrenceOverrides,
+            deductFromPocket,
+          },
+          Number.parseInt(endMonth.slice(0, 4), 10),
+        )
+      : [];
 
   const currentDate = currentDateValue();
 
@@ -437,6 +477,36 @@ export function RecurringExpenseManager({
     setCustomDay(detectedPreset === 'custom' ? String(date.getDate()) : '');
   };
 
+  const setOccurrenceOverride = (
+    scheduledDate: string,
+    patch: Partial<RecurringExpenseOccurrenceOverride>,
+  ) => {
+    setOccurrenceOverrides((current) => {
+      const existing = current.find(
+        (override) => override.scheduledDate === scheduledDate,
+      );
+      const next = { scheduledDate, ...existing, ...patch };
+      if (next.date === scheduledDate) next.date = undefined;
+      const remaining = current.filter(
+        (override) => override.scheduledDate !== scheduledDate,
+      );
+      return next.date || next.amount !== undefined
+        ? [...remaining, next]
+        : remaining;
+    });
+  };
+
+  const resetOccurrenceOverride = (scheduledDate: string) => {
+    setOccurrenceOverrides((current) =>
+      current.filter((override) => override.scheduledDate !== scheduledDate),
+    );
+    setOccurrenceAmountDrafts((current) => {
+      const next = { ...current };
+      delete next[scheduledDate];
+      return next;
+    });
+  };
+
   const resetForm = () => {
     const defaultStart = dateFromValue(projectionStartDate);
     setLabel('');
@@ -445,6 +515,9 @@ export function RecurringExpenseManager({
     setStartDate(projectionStartDate);
     setEndMonth(projectionEndMonth);
     setEndOngoing(true);
+    setOccurrenceDateOpen(null);
+    setOccurrenceOverrides([]);
+    setOccurrenceAmountDrafts({});
     setProrateFirstMonth(false);
     setRenewalManuallySet(false);
     setDeductFromPocket(false);
@@ -469,6 +542,9 @@ export function RecurringExpenseManager({
     setStartDate(startDateForExpense(exp));
     setEndOngoing(exp.endMonth == null);
     setEndMonth(exp.endMonth ?? projectionEndMonth);
+    setOccurrenceDateOpen(null);
+    setOccurrenceOverrides(exp.occurrenceOverrides ?? []);
+    setOccurrenceAmountDrafts({});
     setProrateFirstMonth(exp.prorateFirstMonth ?? false);
     setRenewalManuallySet(true);
     setDeductFromPocket(exp.deductFromPocket ?? false);
@@ -476,7 +552,7 @@ export function RecurringExpenseManager({
   };
 
   const handleSave = () => {
-    const numAmount = Number.parseFloat(amount) || 0;
+    const numAmount = numericAmount;
     if (!label.trim() || numAmount <= 0) return;
     const resolvedDeductSource = deductIncomeSourceId.trim() || undefined;
     const day = resolvedDeductSource
@@ -485,6 +561,35 @@ export function RecurringExpenseManager({
         ? 0
         : Math.min(31, Math.max(1, resolvedDay));
     const resolvedEndMonth = endOngoing ? null : endMonth;
+    const savedOccurrenceOverrides = occurrenceSchedule.flatMap((instance) => {
+      const override = occurrenceOverrides.find(
+        (candidate) => candidate.scheduledDate === instance.scheduledDate,
+      );
+      const draft = occurrenceAmountDrafts[instance.scheduledDate];
+      const parsedDraft = Number(draft ?? '');
+      const occurrenceAmount =
+        draft === undefined
+          ? override?.amount
+          : draft.trim() && Number.isFinite(parsedDraft) && parsedDraft >= 0
+            ? parsedDraft
+            : undefined;
+      const saved: RecurringExpenseOccurrenceOverride = {
+        scheduledDate: instance.scheduledDate,
+      };
+      if (override?.date && override.date !== instance.scheduledDate) {
+        saved.date = override.date;
+      }
+      if (
+        occurrenceAmount !== undefined &&
+        occurrenceAmount !== instance.scheduledAmount
+      ) {
+        saved.amount = occurrenceAmount;
+      }
+      if (override?.note && (saved.date || saved.amount !== undefined)) {
+        saved.note = override.note;
+      }
+      return saved.date || saved.amount !== undefined ? [saved] : [];
+    });
 
     if (formMode === 'edit' && editingId) {
       const currentExpense = expenses.find((exp) => exp.id === editingId);
@@ -497,6 +602,9 @@ export function RecurringExpenseManager({
         startMonth,
         endMonth: resolvedEndMonth,
         prorateFirstMonth: resolvedDeductSource ? false : prorateFirstMonth,
+        occurrenceOverrides: resolvedDeductSource
+          ? []
+          : savedOccurrenceOverrides,
         deductFromPocket,
         deductIncomeSourceId: resolvedDeductSource,
         hidden: currentExpense?.hidden,
@@ -510,6 +618,9 @@ export function RecurringExpenseManager({
         startMonth,
         endMonth: resolvedEndMonth,
         prorateFirstMonth: resolvedDeductSource ? false : prorateFirstMonth,
+        occurrenceOverrides: resolvedDeductSource
+          ? []
+          : savedOccurrenceOverrides,
         deductFromPocket,
         deductIncomeSourceId: resolvedDeductSource,
       });
@@ -997,6 +1108,140 @@ export function RecurringExpenseManager({
             </Label>
           </div>
         )}
+        {!deductIncomeSourceId &&
+          !endOngoing &&
+          occurrenceSchedule.length > 0 && (
+            <div className="min-w-0 space-y-2 sm:col-span-4">
+              <div className="flex items-end justify-between gap-3">
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    Individual payments
+                  </Label>
+                  <p className="text-muted-foreground text-xs">
+                    Change one payment without affecting the rest.
+                  </p>
+                </div>
+                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                  {occurrenceSchedule.length} payments
+                </span>
+              </div>
+              <div className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
+                {occurrenceSchedule.map((instance, index) => {
+                  const month = instance.scheduledDate.slice(0, 7);
+                  const monthStart = `${month}-01`;
+                  const earliestDate =
+                    month === startMonth && startDate > monthStart
+                      ? startDate
+                      : monthStart;
+                  const latestDate = lastDateOfMonth(month);
+                  const override = occurrenceOverrides.find(
+                    (candidate) =>
+                      candidate.scheduledDate === instance.scheduledDate,
+                  );
+                  const amountDraft =
+                    occurrenceAmountDrafts[instance.scheduledDate];
+                  const hasOverride =
+                    Boolean(override?.date) ||
+                    override?.amount !== undefined ||
+                    amountDraft !== undefined;
+
+                  return (
+                    <div
+                      key={instance.scheduledDate}
+                      className="grid min-w-0 gap-2 rounded-md border border-border/40 bg-background/40 p-2 sm:grid-cols-[80px_minmax(0,1fr)_minmax(0,140px)_auto] sm:items-center"
+                    >
+                      <span className="font-medium text-xs">
+                        Payment {index + 1}
+                      </span>
+                      <ResponsivePicker
+                        open={occurrenceDateOpen === instance.scheduledDate}
+                        onOpenChange={(open) =>
+                          setOccurrenceDateOpen(
+                            open ? instance.scheduledDate : null,
+                          )
+                        }
+                        sheetTitle={`Payment ${index + 1} date`}
+                        popoverContentClassName="w-auto p-0"
+                        trigger={
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="min-h-11 min-w-0 justify-start text-left font-normal text-base sm:h-9 sm:min-h-9 sm:text-sm"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                            {dateLabel(instance.date)}
+                          </Button>
+                        }
+                      >
+                        {(close) => (
+                          <Calendar
+                            mode="single"
+                            captionLayout="dropdown"
+                            fromYear={Number.parseInt(month.slice(0, 4), 10)}
+                            toYear={Number.parseInt(month.slice(0, 4), 10)}
+                            selected={dateFromValue(instance.date)}
+                            onSelect={(date) => {
+                              if (!date) return;
+                              const selectedDate = formatDateValue(date);
+                              if (
+                                selectedDate >= earliestDate &&
+                                selectedDate <= latestDate
+                              ) {
+                                setOccurrenceOverride(instance.scheduledDate, {
+                                  date: selectedDate,
+                                });
+                                close();
+                              }
+                            }}
+                            defaultMonth={dateFromValue(instance.date)}
+                            disabled={(date) => {
+                              const value = formatDateValue(date);
+                              return value < earliestDate || value > latestDate;
+                            }}
+                            className="mx-auto w-full max-w-[100vw] rounded-lg"
+                          />
+                        )}
+                      </ResponsivePicker>
+                      <CurrencyInput
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        aria-label={`Payment ${index + 1} amount`}
+                        value={amountDraft ?? String(instance.amount)}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setOccurrenceAmountDrafts((current) => ({
+                            ...current,
+                            [instance.scheduledDate]: value,
+                          }));
+                          const parsed = Number(value);
+                          setOccurrenceOverride(instance.scheduledDate, {
+                            amount:
+                              value.trim() &&
+                              Number.isFinite(parsed) &&
+                              parsed >= 0
+                                ? parsed
+                                : undefined,
+                          });
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className={cn(!hasOverride && 'invisible')}
+                        onClick={() =>
+                          resetOccurrenceOverride(instance.scheduledDate)
+                        }
+                      >
+                        Reset
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         <div className="flex min-w-0 cursor-pointer items-center gap-2 sm:col-span-4">
           <Checkbox
             id="recurring-use-pocket"
