@@ -108,6 +108,15 @@ function RateChangeList({
     });
   };
 
+  const handleToggleHidden = (id: string) => {
+    onUpdate({
+      ...source,
+      rateChanges: source.rateChanges.map((change) =>
+        change.id === id ? { ...change, hidden: !change.hidden } : change,
+      ),
+    });
+  };
+
   const fmtDate = (dateStr: string) => {
     const d = parseISO(dateStr);
     return isValid(d) ? format(d, 'MMM d, yyyy') : dateStr;
@@ -207,7 +216,10 @@ function RateChangeList({
         ) : (
           <div
             key={change.id}
-            className="group flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50"
+            className={cn(
+              'group flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50',
+              change.hidden && 'opacity-50',
+            )}
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               <span className="text-muted-foreground text-xs">
@@ -217,6 +229,23 @@ function RateChangeList({
               {diffLabel(change.amount)}
             </div>
             <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                onClick={() => handleToggleHidden(change.id)}
+                title={
+                  change.hidden
+                    ? 'Show in calculations'
+                    : 'Hide from calculations'
+                }
+              >
+                {change.hidden ? (
+                  <EyeOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" />
+                )}
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"

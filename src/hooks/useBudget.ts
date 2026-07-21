@@ -226,9 +226,9 @@ function isPocketPausedOnDate(settings: BudgetSettings, date: string): boolean {
 }
 
 function getSourceAmountForDate(source: IncomeSource, date: string): number {
-  const sorted = [...source.rateChanges].sort((a, b) =>
-    a.effectiveDate.localeCompare(b.effectiveDate),
-  );
+  const sorted = source.rateChanges
+    .filter((change) => !change.hidden)
+    .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
   let amount = source.amount;
   for (const change of sorted) {
     if (change.effectiveDate <= date) amount = change.amount;

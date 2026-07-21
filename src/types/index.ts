@@ -61,6 +61,7 @@ export interface IncomeRateChange {
   id: string;
   effectiveDate: string;
   amount: number;
+  hidden?: boolean;
 }
 
 export interface PocketPerPeriodChange {
