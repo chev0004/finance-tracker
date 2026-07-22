@@ -32,6 +32,19 @@ const PAY_FREQUENCY_OPTIONS: { value: PayFrequency; label: string }[] = [
   { value: 'custom', label: 'Custom' },
 ];
 
+type RateInputMode = 'net' | 'hourly';
+
+const RATE_INPUT_OPTIONS: { value: RateInputMode; label: string }[] = [
+  { value: 'net', label: 'Net pay' },
+  { value: 'hourly', label: 'Hourly wage' },
+];
+
+const WEEKLY_HOURS = 40;
+const WEEKLY_DEDUCTIONS = 56.48;
+const LOWER_GROSS = 576;
+const LOWER_TAXES = 87.61;
+const WITHHOLDING_RATE = (122.57 - LOWER_TAXES) / (720 - LOWER_GROSS);
+
 interface IncomeSourceManagerProps {
   sources: IncomeSource[];
   onAdd: (source: Omit<IncomeSource, 'id'>) => void;
@@ -52,8 +65,36 @@ function RateChangeList({
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [effectiveDate, setEffectiveDate] = useState('');
-  const [amount, setAmount] = useState('');
+  const [inputMode, setInputMode] = useState<RateInputMode>('net');
+  const [netAmount, setNetAmount] = useState('');
+  const [hourlyRate, setHourlyRate] = useState('18');
   const [rateDateOpen, setRateDateOpen] = useState(false);
+
+  const weeksPerPeriod = {
+    weekly: 1,
+    biweekly: 2,
+    monthly: 52 / 12,
+    custom: (source.payInterval ?? 7) / 7,
+  }[source.payFrequency];
+
+  const estimateNetPay = (wage: number) => {
+    const weeklyGross = wage * WEEKLY_HOURS;
+    const weeklyTaxes = Math.max(
+      0,
+      LOWER_TAXES + (weeklyGross - LOWER_GROSS) * WITHHOLDING_RATE,
+    );
+    return Math.max(
+      0,
+      +(
+        (weeklyGross - WEEKLY_DEDUCTIONS - weeklyTaxes) *
+        weeksPerPeriod
+      ).toFixed(2),
+    );
+  };
+
+  const parsedHourlyRate = Number.parseFloat(hourlyRate) || 0;
+  const estimatedNetPay = estimateNetPay(parsedHourlyRate);
+  const amount = inputMode === 'hourly' ? hourlyRate : netAmount;
 
   const sorted = [...source.rateChanges].sort((a, b) =>
     a.effectiveDate.localeCompare(b.effectiveDate),
@@ -61,7 +102,9 @@ function RateChangeList({
 
   const resetForm = () => {
     setEffectiveDate('');
-    setAmount('');
+    setInputMode('net');
+    setNetAmount('');
+    setHourlyRate('18');
     setFormMode(null);
     setEditingId(null);
   };
@@ -75,18 +118,30 @@ function RateChangeList({
     setEditingId(change.id);
     setFormMode('edit');
     setEffectiveDate(change.effectiveDate);
-    setAmount(String(change.amount));
+    setInputMode(change.hourlyRate === undefined ? 'net' : 'hourly');
+    setNetAmount(String(change.amount));
+    setHourlyRate(String(change.hourlyRate ?? 18));
   };
 
   const handleSave = () => {
-    const numAmount = Number.parseFloat(normalizeNumInputBlur(amount)) || 0;
-    if (!effectiveDate || numAmount <= 0) return;
+    const enteredAmount =
+      Number.parseFloat(
+        normalizeNumInputBlur(inputMode === 'hourly' ? hourlyRate : netAmount),
+      ) || 0;
+    if (!effectiveDate || enteredAmount <= 0) return;
+
+    const change = {
+      effectiveDate,
+      amount:
+        inputMode === 'hourly' ? estimateNetPay(enteredAmount) : enteredAmount,
+      hourlyRate: inputMode === 'hourly' ? enteredAmount : undefined,
+    };
 
     if (formMode === 'edit' && editingId) {
       onUpdate({
         ...source,
         rateChanges: source.rateChanges.map((c) =>
-          c.id === editingId ? { ...c, effectiveDate, amount: numAmount } : c,
+          c.id === editingId ? { ...c, ...change } : c,
         ),
       });
     } else {
@@ -94,7 +149,7 @@ function RateChangeList({
         ...source,
         rateChanges: [
           ...source.rateChanges,
-          { id: crypto.randomUUID(), effectiveDate, amount: numAmount },
+          { id: crypto.randomUUID(), ...change },
         ],
       });
     }
@@ -140,7 +195,7 @@ function RateChangeList({
 
   const formUI = (
     <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Effective Date
@@ -184,19 +239,64 @@ function RateChangeList({
         </div>
         <div className="space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
-            New Amount / Period
+            Enter As
+          </Label>
+          <ResponsiveSelect
+            value={inputMode}
+            onValueChange={(value) => setInputMode(value as RateInputMode)}
+            options={RATE_INPUT_OPTIONS}
+            sheetTitle="Pay type"
+            triggerClassName="w-full"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+            {inputMode === 'hourly' ? 'Hourly Wage' : 'Net Pay / Period'}
           </Label>
           <CurrencyInput
             type="number"
             min={0}
+            step={inputMode === 'hourly' ? 0.25 : 0.01}
             placeholder="0"
             value={amount === '' ? '0' : amount}
-            onChange={(e) =>
-              setAmount(normalizeNumInputLeading(e.target.value))
-            }
+            onChange={(e) => {
+              const value = normalizeNumInputLeading(e.target.value);
+              if (inputMode === 'hourly') setHourlyRate(value);
+              else setNetAmount(value);
+            }}
           />
         </div>
       </div>
+      {inputMode === 'hourly' && (
+        <div className="space-y-2 rounded-lg border border-border/40 bg-background/40 p-3">
+          <input
+            type="range"
+            min={7.25}
+            max={Math.max(60, Math.ceil(parsedHourlyRate / 10) * 10)}
+            step={0.25}
+            value={parsedHourlyRate || 18}
+            onChange={(e) => setHourlyRate(e.target.value)}
+            className="w-full accent-emerald-500"
+            aria-label="Hourly wage"
+          />
+          <div className="flex flex-wrap justify-between gap-1 text-muted-foreground text-xs">
+            <span>
+              {(WEEKLY_HOURS * weeksPerPeriod).toLocaleString(undefined, {
+                maximumFractionDigits: 1,
+              })}{' '}
+              hours / period
+            </span>
+            <span className="font-mono text-foreground">
+              $
+              {estimatedNetPay.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{' '}
+              estimated net / period
+            </span>
+          </div>
+        </div>
+      )}
       <div className="flex gap-2">
         <Button size="sm" onClick={handleSave} variant="muted">
           {formMode === 'edit' ? 'Save' : 'Add'}
@@ -225,7 +325,11 @@ function RateChangeList({
               <span className="text-muted-foreground text-xs">
                 {fmtDate(change.effectiveDate)}
               </span>
-              <span className="font-mono text-xs">${change.amount}</span>
+              <span className="font-mono text-xs">
+                {change.hourlyRate === undefined
+                  ? `$${change.amount}`
+                  : `$${change.hourlyRate}/hr → $${change.amount} net`}
+              </span>
               {diffLabel(change.amount)}
             </div>
             <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
