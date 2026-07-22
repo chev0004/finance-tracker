@@ -19,6 +19,11 @@ import { Label } from '@/components/ui/label';
 import { ResponsivePicker } from '@/components/ui/responsive-picker';
 import { ResponsiveSelect } from '@/components/ui/responsive-select';
 import {
+  BASE_HOURLY_RATE,
+  getHourlyNetAmount,
+  getHoursPerPayPeriod,
+} from '@/lib/income';
+import {
   cn,
   normalizeNumInputBlur,
   normalizeNumInputLeading,
@@ -38,12 +43,6 @@ const RATE_INPUT_OPTIONS: { value: RateInputMode; label: string }[] = [
   { value: 'net', label: 'Net pay' },
   { value: 'hourly', label: 'Hourly wage' },
 ];
-
-const WEEKLY_HOURS = 40;
-const WEEKLY_DEDUCTIONS = 56.48;
-const LOWER_GROSS = 576;
-const LOWER_TAXES = 87.61;
-const WITHHOLDING_RATE = (122.57 - LOWER_TAXES) / (720 - LOWER_GROSS);
 
 interface IncomeSourceManagerProps {
   sources: IncomeSource[];
@@ -67,33 +66,11 @@ function RateChangeList({
   const [effectiveDate, setEffectiveDate] = useState('');
   const [inputMode, setInputMode] = useState<RateInputMode>('net');
   const [netAmount, setNetAmount] = useState('');
-  const [hourlyRate, setHourlyRate] = useState('18');
+  const [hourlyRate, setHourlyRate] = useState(String(BASE_HOURLY_RATE));
   const [rateDateOpen, setRateDateOpen] = useState(false);
 
-  const weeksPerPeriod = {
-    weekly: 1,
-    biweekly: 2,
-    monthly: 52 / 12,
-    custom: (source.payInterval ?? 7) / 7,
-  }[source.payFrequency];
-
-  const estimateNetPay = (wage: number) => {
-    const weeklyGross = wage * WEEKLY_HOURS;
-    const weeklyTaxes = Math.max(
-      0,
-      LOWER_TAXES + (weeklyGross - LOWER_GROSS) * WITHHOLDING_RATE,
-    );
-    return Math.max(
-      0,
-      +(
-        (weeklyGross - WEEKLY_DEDUCTIONS - weeklyTaxes) *
-        weeksPerPeriod
-      ).toFixed(2),
-    );
-  };
-
   const parsedHourlyRate = Number.parseFloat(hourlyRate) || 0;
-  const estimatedNetPay = estimateNetPay(parsedHourlyRate);
+  const estimatedNetPay = getHourlyNetAmount(source, parsedHourlyRate);
   const amount = inputMode === 'hourly' ? hourlyRate : netAmount;
 
   const sorted = [...source.rateChanges].sort((a, b) =>
@@ -104,7 +81,7 @@ function RateChangeList({
     setEffectiveDate('');
     setInputMode('net');
     setNetAmount('');
-    setHourlyRate('18');
+    setHourlyRate(String(BASE_HOURLY_RATE));
     setFormMode(null);
     setEditingId(null);
   };
@@ -120,7 +97,7 @@ function RateChangeList({
     setEffectiveDate(change.effectiveDate);
     setInputMode(change.hourlyRate === undefined ? 'net' : 'hourly');
     setNetAmount(String(change.amount));
-    setHourlyRate(String(change.hourlyRate ?? 18));
+    setHourlyRate(String(change.hourlyRate ?? BASE_HOURLY_RATE));
   };
 
   const handleSave = () => {
@@ -133,7 +110,9 @@ function RateChangeList({
     const change = {
       effectiveDate,
       amount:
-        inputMode === 'hourly' ? estimateNetPay(enteredAmount) : enteredAmount,
+        inputMode === 'hourly'
+          ? getHourlyNetAmount(source, enteredAmount)
+          : enteredAmount,
       hourlyRate: inputMode === 'hourly' ? enteredAmount : undefined,
     };
 
@@ -178,9 +157,9 @@ function RateChangeList({
   };
 
   const diffLabel = (changeAmount: number) => {
-    const diff = changeAmount - source.amount;
+    const diff = +(changeAmount - source.amount).toFixed(2);
     if (diff === 0) return null;
-    const sign = diff > 0 ? '+' : '';
+    const sign = diff > 0 ? '+' : '-';
     return (
       <span
         className={cn(
@@ -188,7 +167,7 @@ function RateChangeList({
           diff > 0 ? 'text-green-400' : 'text-red-400',
         )}
       >
-        {sign}${diff}
+        {sign}${Math.abs(diff).toFixed(2)}
       </span>
     );
   };
@@ -274,14 +253,14 @@ function RateChangeList({
             min={7.25}
             max={Math.max(60, Math.ceil(parsedHourlyRate / 10) * 10)}
             step={0.25}
-            value={parsedHourlyRate || 18}
+            value={parsedHourlyRate || BASE_HOURLY_RATE}
             onChange={(e) => setHourlyRate(e.target.value)}
             className="w-full accent-emerald-500"
             aria-label="Hourly wage"
           />
           <div className="flex flex-wrap justify-between gap-1 text-muted-foreground text-xs">
             <span>
-              {(WEEKLY_HOURS * weeksPerPeriod).toLocaleString(undefined, {
+              {getHoursPerPayPeriod(source).toLocaleString(undefined, {
                 maximumFractionDigits: 1,
               })}{' '}
               hours / period

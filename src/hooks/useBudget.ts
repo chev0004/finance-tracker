@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { BUDGET_STORAGE_KEY } from '@/lib/budget-constants';
+import { getHourlyNetAmount } from '@/lib/income';
 import {
   getPocketAmountForPayday,
   getPocketPerPeriodForDate,
@@ -755,11 +756,22 @@ function normalizeIncomeSource(s: IncomeSource): IncomeSource {
   const rawEnd =
     typeof s.endsOn === 'string' ? s.endsOn.slice(0, 10) : undefined;
   const endsOn = rawEnd && isValidIsoDate(rawEnd) ? rawEnd : undefined;
-  return {
+  const source = {
     ...s,
     hidden: Boolean(s.hidden),
     endsOn,
     endsOnIgnored: endsOn ? Boolean(s.endsOnIgnored) : false,
+  };
+  return {
+    ...source,
+    rateChanges: source.rateChanges.map((change) =>
+      change.hourlyRate === undefined
+        ? change
+        : {
+            ...change,
+            amount: getHourlyNetAmount(source, change.hourlyRate),
+          },
+    ),
   };
 }
 
@@ -1227,9 +1239,7 @@ export function useBudget() {
     } else {
       try {
         localStorage.setItem(BUDGET_STORAGE_KEY, JSON.stringify(workspace));
-      } catch {
-        // localStorage unavailable
-      }
+      } catch {}
     }
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -1791,8 +1801,6 @@ export function useBudget() {
     pocketSchedule.interval,
     monthlyIncome,
   ]);
-
-  // --- Actions ---
 
   const addExpense = useCallback(
     (date: string, label: string, amount: number) => {
