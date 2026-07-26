@@ -5,6 +5,7 @@ import type {
   Expense,
   FixedEvent,
   GoalStat,
+  IncomeSource,
   PocketExpenseItem,
   PocketPoint,
   SavingsPoint,
@@ -49,6 +50,8 @@ interface LedgerDraft {
   reference: string;
   delta: number;
   order: number;
+  source?: string;
+  transactionGroup?: string;
 }
 
 interface LedgerRow extends LedgerDraft {
@@ -112,6 +115,10 @@ function savingsCategory(type: FixedEvent['type']): string {
   return 'Adjustment';
 }
 
+function paycheckGroup(source: IncomeSource, date: string): string {
+  return `${source.name} paycheck ${date}`;
+}
+
 function eventReference(event: SavingsPointEvent): string {
   if (event.sourceId) return event.sourceId;
   if (event.recurringExpenseId) return event.recurringExpenseId;
@@ -173,6 +180,15 @@ function buildSavingsDrafts(payload: ExportPayload): LedgerDraft[] {
         event.type === 'goal'
           ? payload.settings.goals.find((item) => item.id === event.sourceId)
           : undefined;
+      const source = payload.settings.incomeSources.find(
+        (item) => item.id === event.sourceId,
+      );
+      const isPaycheckSplit =
+        source?.id === payload.settings.pocketIncomeSourceId &&
+        payload.pocketTimeline.some(
+          (period) =>
+            period.rawDate === point.rawDate && period.pocketAllocated > 0,
+        );
 
       if (goal && goal.lineItems.length > 0) {
         goal.lineItems.forEach((item, itemIndex) => {
@@ -192,11 +208,21 @@ function buildSavingsDrafts(payload: ExportPayload): LedgerDraft[] {
       rows.push({
         date: point.rawDate,
         account: 'Savings',
-        category: savingsCategory(event.type),
-        description: event.label,
+        category:
+          isPaycheckSplit && source
+            ? 'Paycheck Split'
+            : savingsCategory(event.type),
+        description:
+          isPaycheckSplit && source
+            ? `Savings share of ${source.name} paycheck`
+            : event.label,
         reference: eventReference(event),
         delta: event.delta,
         order: 100 + index,
+        source: source?.name,
+        transactionGroup: source
+          ? paycheckGroup(source, point.rawDate)
+          : undefined,
       });
     });
   }
@@ -207,6 +233,9 @@ function buildSavingsDrafts(payload: ExportPayload): LedgerDraft[] {
 function buildPocketDrafts(payload: ExportPayload): LedgerDraft[] {
   const rows: LedgerDraft[] = [];
   const usedExpenseIds = new Set<string>();
+  const pocketSource = payload.settings.incomeSources.find(
+    (source) => source.id === payload.settings.pocketIncomeSourceId,
+  );
   let pocketBalance = 0;
 
   for (const period of [...payload.pocketTimeline].sort((a, b) =>
@@ -216,11 +245,17 @@ function buildPocketDrafts(payload: ExportPayload): LedgerDraft[] {
       rows.push({
         date: period.rawDate,
         account: 'Pocket',
-        category: 'Pocket Allocation',
-        description: 'Pocket money allocation',
+        category: pocketSource ? 'Paycheck Split' : 'Pocket Allocation',
+        description: pocketSource
+          ? `Pocket share of ${pocketSource.name} paycheck`
+          : 'Pocket money allocation',
         reference: period.date,
         delta: period.pocketAllocated,
         order: 50,
+        source: pocketSource?.name,
+        transactionGroup: pocketSource
+          ? paycheckGroup(pocketSource, period.rawDate)
+          : undefined,
       });
       pocketBalance += period.pocketAllocated;
     }
@@ -316,7 +351,8 @@ interface CategoryColors {
 }
 
 function categoryColors(category: string): CategoryColors {
-  if (category === 'Pocket Allocation') return { bg: '#e0f2fe', fg: '#0369a1' };
+  if (category === 'Pocket Allocation' || category === 'Paycheck Split')
+    return { bg: '#e0f2fe', fg: '#0369a1' };
   if (category === 'Opening Balance') return { bg: '#ede9fe', fg: '#5b21b6' };
   if (category === 'Closing Balance') return { bg: '#ddd6fe', fg: '#4c1d95' };
   if (category === 'Expense' || category === 'Recurring Expense')
@@ -359,6 +395,93 @@ function styleHeaderRow(
     };
   });
   row.height = 22;
+}
+
+function addGuideSheet(
+  workbook: ExcelJS.Workbook,
+  payload: ExportPayload,
+  options?: ExportOptions,
+): void {
+  const sheet = workbook.addWorksheet('Guide');
+  const pocketSource = payload.settings.incomeSources.find(
+    (source) => source.id === payload.settings.pocketIncomeSourceId,
+  );
+  const scope =
+    options?.dateRanges
+      ?.map((range) => `${range.startDate} through ${range.endDate}`)
+      .join(', ') ?? 'All dates';
+
+  sheet.columns = [{ width: 24 }, { width: 105 }];
+  sheet.mergeCells('A1:B1');
+  const title = sheet.getCell('A1');
+  title.value = 'Finance Tracker Export Guide';
+  title.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+  title.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF0f172a' },
+  };
+  title.alignment = { vertical: 'middle', horizontal: 'left' };
+  sheet.getRow(1).height = 30;
+
+  sheet.addRows([
+    [],
+    ['As of', payload.today],
+    ['Export scope', scope],
+    ['Current savings', payload.currentSavings],
+    ['Current pocket', payload.currentPocketBalance],
+    ['Current combined', payload.combinedBalance],
+    [],
+    [
+      'Actual rows',
+      `Budget Ledger rows dated through ${payload.today} reflect recorded activity and scheduled items due by the as-of date.`,
+    ],
+    [
+      'Projected rows',
+      `Rows after ${payload.today} contain scheduled income, recurring expenses, goals, and pocket allocations. Missing future discretionary expenses are unknown, not zero.`,
+    ],
+    [
+      'Paycheck split',
+      pocketSource
+        ? `${pocketSource.name} paychecks are split between Savings and Pocket. Rows with the same Transaction Group are parts of one paycheck. The Pocket share is not extra income and is not funded by another Savings withdrawal.`
+        : 'Pocket allocations are shown separately from external income.',
+    ],
+    [
+      'Projected balances',
+      'Savings Balance remains projected. Pocket Balance and Combined Balance are blank after the as-of date because future discretionary spending is unknown.',
+    ],
+    [
+      'Inflow and outflow',
+      'These columns show changes to the named account. Inflow does not always mean a separate external income source.',
+    ],
+  ]);
+
+  for (let rowNumber = 3; rowNumber <= 13; rowNumber++) {
+    const row = sheet.getRow(rowNumber);
+    row.getCell(1).font = { bold: true, color: { argb: 'FF334155' } };
+    row.getCell(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFf1f5f9' },
+    };
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+      cell.border = {
+        bottom: { style: 'thin', color: { argb: 'FFe2e8f0' } },
+      };
+    });
+  }
+
+  for (const rowNumber of [5, 6, 7]) {
+    sheet.getRow(rowNumber).getCell(2).numFmt = MONEY_FMT;
+  }
+
+  sheet.getRow(9).height = 34;
+  sheet.getRow(10).height = 46;
+  sheet.getRow(11).height = 46;
+  sheet.getRow(12).height = 34;
+  sheet.getRow(13).height = 34;
+  sheet.views = [{ showGridLines: false }];
 }
 
 function addGoalsSheet(
@@ -461,16 +584,20 @@ export async function buildBudgetXlsx(
   workbook.creator = 'Finance Tracker';
   workbook.created = new Date();
 
+  addGuideSheet(workbook, payload, options);
   const sheet = workbook.addWorksheet('Budget Ledger');
 
   sheet.columns = [
     { key: 'date', width: 13 },
+    { key: 'status', width: 12 },
     { key: 'account', width: 10 },
     { key: 'category', width: 19 },
     { key: 'description', width: 46 },
+    { key: 'source', width: 20 },
     { key: 'reference', width: 28 },
-    { key: 'income', width: 13 },
-    { key: 'expense', width: 13 },
+    { key: 'transactionGroup', width: 32 },
+    { key: 'inflow', width: 13 },
+    { key: 'outflow', width: 13 },
     { key: 'savingsBalance', width: 18 },
     { key: 'pocketBalance', width: 17 },
     { key: 'combinedBalance', width: 20 },
@@ -478,45 +605,52 @@ export async function buildBudgetXlsx(
 
   const headerRow = sheet.addRow([
     'Date',
+    'Status',
     'Account',
     'Category',
     'Description',
+    'Source',
     'Reference',
-    'Income',
-    'Expense',
+    'Transaction Group',
+    'Inflow',
+    'Outflow',
     'Savings Balance',
     'Pocket Balance',
     'Combined Balance',
   ]);
 
   const headerBg: Record<number, string> = {
-    8: '#c6edd9',
-    9: '#bfdbfe',
-    10: '#fde68a',
+    11: '#c6edd9',
+    12: '#bfdbfe',
+    13: '#fde68a',
   };
 
-  styleHeaderRow(headerRow, new Set([6, 7, 8, 9, 10]), headerBg);
+  styleHeaderRow(headerRow, new Set([9, 10, 11, 12, 13]), headerBg);
 
   const ledgerRows = buildLedgerRows(payload).filter((row) =>
     isDateIncluded(row.date, options),
   );
 
   for (const row of ledgerRows) {
-    const income = row.delta > 0 ? row.delta : null;
-    const expense = row.delta < 0 ? Math.abs(row.delta) : null;
+    const status = row.date <= payload.today ? 'Actual' : 'Projected';
+    const inflow = row.delta > 0 ? row.delta : null;
+    const outflow = row.delta < 0 ? Math.abs(row.delta) : null;
     const cats = categoryColors(row.category);
 
     const excelRow = sheet.addRow({
       date: row.date,
+      status,
       account: row.account,
       category: row.category,
       description: row.description,
+      source: row.source ?? null,
       reference: row.reference,
-      income,
-      expense,
+      transactionGroup: row.transactionGroup ?? null,
+      inflow,
+      outflow,
       savingsBalance: row.savingsBalance,
-      pocketBalance: row.pocketBalance,
-      combinedBalance: row.combinedBalance,
+      pocketBalance: status === 'Actual' ? row.pocketBalance : null,
+      combinedBalance: status === 'Actual' ? row.combinedBalance : null,
     });
 
     excelRow.eachCell({ includeEmpty: true }, (cell, col) => {
@@ -524,6 +658,26 @@ export async function buildBudgetXlsx(
       cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
 
       if (col === 2) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: {
+            argb: status === 'Actual' ? 'FFdcfce7' : 'FFfef3c7',
+          },
+        };
+        cell.font = {
+          color: {
+            argb: status === 'Actual' ? 'FF166534' : 'FF92400e',
+          },
+          bold: true,
+          size: 10,
+        };
+        cell.alignment = {
+          vertical: 'top',
+          horizontal: 'center',
+          wrapText: false,
+        };
+      } else if (col === 3) {
         cell.fill = accountFill(row.account);
         cell.font = {
           color: { argb: accountFontColor(row.account) },
@@ -535,7 +689,7 @@ export async function buildBudgetXlsx(
           horizontal: 'center',
           wrapText: false,
         };
-      } else if (col === 3) {
+      } else if (col === 4) {
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
@@ -547,19 +701,19 @@ export async function buildBudgetXlsx(
           horizontal: 'center',
           wrapText: false,
         };
-      } else if (col === 6) {
+      } else if (col === 9) {
         cell.numFmt = MONEY_FMT;
         cell.alignment = { horizontal: 'right', vertical: 'top' };
-        if (income !== null) {
+        if (inflow !== null) {
           cell.font = { color: { argb: 'FF047857' } };
         }
-      } else if (col === 7) {
+      } else if (col === 10) {
         cell.numFmt = MONEY_FMT;
         cell.alignment = { horizontal: 'right', vertical: 'top' };
-        if (expense !== null) {
+        if (outflow !== null) {
           cell.font = { color: { argb: 'FFb45309' } };
         }
-      } else if (col === 8) {
+      } else if (col === 11) {
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
@@ -570,7 +724,7 @@ export async function buildBudgetXlsx(
         if (row.savingsBalance < 0) {
           cell.font = { color: { argb: 'FFb45309' } };
         }
-      } else if (col === 9) {
+      } else if (col === 12) {
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
@@ -578,10 +732,10 @@ export async function buildBudgetXlsx(
         };
         cell.numFmt = MONEY_FMT;
         cell.alignment = { horizontal: 'right', vertical: 'top' };
-        if (row.pocketBalance < 0) {
+        if (status === 'Actual' && row.pocketBalance < 0) {
           cell.font = { color: { argb: 'FFb45309' } };
         }
-      } else if (col === 10) {
+      } else if (col === 13) {
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
@@ -589,18 +743,20 @@ export async function buildBudgetXlsx(
         };
         cell.numFmt = MONEY_FMT;
         cell.alignment = { horizontal: 'right', vertical: 'top' };
-        cell.font = {
-          bold: true,
-          color: {
-            argb: row.combinedBalance < 0 ? 'FFb45309' : 'FF047857',
-          },
-        };
+        if (status === 'Actual') {
+          cell.font = {
+            bold: true,
+            color: {
+              argb: row.combinedBalance < 0 ? 'FFb45309' : 'FF047857',
+            },
+          };
+        }
       }
     });
   }
 
   sheet.views = [{ state: 'frozen', ySplit: 1, xSplit: 0 }];
-  sheet.autoFilter = 'A1:J1';
+  sheet.autoFilter = 'A1:M1';
   addGoalsSheet(workbook, payload, options);
 
   return workbook.xlsx.writeBuffer() as Promise<ArrayBuffer>;
