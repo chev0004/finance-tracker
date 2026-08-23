@@ -1,6 +1,7 @@
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { getCurrentBalances } from '@/lib/budget-calculations';
 import { readTrackerData } from '@/lib/tracker-data';
 import {
   addOneTimeIncome,
@@ -9,6 +10,7 @@ import {
   addSavingsGoal,
   setRecurringExpenseAmounts,
 } from '@/lib/tracker-operations';
+import type { BudgetState } from '@/types';
 
 const dateSchema: z.ZodType<string> = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const monthSchema: z.ZodType<string> = z.string().regex(/^\d{4}-\d{2}$/);
@@ -67,6 +69,16 @@ type RegisterTool = (
 
 const trackerOutputSchema = z.object({
   tracker: z.unknown(),
+  dashboard: z.object({
+    asOfDate: dateSchema,
+    activeBranchId: z.string().nullable(),
+    activeBranchName: z.string(),
+    balances: z.object({
+      savings: z.number(),
+      pocket: z.number(),
+      combined: z.number(),
+    }),
+  }),
 });
 const mutationOutputSchema = z.object({
   activeBranchId: z.string().nullable(),
@@ -238,8 +250,8 @@ export const createTrackerMcpServer = (resourceMetadataUrl: string) => {
     {
       title: 'Read finance tracker',
       description:
-        "Use this before answering questions about the user's finances. Returns every stored field in the signed-in account's cloud tracker, including all branches, pocket expenses, savings inputs, goals, recurring expenses, income sources, one-time income, and overrides.",
-      inputSchema: z.object({}),
+        "Use this before answering questions about the user's finances. Pass the user's current local date. Returns every stored field plus authoritative savings, pocket, and combined balances calculated exactly like the dashboard. Never estimate or reconstruct these balances from the raw tracker.",
+      inputSchema: z.object({ asOfDate: dateSchema }),
       outputSchema: trackerOutputSchema,
       annotations: {
         readOnlyHint: true,
@@ -248,14 +260,38 @@ export const createTrackerMcpServer = (resourceMetadataUrl: string) => {
       },
       _meta: oauthMeta(['tracker:read']),
     },
-    async (_, extra) =>
-      runAuthenticated(
+    async (args, extra) => {
+      const { asOfDate } = z.object({ asOfDate: dateSchema }).parse(args);
+      return runAuthenticated(
         extra.authInfo,
         'tracker:read',
         resourceMetadataUrl,
-        async (userId) => ({ tracker: await readTrackerData(userId) }),
-        'Read the complete finance tracker.',
-      ),
+        async (userId) => {
+          const tracker = await readTrackerData(userId);
+          const activeBranch = 'activeBranchId' in tracker;
+          const branch = activeBranch
+            ? tracker.branches.find(
+                (candidate) => candidate.id === tracker.activeBranchId,
+              )
+            : null;
+          if (activeBranch && !branch)
+            throw new Error('Active branch not found');
+          return {
+            tracker,
+            dashboard: {
+              asOfDate,
+              activeBranchId: branch?.id ?? null,
+              activeBranchName: branch?.name ?? 'Main',
+              balances: getCurrentBalances(
+                branch?.state ?? (tracker as BudgetState),
+                asOfDate,
+              ),
+            },
+          };
+        },
+        'Read the complete finance tracker and authoritative dashboard balances.',
+      );
+    },
   );
 
   registerTool(

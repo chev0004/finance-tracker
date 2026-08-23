@@ -69,7 +69,9 @@ export default function Home() {
     activeBranchId,
     savingsTimeline,
     pocketTimeline,
+    currentSavings,
     currentPocketBalance,
+    currentCombinedBalance,
     goalStats,
     validation,
     paydays,
@@ -362,10 +364,7 @@ export default function Home() {
   const todayLabel = isValid(todayParsed)
     ? format(todayParsed, 'EEE, MMM d, yyyy')
     : today;
-  const currentSavings =
-    [...savingsTimeline].filter((p) => p.rawDate <= today).pop()?.balance ??
-    settings.startingBalance;
-  const combinedBalance = currentSavings + currentPocketBalance;
+  const combinedBalance = currentCombinedBalance;
 
   return (
     <div className="min-h-dvh bg-background p-4 sm:p-6 lg:p-8">

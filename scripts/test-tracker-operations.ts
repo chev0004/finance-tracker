@@ -84,6 +84,25 @@ const {
   addSavingsGoal,
   setRecurringExpenseAmounts,
 } = await import('@/lib/tracker-operations');
+const { getCurrentBalances } = await import('@/lib/budget-calculations');
+
+assert.deepEqual(
+  getCurrentBalances(
+    {
+      expenses: [
+        { id: 'expense', date: '2026-08-02', label: 'Groceries', amount: 50 },
+      ],
+      spentPerPeriod: [],
+      settings: {
+        ...settings(),
+        startingBalance: 2500,
+        startDate: '2026-08-01',
+      },
+    },
+    '2026-08-02',
+  ),
+  { savings: 2300, pocket: 150, combined: 2450 },
+);
 
 await addPocketExpenses('user-a', [
   { date: '2026-08-22', label: 'Rice', amount: 28.49 },
