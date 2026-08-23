@@ -10,6 +10,7 @@ import {
   addSavingsGoal,
   setRecurringExpenseAmounts,
 } from '@/lib/tracker-operations';
+import { getLocalDateString } from '@/lib/utils';
 import type { BudgetState } from '@/types';
 
 const dateSchema: z.ZodType<string> = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -250,8 +251,8 @@ export const createTrackerMcpServer = (resourceMetadataUrl: string) => {
     {
       title: 'Read finance tracker',
       description:
-        "Use this before answering questions about the user's finances. Pass the user's current local date. Returns every stored field plus authoritative savings, pocket, and combined balances calculated exactly like the dashboard. Never estimate or reconstruct these balances from the raw tracker.",
-      inputSchema: z.object({ asOfDate: dateSchema }),
+        "Use this before answering questions about the user's finances. Returns every stored field plus authoritative savings, pocket, and combined balances calculated exactly like the dashboard. Never estimate or reconstruct these balances from the raw tracker. Pass asOfDate when available; otherwise the server uses today's date.",
+      inputSchema: z.object({ asOfDate: dateSchema.optional() }),
       outputSchema: trackerOutputSchema,
       annotations: {
         readOnlyHint: true,
@@ -261,7 +262,9 @@ export const createTrackerMcpServer = (resourceMetadataUrl: string) => {
       _meta: oauthMeta(['tracker:read']),
     },
     async (args, extra) => {
-      const { asOfDate } = z.object({ asOfDate: dateSchema }).parse(args);
+      const { asOfDate = getLocalDateString() } = z
+        .object({ asOfDate: dateSchema.optional() })
+        .parse(args);
       return runAuthenticated(
         extra.authInfo,
         'tracker:read',

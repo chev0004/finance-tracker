@@ -29,9 +29,9 @@ assert.deepEqual(
     ?.securitySchemes,
   [{ type: 'oauth2', scopes: ['tracker:read'] }],
 );
-assert.deepEqual(
+assert.equal(
   tools.tools.find(({ name }) => name === 'get_tracker')?.inputSchema.required,
-  ['asOfDate'],
+  undefined,
 );
 for (const tool of tools.tools) {
   const schema = tool.inputSchema;
@@ -54,7 +54,7 @@ assert.deepEqual(
 
 const protectedRead = await client.callTool({
   name: 'get_tracker',
-  arguments: { asOfDate: '2026-08-23' },
+  arguments: {},
 });
 assert.equal(protectedRead.isError, true);
 assert.match(
