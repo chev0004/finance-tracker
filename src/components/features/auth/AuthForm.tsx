@@ -16,9 +16,10 @@ import { authClient, setLocalOnlyPreference } from '@/lib/auth-client';
 
 type AuthFormProps = {
   mode: 'sign-in' | 'sign-up';
+  callbackUrl?: string;
 };
 
-export function AuthForm({ mode }: AuthFormProps) {
+export function AuthForm({ mode, callbackUrl = '/' }: AuthFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -52,7 +53,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           return;
         }
       }
-      window.location.href = '/';
+      window.location.href = callbackUrl;
     } catch {
       setError('Something went wrong');
     } finally {

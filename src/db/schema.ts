@@ -80,6 +80,44 @@ export const budget = sqliteTable('budget', {
     .notNull(),
 });
 
+export const mcpOAuthClient = sqliteTable('mcp_oauth_client', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  redirectUris: text('redirect_uris').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+});
+
+export const mcpOAuthCode = sqliteTable('mcp_oauth_code', {
+  hash: text('hash').primaryKey(),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => mcpOAuthClient.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  redirectUri: text('redirect_uri').notNull(),
+  codeChallenge: text('code_challenge').notNull(),
+  scopes: text('scopes').notNull(),
+  resource: text('resource').notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export const mcpOAuthToken = sqliteTable('mcp_oauth_token', {
+  hash: text('hash').primaryKey(),
+  kind: text('kind', { enum: ['access', 'refresh'] }).notNull(),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => mcpOAuthClient.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  scopes: text('scopes').notNull(),
+  resource: text('resource').notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
 export const verification = sqliteTable(
   'verification',
   {
