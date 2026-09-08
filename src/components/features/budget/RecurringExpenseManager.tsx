@@ -229,13 +229,13 @@ export function RecurringExpenseManager({
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
   const [dayPreset, setDayPreset] = useState<DayPreset>(() =>
-    presetForDate(dateFromValue(projectionStartDate)),
+    presetForDate(new Date()),
   );
   const [customDay, setCustomDay] = useState(() => {
-    const start = dateFromValue(projectionStartDate);
+    const start = new Date();
     return presetForDate(start) === 'custom' ? String(start.getDate()) : '';
   });
-  const [startDate, setStartDate] = useState(projectionStartDate);
+  const [startDate, setStartDate] = useState(() => formatDateValue(new Date()));
   const [endMonth, setEndMonth] = useState(projectionEndMonth);
   const [endOngoing, setEndOngoing] = useState(true);
   const [startDateOpen, setStartDateOpen] = useState(false);
@@ -508,11 +508,11 @@ export function RecurringExpenseManager({
   };
 
   const resetForm = () => {
-    const defaultStart = dateFromValue(projectionStartDate);
+    const defaultStart = new Date();
     setLabel('');
     setAmount('');
     setRenewalFromStartDate(defaultStart);
-    setStartDate(projectionStartDate);
+    setStartDate(formatDateValue(defaultStart));
     setEndMonth(projectionEndMonth);
     setEndOngoing(true);
     setOccurrenceDateOpen(null);
