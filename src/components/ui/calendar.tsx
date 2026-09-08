@@ -270,26 +270,32 @@ function CalendarDropdown({
         )}
       />
       {open && (
-        <div className="glass-card absolute top-full left-0 z-50 mt-1 max-h-56 min-w-full overflow-y-auto rounded-md border border-border p-1">
-          {options?.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              disabled={option.disabled}
-              onClick={() => handleSelect(option.value)}
-              className={cn(
-                'w-full cursor-pointer rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-[background-color,color,box-shadow,transform]',
-                'hover:bg-accent/60 active:scale-[0.99] active:bg-accent/80',
-                'focus-visible:ring-2 focus-visible:ring-ring/50',
-                'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
-                option.value === value
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-foreground',
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
+        <div className="glass-card absolute top-full left-0 z-50 mt-1 min-w-full rounded-md border border-border">
+          <div
+            className="max-h-56 overflow-y-auto overscroll-contain p-1"
+            onWheel={(event) => event.stopPropagation()}
+            onTouchMove={(event) => event.stopPropagation()}
+          >
+            {options?.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                disabled={option.disabled}
+                onClick={() => handleSelect(option.value)}
+                className={cn(
+                  'w-full cursor-pointer rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-[background-color,color,box-shadow,transform]',
+                  'hover:bg-accent/60 active:scale-[0.99] active:bg-accent/80',
+                  'focus-visible:ring-2 focus-visible:ring-ring/50',
+                  'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
+                  option.value === value
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-foreground',
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
