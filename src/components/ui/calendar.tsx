@@ -9,8 +9,11 @@ import * as React from 'react';
 import {
   type DayButton,
   DayPicker,
+  type DayPickerProps,
   type DropdownProps,
+  dateMatchModifiers,
   getDefaultClassNames,
+  useDayPicker,
 } from 'react-day-picker';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -176,7 +179,39 @@ function Calendar({
         ...components,
       }}
       {...props}
+      footer={<CalendarTodayButton />}
     />
+  );
+}
+
+function CalendarTodayButton() {
+  const { dayPickerProps, goToMonth, select, isSelected } =
+    useDayPicker<DayPickerProps>();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const disabled =
+    dateMatchModifiers(today, dayPickerProps.disabled ?? false) ||
+    dateMatchModifiers(today, dayPickerProps.hidden ?? false);
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="mt-2 w-full"
+      disabled={disabled}
+      onClick={(event) => {
+        goToMonth(today);
+        const modifiers = { today: true, selected: !!isSelected?.(today) };
+        if (dayPickerProps.mode === 'single' && dayPickerProps.onSelect) {
+          dayPickerProps.onSelect(today, today, modifiers, event);
+        } else {
+          select?.(today, modifiers, event);
+        }
+      }}
+    >
+      Today
+    </Button>
   );
 }
 
