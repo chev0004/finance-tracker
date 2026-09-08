@@ -11,7 +11,7 @@ import {
   ChevronsUp,
   Target,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { GoalStat, RecurringExpense, SavingsGoal } from '@/types';
 import { GoalCard } from './GoalCard';
@@ -46,6 +46,7 @@ interface SavingsGoalManagerProps {
   onEditingGoalChange: (id: string | null) => void;
   onUpdate: (goal: SavingsGoal) => void;
   onRemove: (id: string) => void;
+  onMoveToPocket: (goal: SavingsGoal) => void;
   onToggleHidden: (id: string) => void;
 }
 
@@ -85,6 +86,7 @@ export function SavingsGoalManager({
   onEditingGoalChange,
   onUpdate,
   onRemove,
+  onMoveToPocket,
   onToggleHidden,
 }: SavingsGoalManagerProps) {
   const [activeOpen, setActiveOpen] = useState(true);
@@ -195,6 +197,33 @@ export function SavingsGoalManager({
   const upcomingGroups = buildGoalGroups('upcoming', upcomingGoals);
   const finishedGroups = buildGoalGroups('finished', finishedGoals);
   const allGoalGroups = [...activeGroups, ...upcomingGroups, ...finishedGroups];
+
+  useEffect(() => {
+    if (!editingGoalId) return;
+    const goal = goals.find((item) => item.id === editingGoalId);
+    if (!goal) return;
+    const section = sectionForGoal(goal, today);
+    if (section === 'active') setActiveOpen(true);
+    if (section === 'upcoming') setUpcomingOpen(true);
+    if (section === 'finished') setFinishedOpen(true);
+    const stat = goalStats.find((item) => item.goalId === goal.id);
+    const groupKey =
+      section === 'upcoming'
+        ? `upcoming:${goal.startDate.slice(0, 7)}`
+        : section === 'finished'
+          ? `finished:${goal.endDate.slice(0, 7)}`
+          : stat && !stat.isFeasible
+            ? 'active:attention'
+            : stat?.isWarning
+              ? 'active:tight'
+              : 'active:on-track';
+    setOpenGoalGroups((current) => {
+      const next = new Set(current);
+      next.add(groupKey);
+      return next;
+    });
+  }, [editingGoalId, goals, goalStats, today]);
+
   const openGroupForGoal = (goal: SavingsGoal) => {
     const section = sectionForGoal(goal, today);
     if (section === 'active') setActiveOpen(true);
@@ -280,6 +309,10 @@ export function SavingsGoalManager({
             onEditingGoalChange(null);
           }}
           onCancel={() => onEditingGoalChange(null)}
+          onMoveToPocket={(updated) => {
+            onMoveToPocket(updated);
+            onEditingGoalChange(null);
+          }}
         />
       );
     }

@@ -20,6 +20,7 @@ interface ExpenseListProps {
   activePeriodStart?: string | null;
   onRemove: (id: string) => void;
   onUpdateExpense: (expense: Expense) => void;
+  onMoveToGoal: (expense: Expense) => void;
   onActivePeriodChange?: (period: {
     start: string;
     end: string;
@@ -44,6 +45,7 @@ export function ExpenseList({
   activePeriodStart,
   onRemove,
   onUpdateExpense,
+  onMoveToGoal,
   onActivePeriodChange,
 }: ExpenseListProps) {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -138,6 +140,7 @@ export function ExpenseList({
         }}
         balanceStartDate={balanceStartDate}
         onSave={onUpdateExpense}
+        onMoveToGoal={onMoveToGoal}
       />
 
       <NavStepper

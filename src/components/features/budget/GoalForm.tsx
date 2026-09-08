@@ -1,7 +1,7 @@
 'use client';
 
 import { format, isValid, parseISO } from 'date-fns';
-import { CalendarIcon, Plus, X } from 'lucide-react';
+import { ArrowRightLeft, CalendarIcon, Plus, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ interface GoalFormProps {
   recurringExpenses: RecurringExpense[];
   onSave: (goal: SavingsGoal) => void;
   onCancel: () => void;
+  onMoveToPocket?: (goal: SavingsGoal) => void;
 }
 
 interface LineItemDraft {
@@ -46,6 +47,7 @@ export function GoalForm({
   recurringExpenses,
   onSave,
   onCancel,
+  onMoveToPocket,
 }: GoalFormProps) {
   const [name, setName] = useState(goal?.name ?? '');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(
@@ -120,15 +122,15 @@ export function GoalForm({
     );
   };
 
-  const handleSave = () => {
+  const getGoal = (): SavingsGoal | null => {
     setError(null);
     if (!name.trim()) {
       setError('Please enter a goal name.');
-      return;
+      return null;
     }
     if (!dateRange?.from || !isValid(dateRange.from)) {
       setError('Please select at least a start date.');
-      return;
+      return null;
     }
     const parsedItems = lineItems
       .filter((i) => i.label.trim() || i.amount)
@@ -139,7 +141,7 @@ export function GoalForm({
       }));
     if (parsedItems.length === 0 || parsedItems.every((i) => i.amount === 0)) {
       setError('Add at least one line item with an amount.');
-      return;
+      return null;
     }
 
     const from = dateRange.from;
@@ -147,10 +149,10 @@ export function GoalForm({
     const goalEndStr = format(to, 'yyyy-MM-dd');
     if (pauseIncome && incomeResumeDate && incomeResumeDate < goalEndStr) {
       setError('Income resume date must be on or after the goal end date.');
-      return;
+      return null;
     }
 
-    onSave({
+    return {
       id: goal?.id ?? crypto.randomUUID(),
       name: name.trim(),
       startDate: format(from, 'yyyy-MM-dd'),
@@ -160,7 +162,17 @@ export function GoalForm({
       incomeResumeDate: pauseIncome ? incomeResumeDate : undefined,
       pausePocket: false,
       pausedExpenseIds: [...pausedExpenseIds],
-    });
+    };
+  };
+
+  const handleSave = () => {
+    const updated = getGoal();
+    if (updated) onSave(updated);
+  };
+
+  const handleMoveToPocket = () => {
+    const updated = getGoal();
+    if (updated) onMoveToPocket?.(updated);
   };
 
   const total = lineItems.reduce(
@@ -419,6 +431,12 @@ export function GoalForm({
           <Button onClick={handleSave} variant="muted">
             {goal ? 'Update Goal' : 'Add Goal'}
           </Button>
+          {goal && onMoveToPocket && (
+            <Button variant="outline" onClick={handleMoveToPocket}>
+              <ArrowRightLeft className="h-4 w-4" />
+              Move to pocket
+            </Button>
+          )}
           <Button variant="ghost" onClick={onCancel}>
             Cancel
           </Button>

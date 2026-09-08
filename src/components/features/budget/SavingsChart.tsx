@@ -58,6 +58,7 @@ interface SavingsChartProps {
     occurrenceDate: string,
   ) => void;
   onBranchFromPoint?: (rawDate: string, savingsBalance: number) => void;
+  onEditGoal?: (goalId: string) => void;
 }
 
 const GREEN = '#10b981';
@@ -100,6 +101,7 @@ interface ChartDataPoint {
   radius: number;
   events: SavingsPointEvent[];
   canEditPayday: boolean;
+  canEditGoal: boolean;
   canSkipRecurring: boolean;
   canBranchFromHere: boolean;
   monthComparison: MonthComparison;
@@ -377,6 +379,7 @@ const SavingsChartPlot = memo(function SavingsChartPlot({
                       className={cn(
                         'chart-marker-scale-wrap',
                         (point.canEditPayday ||
+                          point.canEditGoal ||
                           point.canSkipRecurring ||
                           point.canBranchFromHere) &&
                           'chart-marker-scale-wrap--strong',
@@ -394,6 +397,7 @@ const SavingsChartPlot = memo(function SavingsChartPlot({
                         className={cn(
                           'chart-marker-dot',
                           (point.canEditPayday ||
+                            point.canEditGoal ||
                             point.canSkipRecurring ||
                             point.canBranchFromHere) &&
                             'chart-marker-dot--interactive',
@@ -425,6 +429,7 @@ export function SavingsChart({
   onSkipRecurringInstance,
   onRestoreRecurringInstance,
   onBranchFromPoint,
+  onEditGoal,
 }: SavingsChartProps) {
   const maxVisibleTicks = useChartMaxTicks();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -511,6 +516,9 @@ export function SavingsChart({
         point.events.some(
           (e) => e.type === 'recurring' && e.recurringExpenseId,
         );
+      const canEditGoal =
+        Boolean(onEditGoal) &&
+        point.events.some((event) => event.type === 'goal' && event.sourceId);
       const canBranchFromHere =
         Boolean(onBranchFromPoint) &&
         point.label !== '…' &&
@@ -544,6 +552,7 @@ export function SavingsChart({
         radius: getSavingsRadius(point.type),
         events: point.events,
         canEditPayday,
+        canEditGoal,
         canSkipRecurring,
         canBranchFromHere,
         monthComparison: {
@@ -556,7 +565,7 @@ export function SavingsChart({
         },
       };
     });
-  }, [data, monthlySavings, onBranchFromPoint, today]);
+  }, [data, monthlySavings, onBranchFromPoint, onEditGoal, today]);
 
   const todayLineLabel = useMemo(() => {
     let lastPastIdx = -1;
@@ -645,6 +654,7 @@ export function SavingsChart({
     const actionable =
       hit &&
       (hit.point.canEditPayday ||
+        hit.point.canEditGoal ||
         hit.point.canSkipRecurring ||
         hit.point.canBranchFromHere);
     el.style.cursor = actionable ? 'pointer' : 'default';
@@ -690,6 +700,7 @@ export function SavingsChart({
     const target = pickDotUnderPointer(x, y);
     if (
       !target?.point.canEditPayday &&
+      !target?.point.canEditGoal &&
       !target?.point.canSkipRecurring &&
       !target?.point.canBranchFromHere
     ) {
@@ -703,7 +714,12 @@ export function SavingsChart({
     const t = hoverTooltipRef.current;
     if (!t) return;
     const p = t.point;
-    if (!p.canEditPayday && !p.canSkipRecurring && !p.canBranchFromHere) {
+    if (
+      !p.canEditPayday &&
+      !p.canEditGoal &&
+      !p.canSkipRecurring &&
+      !p.canBranchFromHere
+    ) {
       return;
     }
     event.preventDefault();
@@ -883,8 +899,15 @@ export function SavingsChart({
         recurringExpenseId: string;
       } => ev.type === 'recurring' && Boolean(ev.recurringExpenseId),
     ) ?? [];
+  const chartMenuGoalEvents =
+    chartActionMenu?.point.events.filter(
+      (event): event is SavingsPointEvent & { sourceId: string } =>
+        event.type === 'goal' && Boolean(event.sourceId),
+    ) ?? [];
   const chartMenuHasEditActions = Boolean(
-    chartActionMenu?.point.canEditPayday || chartMenuRecurringEvents.length > 0,
+    chartActionMenu?.point.canEditPayday ||
+      chartMenuGoalEvents.length > 0 ||
+      chartMenuRecurringEvents.length > 0,
   );
 
   const openRecurringActionGroup = (triggerEl: HTMLElement) => {
@@ -1014,6 +1037,26 @@ export function SavingsChart({
                         <span className="min-w-0 flex-1">Income</span>
                       </button>
                     )}
+                    {chartMenuGoalEvents.map((event) => (
+                      <button
+                        key={event.sourceId}
+                        type="button"
+                        role="menuitem"
+                        className={cn(
+                          'flex w-full cursor-pointer items-center rounded-md px-3 py-2 text-left text-sm transition-colors',
+                          'text-foreground/95 hover:bg-muted/60 active:bg-muted',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        )}
+                        onClick={() => {
+                          closeChartActionMenu();
+                          onEditGoal?.(event.sourceId);
+                        }}
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {eventName(event.label)}
+                        </span>
+                      </button>
+                    ))}
                     {chartMenuRecurringEvents.length > 0 && (
                       <button
                         type="button"

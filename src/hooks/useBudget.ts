@@ -1324,6 +1324,24 @@ export function useBudget() {
     [pocketPeriodBounds],
   );
 
+  const moveExpenseToGoal = useCallback((expense: Expense) => {
+    const label = expense.label.trim();
+    const goal: SavingsGoal = {
+      id: expense.id,
+      name: label,
+      startDate: expense.date,
+      endDate: expense.date,
+      lineItems: [{ id: crypto.randomUUID(), label, amount: expense.amount }],
+      pauseIncome: false,
+      pausePocket: false,
+      pausedExpenseIds: [],
+    };
+    startMutation(() => {
+      setExpenses((prev) => prev.filter((item) => item.id !== expense.id));
+      setSettings((prev) => ({ ...prev, goals: [...prev.goals, goal] }));
+    });
+  }, []);
+
   const updateSettings = useCallback((patch: Partial<BudgetSettings>) => {
     startMutation(() => {
       setSettings((prev) => ({ ...prev, ...patch }));
@@ -1356,6 +1374,29 @@ export function useBudget() {
       }));
     });
   }, []);
+
+  const moveGoalToExpense = useCallback(
+    (goal: SavingsGoal) => {
+      const amount = goal.lineItems.reduce((sum, item) => sum + item.amount, 0);
+      const expense: Expense = {
+        id: goal.id,
+        date: goal.startDate,
+        label: goal.name.trim(),
+        amount,
+        weekIdx:
+          getPeriodIndexWithBounds(goal.startDate, pocketPeriodBounds) ??
+          undefined,
+      };
+      startMutation(() => {
+        setSettings((prev) => ({
+          ...prev,
+          goals: prev.goals.filter((item) => item.id !== goal.id),
+        }));
+        setExpenses((prev) => [...prev, expense]);
+      });
+    },
+    [pocketPeriodBounds],
+  );
 
   const toggleGoalHidden = useCallback((id: string) => {
     startMutation(() => {
@@ -1876,10 +1917,12 @@ export function useBudget() {
     addExpense,
     removeExpense,
     updateExpense,
+    moveExpenseToGoal,
     updateSettings,
     addGoal,
     updateGoal,
     removeGoal,
+    moveGoalToExpense,
     toggleGoalHidden,
     addRecurringExpense,
     updateRecurringExpense,

@@ -1,7 +1,12 @@
 'use client';
 
 import { format, isValid, parseISO } from 'date-fns';
-import { CalendarIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  CalendarIcon,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import {
   type KeyboardEvent,
   useEffect,
@@ -29,6 +34,7 @@ interface ExpenseEditDialogProps {
   onOpenChange: (open: boolean) => void;
   balanceStartDate: string;
   onSave: (expense: Expense) => void;
+  onMoveToGoal: (expense: Expense) => void;
 }
 
 export function ExpenseEditDialog({
@@ -37,6 +43,7 @@ export function ExpenseEditDialog({
   onOpenChange,
   balanceStartDate,
   onSave,
+  onMoveToGoal,
 }: ExpenseEditDialogProps) {
   const { minDate, maxDate } = useMemo(() => {
     const parsedMin = parseISO(balanceStartDate);
@@ -81,30 +88,43 @@ export function ExpenseEditDialog({
     amountRef.current?.focus();
   };
 
-  const handleSave = () => {
+  const getExpense = (): Expense | null => {
     setError(null);
-    if (!expense) return;
+    if (!expense) return null;
 
     if (!date || !isValid(date)) {
       setError('Please select a valid date');
-      return;
+      return null;
     }
     if (!label.trim()) {
       setError('Please enter a description');
-      return;
+      return null;
     }
     const numAmount = Number.parseFloat(amount);
     if (Number.isNaN(numAmount) || numAmount <= 0) {
       setError('Please enter a valid amount');
-      return;
+      return null;
     }
 
-    onSave({
+    return {
       ...expense,
       date: format(date, 'yyyy-MM-dd'),
       label: label.trim(),
       amount: numAmount,
-    });
+    };
+  };
+
+  const handleSave = () => {
+    const updated = getExpense();
+    if (!updated) return;
+    onSave(updated);
+    onOpenChange(false);
+  };
+
+  const handleMoveToGoal = () => {
+    const updated = getExpense();
+    if (!updated) return;
+    onMoveToGoal(updated);
     onOpenChange(false);
   };
 
@@ -221,6 +241,10 @@ export function ExpenseEditDialog({
         </div>
 
         <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={handleMoveToGoal}>
+            <ArrowRightLeft className="h-4 w-4" />
+            Move to savings
+          </Button>
           <Button
             type="button"
             variant="ghost"

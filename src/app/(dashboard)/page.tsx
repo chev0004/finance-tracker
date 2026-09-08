@@ -78,10 +78,12 @@ export default function Home() {
     addExpense,
     removeExpense,
     updateExpense,
+    moveExpenseToGoal,
     updateSettings,
     addGoal,
     updateGoal,
     removeGoal,
+    moveGoalToExpense,
     toggleGoalHidden,
     addRecurringExpense,
     updateRecurringExpense,
@@ -131,6 +133,7 @@ export default function Home() {
     number | null
   >(null);
   const expenseLogRef = useRef<HTMLDivElement>(null);
+  const goalsRef = useRef<HTMLDivElement>(null);
 
   const openExpensePeriod = (period: { start: string }) => {
     setActiveExpensePeriodStart(period.start);
@@ -139,6 +142,14 @@ export default function Home() {
         behavior: 'smooth',
         block: 'start',
       });
+    });
+  };
+
+  const openGoalEditor = (goalId: string) => {
+    setCollapsedSections((prev) => ({ ...prev, goals: false }));
+    setEditingGoalId(goalId);
+    requestAnimationFrame(() => {
+      goalsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   };
 
@@ -693,6 +704,7 @@ export default function Home() {
               getPaydayEditRowsForDate={getPaydayEditRowsForDate}
               onApplyPaydayIncomeAmounts={applyPaydayIncomeAmounts}
               onBranchFromPoint={branchFromSavingsPoint}
+              onEditGoal={openGoalEditor}
               onSkipRecurringInstance={(
                 recurringExpenseId,
                 occurrenceDate,
@@ -830,6 +842,7 @@ export default function Home() {
         {/* --- Goals --- */}
         {settings.goals.length > 0 && (
           <Card
+            ref={goalsRef}
             className={cn(
               'gap-3 border-border/50 bg-card/50 hover:border-border/80',
               collapsedSections.goals && 'py-3',
@@ -866,6 +879,7 @@ export default function Home() {
                   onEditingGoalChange={setEditingGoalId}
                   onUpdate={updateGoal}
                   onRemove={removeGoal}
+                  onMoveToPocket={moveGoalToExpense}
                   onToggleHidden={toggleGoalHidden}
                 />
               </CardContent>
@@ -1040,6 +1054,7 @@ export default function Home() {
                   activePeriodStart={activeExpensePeriodStart}
                   onRemove={removeExpense}
                   onUpdateExpense={updateExpense}
+                  onMoveToGoal={moveExpenseToGoal}
                   onActivePeriodChange={handleActiveExpensePeriodChange}
                 />
                 {activePocketPoint && (
